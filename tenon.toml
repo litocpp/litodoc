@@ -1,0 +1,35 @@
+[package]
+name = "tenon-doc"
+version.workspace = true
+module = "tenon.doc"
+
+[library]
+archive = "tenon.doc"
+discovery = "module"
+
+[usage]
+private-options = [
+  "-fPIC",
+  "-Wall",
+  "-Wpedantic",
+  "-Wno-gnu-statement-expression",
+  "-Wno-deprecated-declarations",
+  "-Wunknown-attributes",
+  "-fsized-deallocation",
+]
+
+[dependencies.tenon-frontend]
+path = "../frontend"
+visibility = "public"
+
+[dependencies.rstd-std]
+git = "https://github.com/litocpp/rstd.git"
+visibility = "public"
+
+[dependencies.rstd-json]
+git = "https://github.com/litocpp/rstd.git"
+visibility = "private"
+
+[dependencies.rstd-nostd]
+git = "https://github.com/litocpp/rstd.git"
+visibility = "runtime"
