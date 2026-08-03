@@ -41,6 +41,7 @@ struct Symbol {
     String                    name;
     String                    qualified_name;
     String                    signature;
+    bool                      is_definition { false };
     Option<String>            parent_key;
     Option<String>            group;
     Option<String>            comment;
@@ -98,6 +99,7 @@ struct PackageSummary {
     usize               undocumented {};
     usize               unsupported {};
     usize               diagnostics {};
+    Vec<Diagnostic>     diagnostic_details;
 };
 
 struct Summary {

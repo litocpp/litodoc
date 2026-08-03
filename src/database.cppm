@@ -176,22 +176,48 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
                 auto existing = symbols.get_mut(key.as_str());
                 if (existing.is_some()) {
                     const auto& previous = (**existing).comment;
-                    if (previous.is_some() && comment.is_some() &&
-                        previous->as_str() != comment->as_str()) {
-                        return Err(rstd::format("conflicting documentation for symbol '{}'",
-                                                declaration.qualified_name.as_str()));
+                    auto        conflict = previous.is_some() && comment.is_some() &&
+                                           previous->as_str() != comment->as_str();
+                    auto        prefer_incoming =
+                        declaration.is_definition && ! (**existing).is_definition;
+                    if (conflict) {
+                        auto message = rstd::format(
+                            "conflicting documentation for '{}'; kept the first entry at the "
+                            "same precedence",
+                            declaration.qualified_name.as_str());
+                        if (prefer_incoming) {
+                            message = rstd::format(
+                                "definition documentation replaced declaration documentation "
+                                "for '{}'",
+                                declaration.qualified_name.as_str());
+                        } else if ((**existing).is_definition && ! declaration.is_definition) {
+                            message =
+                                rstd::format("definition documentation retained over declaration "
+                                             "documentation for '{}'",
+                                             declaration.qualified_name.as_str());
+                        }
+                        package.diagnostics.push(Diagnostic {
+                            .severity = frontend::DocumentationSeverity::Warning,
+                            .code     = String::make("conflicting-symbol-documentation"_str),
+                            .message  = rstd::move(message),
+                            .path     = path->clone(),
+                            .line     = declaration.span.begin_line,
+                        });
                     }
-                    if (previous.is_none() && comment.is_some())
-                        (**existing).comment = rstd::move(comment);
-                    if ((**existing).signature.as_str().trim_ascii().ends_with(";"_str) &&
-                        declaration.signature.as_str().trim_ascii().ends_with("{"_str)) {
-                        (**existing).signature         = declaration.signature.clone();
+                    if (prefer_incoming) {
+                        (**existing).is_definition = true;
+                        (**existing).signature     = declaration.signature.clone();
+                        if (comment.is_some()) (**existing).comment = rstd::move(comment);
+                        if (declaration.group.is_some())
+                            (**existing).group = Some(declaration.group->clone());
                         (**existing).source_page       = source_record->page.clone();
                         (**existing).source_path       = path->clone();
                         (**existing).source_line       = declaration.span.begin_line;
                         (**existing).source_column     = declaration.span.begin_column;
                         (**existing).source_end_line   = declaration.span.end_line;
                         (**existing).source_end_column = declaration.span.end_column;
+                    } else if (previous.is_none() && comment.is_some()) {
+                        (**existing).comment = rstd::move(comment);
                     }
                     continue;
                 }
@@ -215,6 +241,7 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
                                    .name              = declaration.name.clone(),
                                    .qualified_name    = declaration.qualified_name.clone(),
                                    .signature         = declaration.signature.clone(),
+                                   .is_definition     = declaration.is_definition,
                                    .parent_key        = rstd::move(parent),
                                    .group             = declaration.group.is_some()
                                                             ? Some(declaration.group->clone())

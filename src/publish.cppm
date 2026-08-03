@@ -46,7 +46,7 @@ auto summary_for(ref<rstd::path::Path> output, const Database& database) -> Summ
         auto directory = rstd::path::PathBuf::from(output)
                              .join(rstd::path::PathBuf::from("package"_str).as_path())
                              .join(rstd::path::PathBuf::from(package.name.as_str()).as_path());
-        summary.packages.push(PackageSummary {
+        auto package_summary = PackageSummary {
             .name         = package.name.clone(),
             .directory    = directory.clone(),
             .json         = directory.join(rstd::path::PathBuf::from("doc.json"_str).as_path()),
@@ -56,7 +56,17 @@ auto summary_for(ref<rstd::path::Path> output, const Database& database) -> Summ
             .undocumented = package.undocumented,
             .unsupported  = package.unsupported,
             .diagnostics  = package.diagnostics.len(),
-        });
+        };
+        for (const auto& diagnostic : package.diagnostics) {
+            package_summary.diagnostic_details.push(Diagnostic {
+                .severity = diagnostic.severity,
+                .code     = diagnostic.code.clone(),
+                .message  = diagnostic.message.clone(),
+                .path     = diagnostic.path.clone(),
+                .line     = diagnostic.line,
+            });
+        }
+        summary.packages.push(rstd::move(package_summary));
     }
     return summary;
 }
