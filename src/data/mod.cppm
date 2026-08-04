@@ -181,6 +181,7 @@ auto encode_package(const Package& package) -> Json {
         object.insert(String::make("name"_str), json_string(symbol.name.as_str()));
         object.insert(String::make("qualified-name"_str),
                       json_string(symbol.qualified_name.as_str()));
+        object.insert(String::make("namespace"_str), json_string(symbol.namespace_name.as_str()));
         object.insert(String::make("signature"_str), json_string(symbol.signature.as_str()));
         object.insert(String::make("is-definition"_str), Json::Bool(symbol.is_definition));
         object.insert(String::make("parent"_str),
@@ -267,6 +268,15 @@ auto optional_string(const Json& value, ref<str> name, ref<str> context)
     auto text = (**member).as_str();
     if (text.is_none()) return Err(rstd::format("{}.{} must be a string or null", context, name));
     return Ok(Some(String::make(*text)));
+}
+
+auto defaulted_string(const Json& value, ref<str> name, ref<str> context)
+    -> Result<String, String> {
+    auto member = value.get(name);
+    if (member.is_none()) return Ok(String::make());
+    auto text = (**member).as_str();
+    if (text.is_none()) return Err(rstd::format("{}.{} must be a string", context, name));
+    return Ok(String::make(*text));
 }
 
 auto required_usize(const Json& value, ref<str> name, ref<str> context) -> Result<usize, String> {
@@ -460,6 +470,7 @@ auto decode_package(const Json&                   document,
         auto kind_text      = required_string(value, "kind"_str, "doc symbol"_str);
         auto symbol_name    = required_string(value, "name"_str, "doc symbol"_str);
         auto qualified_name = required_string(value, "qualified-name"_str, "doc symbol"_str);
+        auto namespace_name = defaulted_string(value, "namespace"_str, "doc symbol"_str);
         auto signature      = required_string(value, "signature"_str, "doc symbol"_str);
         auto is_definition  = required_bool(value, "is-definition"_str, "doc symbol"_str);
         auto parent         = optional_string(value, "parent"_str, "doc symbol"_str);
@@ -473,6 +484,7 @@ auto decode_package(const Json&                   document,
         if (kind_text.is_err()) return Err(rstd::move(kind_text).unwrap_err());
         if (symbol_name.is_err()) return Err(rstd::move(symbol_name).unwrap_err());
         if (qualified_name.is_err()) return Err(rstd::move(qualified_name).unwrap_err());
+        if (namespace_name.is_err()) return Err(rstd::move(namespace_name).unwrap_err());
         if (signature.is_err()) return Err(rstd::move(signature).unwrap_err());
         if (is_definition.is_err()) return Err(rstd::move(is_definition).unwrap_err());
         if (parent.is_err()) return Err(rstd::move(parent).unwrap_err());
@@ -503,6 +515,7 @@ auto decode_package(const Json&                   document,
             .kind              = *kind,
             .name              = rstd::move(symbol_name).unwrap(),
             .qualified_name    = rstd::move(qualified_name).unwrap(),
+            .namespace_name    = rstd::move(namespace_name).unwrap(),
             .signature         = rstd::move(signature).unwrap(),
             .is_definition     = *is_definition,
             .parent_key        = rstd::move(parent).unwrap(),

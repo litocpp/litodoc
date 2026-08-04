@@ -1,20 +1,30 @@
 {{> templates/partials/head.html}}
-<nav class="module-rail" aria-label="Module identity">
-  <a href="{{package.href}}">{{package.name}}</a><span aria-hidden="true">→</span><strong>{{module.prefix}}</strong>{{#if module.partition}}<span class="partition-mark">:</span><strong class="partition-name">{{module.partition}}</strong>{{/if}}
-</nav>
+<tenon-doc-module-identity variant="module">
+  <nav aria-label="Module identity">
+    <a href="{{package.href}}">{{package.name}}</a><span aria-hidden="true">→</span><strong>{{module.prefix}}</strong>{{#if module.partition}}<span class="partition-mark">:</span><strong class="partition-name">{{module.partition}}</strong>{{/if}}
+  </nav>
+</tenon-doc-module-identity>
 <section class="identity-block">
   <p class="eyebrow">C++ module</p>
   <h1><code>{{module.name}}</code></h1>
 </section>
 {{#if module.has_documentation}}<section class="documentation prose" id="documentation">{{{module.documentation}}}</section>{{/if}}
-{{#if module.has_reexports}}
-<section class="api-section" id="reexports">
-  <div class="section-heading"><span>Reexports</span><span>{{module.reexport_count}}</span></div>
-  <ul class="api-list">{{#each reexports}}<li><code>{{name}}</code></li>{{/each}}</ul>
+{{#if module.has_modules}}
+<section class="api-section" id="modules">
+  <div class="section-heading"><span>Modules</span><span>{{module.module_count}}</span></div>
+  <ul class="api-list">{{#each modules}}<li><a href="{{href}}"><code>{{label}}</code></a></li>{{/each}}</ul>
 </section>
 {{/if}}
-<section class="api-section" id="symbols">
-  <div class="section-heading"><span>Symbols</span><span>{{module.symbol_count}}</span></div>
-  <ul class="api-list symbol-list">{{#each symbols}}<li><span class="kind-label">{{kind}}</span><a href="{{href}}"><code>{{qualified_name}}</code></a></li>{{/each}}</ul>
+{{#if module.has_structs}}
+<section class="api-section" id="structs">
+  <div class="section-heading"><span>Structs</span><span>{{module.struct_count}}</span></div>
+  <ul class="api-list declaration-list">{{#each structs}}<li><a href="{{href}}"><code>{{name}}</code></a>{{#if has_namespace}}<span class="namespace-label">{{namespace}}</span>{{/if}}</li>{{/each}}</ul>
 </section>
+{{/if}}
+{{#if module.has_functions}}
+<section class="api-section" id="functions">
+  <div class="section-heading"><span>Functions</span><span>{{module.function_count}}</span></div>
+  <ul class="api-list declaration-list">{{#each functions}}<li><a href="{{href}}"><code>{{name}}</code></a>{{#if has_namespace}}<span class="namespace-label">{{namespace}}</span>{{/if}}</li>{{/each}}</ul>
+</section>
+{{/if}}
 {{> templates/partials/foot.html}}

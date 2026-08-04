@@ -240,6 +240,7 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
                                    .kind              = declaration.kind,
                                    .name              = declaration.name.clone(),
                                    .qualified_name    = declaration.qualified_name.clone(),
+                                   .namespace_name    = declaration.namespace_name.clone(),
                                    .signature         = declaration.signature.clone(),
                                    .is_definition     = declaration.is_definition,
                                    .parent_key        = rstd::move(parent),

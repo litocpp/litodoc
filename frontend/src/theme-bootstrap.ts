@@ -1,6 +1,3 @@
-(() => {
-  const saved = window.localStorage.getItem("tenon-doc-theme");
-  if (saved === "light" || saved === "dark") {
-    document.documentElement.dataset.theme = saved;
-  }
-})();
+import { applyTheme, readBrowserTheme } from "./theme";
+
+applyTheme(document.documentElement, readBrowserTheme());

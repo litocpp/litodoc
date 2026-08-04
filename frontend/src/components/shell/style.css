@@ -1,0 +1,209 @@
+tenon-doc-shell {
+  display: block;
+  min-height: 100vh;
+}
+
+.topbar {
+  position: sticky;
+  z-index: 40;
+  top: 0;
+  height: var(--topbar-height);
+  display: grid;
+  grid-template-columns: auto minmax(12rem, 31rem) auto;
+  align-items: center;
+  gap: 1.2rem;
+  padding: 0 1.25rem;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: var(--sidebar-width);
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.brand-mark {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  color: var(--surface);
+  background: var(--partition);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.menu-button {
+  display: none;
+}
+
+.doc-shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, var(--content-width));
+  justify-content: center;
+  align-items: start;
+  min-height: calc(100vh - var(--topbar-height));
+}
+
+.sidebar {
+  position: sticky;
+  top: var(--topbar-height);
+  max-height: calc(100vh - var(--topbar-height));
+  overflow: auto;
+}
+
+.sidebar {
+  align-self: stretch;
+  min-height: calc(100vh - var(--topbar-height));
+  padding: 1.8rem 1.4rem 3rem 0.75rem;
+  border-right: 1px solid var(--border);
+}
+
+.sidebar-heading {
+  margin: 0 0 0.55rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.sidebar-section + .sidebar-section {
+  padding-top: 1.5rem;
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.nav-list {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.nav-list a {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.45rem 0.55rem;
+  color: var(--ink);
+  border-left: 2px solid transparent;
+  text-decoration: none;
+}
+
+.nav-list a:hover {
+  background: var(--surface-raised);
+  border-left-color: var(--module);
+}
+
+.nav-list span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.module-list a {
+  justify-content: flex-start;
+  overflow-wrap: anywhere;
+}
+
+.outline-list a {
+  justify-content: flex-start;
+  color: var(--muted);
+}
+
+.content {
+  width: 100%;
+  min-width: 0;
+  padding: 2.25rem 3rem 5rem;
+}
+
+@media (max-width: 50rem) {
+  .topbar {
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    gap: 0.65rem;
+    padding: 0 0.75rem;
+  }
+
+  .brand {
+    min-width: 0;
+  }
+
+  .brand span:last-child {
+    display: none;
+  }
+
+  tenon-doc-shell[data-ready] .menu-button {
+    display: inline-grid;
+    width: 2.5rem;
+    height: 2.5rem;
+    place-items: center;
+    color: var(--ink);
+    background: var(--canvas);
+    border: 1px solid var(--border);
+    border-radius: 0.25rem;
+    font-size: 1.15rem;
+  }
+
+  .doc-shell {
+    display: block;
+  }
+
+  .sidebar {
+    position: static;
+    max-height: none;
+    min-height: 0;
+    padding: 1.25rem;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  tenon-doc-shell[data-ready] .sidebar {
+    position: fixed;
+    z-index: 50;
+    top: var(--topbar-height);
+    left: 0;
+    width: min(var(--sidebar-width), 88vw);
+    min-height: calc(100vh - var(--topbar-height));
+    max-height: calc(100vh - var(--topbar-height));
+    padding: 1.8rem 1.4rem 3rem 1rem;
+    overflow: auto;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    border-bottom: 0;
+    box-shadow: 1rem 0 2.5rem rgb(0 0 0 / 0.18);
+    transform: translateX(-105%);
+  }
+
+  tenon-doc-shell[data-ready][data-motion] .sidebar {
+    transition: transform 160ms ease;
+  }
+
+  tenon-doc-shell[data-ready][drawer-open] .sidebar {
+    transform: translateX(0);
+  }
+
+  .content {
+    max-width: var(--content-width);
+    padding: 1.5rem 1.15rem 4rem;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 34rem) {
+  :root {
+    --topbar-height: 3.6rem;
+  }
+
+  .topbar {
+    grid-template-columns: auto auto minmax(0, 1fr);
+  }
+}

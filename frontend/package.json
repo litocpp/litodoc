@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "bundle": "node build.mjs",
-    "check-bundle": "node build.mjs --check"
+    "check-bundle": "node build.mjs --check",
+    "test": "node build.mjs --test"
   },
   "devDependencies": {
     "esbuild": "0.28.1"

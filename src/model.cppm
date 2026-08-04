@@ -49,6 +49,7 @@ struct Symbol {
     frontend::DeclarationKind kind { frontend::DeclarationKind::Variable };
     String                    name;
     String                    qualified_name;
+    String                    namespace_name;
     String                    signature;
     bool                      is_definition { false };
     Option<String>            parent_key;

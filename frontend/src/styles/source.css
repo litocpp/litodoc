@@ -1,0 +1,38 @@
+.source-code {
+  margin: 0;
+  padding: 0.75rem 0;
+  overflow: auto;
+  color: var(--code);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  font-size: 0.83rem;
+  line-height: 1.65;
+  tab-size: 4;
+}
+
+.source-line {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(max-content, 1fr);
+  min-height: 1.65em;
+}
+
+.source-line:target {
+  background: color-mix(in srgb, var(--partition) 16%, transparent);
+}
+
+.source-line > a {
+  position: sticky;
+  left: 0;
+  padding-right: 0.9rem;
+  color: var(--muted);
+  background: var(--surface-raised);
+  border-right: 1px solid var(--border);
+  text-align: right;
+  text-decoration: none;
+  user-select: none;
+}
+
+.source-line > span {
+  padding: 0 1rem;
+  white-space: pre;
+}

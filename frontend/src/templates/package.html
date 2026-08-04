@@ -1,27 +1,18 @@
 {{> templates/partials/head.html}}
-<nav class="module-rail" aria-label="Module identity">
-  <a href="{{page.asset_prefix}}index.html">workspace</a><span aria-hidden="true">→</span><strong>{{package.name}}</strong>
-</nav>
+<tenon-doc-module-identity variant="module">
+  <nav aria-label="Module identity">
+    <a href="{{page.asset_prefix}}index.html">workspace</a><span aria-hidden="true">→</span><strong>{{package.name}}</strong>
+  </nav>
+</tenon-doc-module-identity>
 <section class="identity-block">
   <p class="eyebrow">Package · {{package.version}}</p>
   <h1>{{package.name}}</h1>
-  <p class="lede">Public surface rooted at <code>{{package.root_module}}</code>.</p>
-  <dl class="coverage-strip">
-    <div><dt>Documented</dt><dd>{{package.documented}}</dd></div>
-    <div><dt>Undocumented</dt><dd>{{package.undocumented}}</dd></div>
-    <div><dt>Unsupported</dt><dd>{{package.unsupported}}</dd></div>
-  </dl>
 </section>
+{{#if package.has_documentation}}<section class="documentation prose" id="documentation">{{{package.documentation}}}</section>{{/if}}
 <section class="api-section" id="modules">
   <div class="section-heading"><span>Modules</span><span>{{package.module_count}}</span></div>
   <ul class="api-list">
-    {{#each modules}}<li><a href="{{href}}"><code>{{name}}</code></a><span>{{reexport_count}} reexports</span></li>{{/each}}
-  </ul>
-</section>
-<section class="api-section" id="symbols">
-  <div class="section-heading"><span>Public API</span><span>{{package.symbol_count}}</span></div>
-  <ul class="api-list symbol-list">
-    {{#each symbols}}<li><span class="kind-label">{{kind}}</span><a href="{{href}}"><code>{{qualified_name}}</code></a></li>{{/each}}
+    {{#each modules}}<li><a href="{{href}}"><code>{{label}}</code></a></li>{{/each}}
   </ul>
 </section>
 {{> templates/partials/foot.html}}

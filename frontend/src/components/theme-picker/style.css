@@ -1,0 +1,44 @@
+tenon-doc-theme-picker {
+  display: block;
+  width: 7rem;
+}
+
+tenon-doc-theme-picker:not([data-ready]) {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+tenon-doc-theme-picker > label {
+  display: block;
+}
+
+tenon-doc-theme-picker > label > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+tenon-doc-theme-picker select {
+  width: 100%;
+  min-height: 2.45rem;
+  padding: 0.35rem 0.5rem;
+  color: var(--ink);
+  background: var(--canvas);
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  font: inherit;
+}
+
+@media (max-width: 50rem) {
+  tenon-doc-theme-picker {
+    width: 5.6rem;
+  }
+}
+
+@media (max-width: 34rem) {
+  tenon-doc-theme-picker {
+    display: none;
+  }
+}

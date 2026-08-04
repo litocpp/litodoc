@@ -76,35 +76,92 @@ auto package_route(ref<str> package) -> String {
     return rstd::format("package/{}/index.html", package);
 }
 
-auto navigation_value(const Dataset& dataset, const Package* current, ref<str> asset_prefix)
-    -> TemplateValue {
+auto direct_module_child(ref<str> parent, ref<str> candidate) -> bool {
+    if (candidate == parent || ! candidate.starts_with(parent) || candidate.len() <= parent.len())
+        return false;
+    const auto boundary = candidate[parent.len()];
+    if (boundary != u8('.') && boundary != u8(':')) return false;
+    if (parent.contains(":"_str) && boundary != u8('.')) return false;
+    for (auto index = parent.len() + usize(1); index < candidate.len(); ++index) {
+        if (candidate[index] == u8('.') || candidate[index] == u8(':')) return false;
+    }
+    return true;
+}
+
+struct ModuleLinks {
+    TemplateValue items;
+    usize         count {};
+};
+
+struct PackageRenderIndex {
+    rstd::collections::BTreeSet<String> record_keys;
+};
+
+auto package_render_index(const Package& package) -> PackageRenderIndex {
+    auto index = PackageRenderIndex {
+        .record_keys = rstd::collections::BTreeSet<String>::make(),
+    };
+    for (const auto& symbol : package.symbols) {
+        if (symbol.kind == frontend::DeclarationKind::Record)
+            index.record_keys.insert(symbol.key.clone());
+    }
+    return index;
+}
+
+auto is_record_member(const PackageRenderIndex& index, const Symbol& symbol) -> bool {
+    return symbol.parent_key.is_some() && index.record_keys.contains(symbol.parent_key->as_str());
+}
+
+auto direct_module_links(const Package& package, ref<str> parent, ref<str> href_prefix)
+    -> ModuleLinks {
+    auto result = ModuleLinks { .items = TemplateValue::array_value() };
+    for (const auto& module : package.modules) {
+        if (! direct_module_child(parent, module.name.as_str())) continue;
+        auto item = TemplateValue::object_value();
+        item.insert("name"_str, template_text(module.name.as_str()));
+        item.insert(
+            "label"_str,
+            template_text(
+                module.name.as_str().get(parent.len() + usize(1), module.name.len()).unwrap()));
+        item.insert(
+            "href"_str,
+            TemplateValue::text_value(rstd::format("{}{}", href_prefix, module.page.as_str())));
+        result.items.array.push(rstd::move(item));
+        ++result.count;
+    }
+    return result;
+}
+
+auto navigation_value(const Dataset& dataset,
+                      const Package* current,
+                      ref<str>       asset_prefix,
+                      bool           show_module_supplement) -> TemplateValue {
     auto navigation = TemplateValue::object_value();
     auto packages   = TemplateValue::array_value();
-    for (const auto& package : dataset.packages) {
-        auto item = TemplateValue::object_value();
-        item.insert("name"_str, template_text(package.name.as_str()));
-        item.insert("version"_str, template_text(package.version.as_str()));
-        item.insert("href"_str,
-                    TemplateValue::text_value(rstd::format(
-                        "{}{}", asset_prefix, package_route(package.name.as_str()).as_str())));
-        packages.array.push(rstd::move(item));
-    }
-    navigation.insert("packages"_str, rstd::move(packages));
-    navigation.insert("has_modules"_str, TemplateValue::boolean_value(current != nullptr));
-    auto modules = TemplateValue::array_value();
-    if (current != nullptr) {
-        for (const auto& module : current->modules) {
+    if (current == nullptr) {
+        for (const auto& package : dataset.packages) {
             auto item = TemplateValue::object_value();
-            item.insert("name"_str, template_text(module.name.as_str()));
+            item.insert("name"_str, template_text(package.name.as_str()));
+            item.insert("version"_str, template_text(package.version.as_str()));
             item.insert("href"_str,
-                        TemplateValue::text_value(rstd::format("{}package/{}/{}",
-                                                               asset_prefix,
-                                                               current->name.as_str(),
-                                                               module.page.as_str())));
-            modules.array.push(rstd::move(item));
+                        TemplateValue::text_value(rstd::format(
+                            "{}{}", asset_prefix, package_route(package.name.as_str()).as_str())));
+            packages.array.push(rstd::move(item));
         }
     }
-    navigation.insert("modules"_str, rstd::move(modules));
+    navigation.insert("has_packages"_str, TemplateValue::boolean_value(current == nullptr));
+    navigation.insert("packages"_str, rstd::move(packages));
+    auto modules = ModuleLinks { .items = TemplateValue::array_value() };
+    if (current != nullptr) {
+        auto href_prefix = rstd::format("{}package/{}/", asset_prefix, current->name.as_str());
+        modules =
+            direct_module_links(*current, current->root_module.as_str(), href_prefix.as_str());
+    }
+    navigation.insert("has_modules"_str, TemplateValue::boolean_value(modules.count != usize {}));
+    navigation.insert(
+        "show_modules"_str,
+        TemplateValue::boolean_value(show_module_supplement && modules.count != usize {}));
+    navigation.insert("modules"_str, rstd::move(modules.items));
     return navigation;
 }
 
@@ -112,11 +169,13 @@ auto base_context(const Dataset& dataset,
                   const Package* current,
                   ref<str>       title,
                   ref<str>       kind,
-                  ref<str>       asset_prefix) -> TemplateValue {
+                  ref<str>       asset_prefix,
+                  bool           show_module_supplement) -> TemplateValue {
     auto context = TemplateValue::object_value();
     context.insert("site"_str, site_value(dataset));
     context.insert("page"_str, page_value(title, kind, asset_prefix));
-    context.insert("navigation"_str, navigation_value(dataset, current, asset_prefix));
+    context.insert("navigation"_str,
+                   navigation_value(dataset, current, asset_prefix, show_module_supplement));
     return context;
 }
 
@@ -143,7 +202,7 @@ auto split_module(ref<str> name) -> rstd::tuple<String, String> {
 
 auto root_context(const Dataset& dataset) -> TemplateValue {
     auto context =
-        base_context(dataset, nullptr, "Workspace documentation"_str, "root"_str, ""_str);
+        base_context(dataset, nullptr, "Workspace documentation"_str, "root"_str, ""_str, false);
     auto packages = TemplateValue::array_value();
     for (const auto& package : dataset.packages) {
         packages.array.push(
@@ -156,24 +215,34 @@ auto root_context(const Dataset& dataset) -> TemplateValue {
 }
 
 auto package_context(const Dataset& dataset, const Package& package) -> TemplateValue {
-    auto context = base_context(
-        dataset, rstd::addressof(package), package.name.as_str(), "package"_str, "../../"_str);
+    auto context       = base_context(dataset,
+                                      rstd::addressof(package),
+                                      package.name.as_str(),
+                                      "package"_str,
+                                      "../../"_str,
+                                      false);
     auto package_value = package_link_value(package, "index.html"_str);
     package_value.insert("documented"_str, template_number(package.documented));
     package_value.insert("undocumented"_str, template_number(package.undocumented));
     package_value.insert("unsupported"_str, template_number(package.unsupported));
-    package_value.insert("module_count"_str, template_number(package.modules.len()));
     package_value.insert("symbol_count"_str, template_number(package.symbols.len()));
-    context.insert("package"_str, rstd::move(package_value));
-    auto modules = TemplateValue::array_value();
+    const Module* root_module = nullptr;
     for (const auto& module : package.modules) {
-        auto item = TemplateValue::object_value();
-        item.insert("name"_str, template_text(module.name.as_str()));
-        item.insert("href"_str, template_text(module.page.as_str()));
-        item.insert("reexport_count"_str, template_number(module.reexports.len()));
-        modules.array.push(rstd::move(item));
+        if (module.name.as_str() == package.root_module.as_str()) {
+            root_module = rstd::addressof(module);
+            break;
+        }
     }
-    context.insert("modules"_str, rstd::move(modules));
+    const auto has_documentation = root_module != nullptr && root_module->comment.is_some();
+    package_value.insert("has_documentation"_str, TemplateValue::boolean_value(has_documentation));
+    package_value.insert(
+        "documentation"_str,
+        TemplateValue::trusted_html(
+            has_documentation ? render_markdown(root_module->comment->as_str()) : String::make()));
+    auto modules = direct_module_links(package, package.root_module.as_str(), ""_str);
+    package_value.insert("module_count"_str, template_number(modules.count));
+    context.insert("package"_str, rstd::move(package_value));
+    context.insert("modules"_str, rstd::move(modules.items));
     auto symbols = TemplateValue::array_value();
     for (const auto& symbol : package.symbols) {
         auto item = TemplateValue::object_value();
@@ -184,15 +253,21 @@ auto package_context(const Dataset& dataset, const Package& package) -> Template
     }
     context.insert("symbols"_str, rstd::move(symbols));
     auto page = context.object.get_mut("page"_str).unwrap();
+    if (has_documentation) append_outline(*page, "#documentation"_str, "Documentation"_str);
     append_outline(*page, "#modules"_str, "Modules"_str);
-    append_outline(*page, "#symbols"_str, "Public API"_str);
     return context;
 }
 
-auto module_context(const Dataset& dataset, const Package& package, const Module& module)
-    -> TemplateValue {
-    auto context = base_context(
-        dataset, rstd::addressof(package), module.name.as_str(), "module"_str, "../../../"_str);
+auto module_context(const Dataset&            dataset,
+                    const Package&            package,
+                    const PackageRenderIndex& index,
+                    const Module&             module) -> TemplateValue {
+    auto context = base_context(dataset,
+                                rstd::addressof(package),
+                                module.name.as_str(),
+                                "module"_str,
+                                "../../../"_str,
+                                module.name.as_str() != package.root_module.as_str());
     context.insert("package"_str, package_link_value(package, "../index.html"_str));
     auto parts        = split_module(module.name.as_str());
     auto module_value = TemplateValue::object_value();
@@ -215,8 +290,16 @@ auto module_context(const Dataset& dataset, const Package& package, const Module
         reexports.array.push(rstd::move(item));
     }
     context.insert("reexports"_str, rstd::move(reexports));
-    auto symbols      = TemplateValue::array_value();
-    auto symbol_count = usize {};
+    auto modules = direct_module_links(package, module.name.as_str(), "../"_str);
+    module_value.insert("has_modules"_str, TemplateValue::boolean_value(modules.count != usize {}));
+    module_value.insert("module_count"_str, template_number(modules.count));
+    context.insert("modules"_str, rstd::move(modules.items));
+    auto symbols        = TemplateValue::array_value();
+    auto structs        = TemplateValue::array_value();
+    auto functions      = TemplateValue::array_value();
+    auto symbol_count   = usize {};
+    auto struct_count   = usize {};
+    auto function_count = usize {};
     for (const auto& symbol : package.symbols) {
         if (symbol.module.as_str() != module.name.as_str()) continue;
         auto item = TemplateValue::object_value();
@@ -225,14 +308,41 @@ auto module_context(const Dataset& dataset, const Package& package, const Module
         item.insert("href"_str, TemplateValue::text_value(rstd::format("../{}", symbol.page)));
         symbols.array.push(rstd::move(item));
         ++symbol_count;
+        if (is_record_member(index, symbol)) continue;
+        if (symbol.kind != frontend::DeclarationKind::Record &&
+            symbol.kind != frontend::DeclarationKind::Function)
+            continue;
+        auto category_item = TemplateValue::object_value();
+        category_item.insert("name"_str, template_text(symbol.name.as_str()));
+        category_item.insert("qualified_name"_str, template_text(symbol.qualified_name.as_str()));
+        category_item.insert("has_namespace"_str,
+                             TemplateValue::boolean_value(! symbol.namespace_name.is_empty()));
+        category_item.insert("namespace"_str, template_text(symbol.namespace_name.as_str()));
+        category_item.insert("href"_str,
+                             TemplateValue::text_value(rstd::format("../{}", symbol.page)));
+        if (symbol.kind == frontend::DeclarationKind::Record) {
+            structs.array.push(rstd::move(category_item));
+            ++struct_count;
+        } else {
+            functions.array.push(rstd::move(category_item));
+            ++function_count;
+        }
     }
     module_value.insert("symbol_count"_str, template_number(symbol_count));
+    module_value.insert("has_structs"_str, TemplateValue::boolean_value(struct_count != usize {}));
+    module_value.insert("struct_count"_str, template_number(struct_count));
+    module_value.insert("has_functions"_str,
+                        TemplateValue::boolean_value(function_count != usize {}));
+    module_value.insert("function_count"_str, template_number(function_count));
     context.insert("module"_str, rstd::move(module_value));
     context.insert("symbols"_str, rstd::move(symbols));
+    context.insert("structs"_str, rstd::move(structs));
+    context.insert("functions"_str, rstd::move(functions));
     auto page = context.object.get_mut("page"_str).unwrap();
     if (module.comment.is_some()) append_outline(*page, "#documentation"_str, "Documentation"_str);
-    if (! module.reexports.is_empty()) append_outline(*page, "#reexports"_str, "Reexports"_str);
-    append_outline(*page, "#symbols"_str, "Symbols"_str);
+    if (modules.count != usize {}) append_outline(*page, "#modules"_str, "Modules"_str);
+    if (struct_count != usize {}) append_outline(*page, "#structs"_str, "Structs"_str);
+    if (function_count != usize {}) append_outline(*page, "#functions"_str, "Functions"_str);
     return context;
 }
 
@@ -242,7 +352,8 @@ auto symbol_context(const Dataset& dataset, const Package& package, const Symbol
                                 rstd::addressof(package),
                                 symbol.qualified_name.as_str(),
                                 "symbol"_str,
-                                "../../../"_str);
+                                "../../../"_str,
+                                true);
     context.insert("package"_str, package_link_value(package, "../index.html"_str));
     auto parts        = split_module(symbol.module.as_str());
     auto module_value = TemplateValue::object_value();
@@ -300,8 +411,12 @@ auto source_lines(ref<str> contents) -> TemplateValue {
 
 auto source_context(const Dataset& dataset, const Package& package, const Source& source)
     -> TemplateValue {
-    auto context = base_context(
-        dataset, rstd::addressof(package), source.path.as_str(), "source"_str, "../../../"_str);
+    auto context = base_context(dataset,
+                                rstd::addressof(package),
+                                source.path.as_str(),
+                                "source"_str,
+                                "../../../"_str,
+                                true);
     context.insert("package"_str, package_link_value(package, "../index.html"_str));
     auto source_value = TemplateValue::object_value();
     source_value.insert("path"_str, template_text(source.path.as_str()));
@@ -338,6 +453,7 @@ auto render_site(ref<rstd::path::Path> root,
         render_page(root, "index.html"_str, frontend, frontend.root_template.as_str(), root_value);
     if (written.is_err()) return written;
     for (const auto& package : dataset.packages) {
+        auto render_index     = package_render_index(package);
         auto prefix           = rstd::format("package/{}/", package.name.as_str());
         auto package_value    = package_context(dataset, package);
         auto package_relative = rstd::format("{}index.html", prefix.as_str());
@@ -352,7 +468,7 @@ auto render_site(ref<rstd::path::Path> root,
                                  package_json(package).as_str());
         if (written.is_err()) return written;
         for (const auto& module : package.modules) {
-            auto context = module_context(dataset, package, module);
+            auto context = module_context(dataset, package, render_index, module);
             written =
                 render_page(root,
                             rstd::format("{}{}", prefix.as_str(), module.page.as_str()).as_str(),

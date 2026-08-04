@@ -1,0 +1,33 @@
+tenon-doc-module-identity {
+  display: block;
+  min-height: 2.4rem;
+  padding: 0.55rem 0.75rem;
+  margin-bottom: 2rem;
+  color: var(--muted);
+  background: var(--surface-raised);
+  border-left: 3px solid var(--module);
+  font-size: 0.82rem;
+}
+
+tenon-doc-module-identity > nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+tenon-doc-module-identity a,
+tenon-doc-module-identity strong {
+  color: var(--module);
+}
+
+tenon-doc-module-identity .partition-mark,
+tenon-doc-module-identity .partition-name {
+  color: var(--partition);
+}
+
+@media (max-width: 50rem) {
+  tenon-doc-module-identity {
+    margin-bottom: 1.5rem;
+  }
+}

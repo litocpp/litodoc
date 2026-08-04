@@ -10,45 +10,54 @@
   <script src="{{page.asset_prefix}}static/search-index.js"></script>
   <script defer src="{{page.asset_prefix}}static/app.js"></script>
 </head>
-<body data-root-prefix="{{page.asset_prefix}}" data-page-kind="{{page.kind}}">
+<body data-page-kind="{{page.kind}}">
   <a class="skip-link" href="#content">Skip to documentation</a>
+  <tenon-doc-shell>
   <header class="topbar">
-    <button class="menu-button" type="button" aria-controls="sidebar" aria-expanded="false">
-      <span aria-hidden="true">☰</span><span class="sr-only">Open module navigation</span>
+    <button class="menu-button" type="button" data-drawer-trigger aria-controls="sidebar" aria-expanded="false">
+      <span aria-hidden="true">☰</span><span class="sr-only">Open documentation navigation</span>
     </button>
     <a class="brand" href="{{page.asset_prefix}}index.html">
       <span class="brand-mark" aria-hidden="true">:</span>
       <span>Tenon docs</span>
     </a>
-    <div class="search-control">
+    <tenon-doc-search root-prefix="{{page.asset_prefix}}">
       <label for="doc-search">Search API</label>
-      <input id="doc-search" type="search" autocomplete="off" spellcheck="false" placeholder="Symbol or module">
-      <div id="search-results" class="search-results" hidden aria-live="polite"></div>
-    </div>
-    <label class="theme-control" for="theme-mode">
-      <span>Theme</span>
-      <select id="theme-mode">
-        <option value="auto">System</option>
-        <option value="light">Light</option>
-        <option value="dark">Dark</option>
-      </select>
-    </label>
-  </header>
+      <input id="doc-search" data-search-input type="search" autocomplete="off" spellcheck="false" placeholder="Symbol or module" aria-controls="search-results">
+      <div id="search-results" data-search-results hidden aria-live="polite"></div>
+    </tenon-doc-search>
+    <tenon-doc-theme-picker>
+      <label for="theme-mode">
+        <span>Theme</span>
+        <select id="theme-mode" data-theme-select>
+          <option value="auto">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>
+    </tenon-doc-theme-picker>
+    </header>
   <div class="doc-shell">
-    <aside class="sidebar" id="sidebar" aria-label="Documentation navigation">
-      <div class="sidebar-heading">Packages</div>
-      <nav>
-        <ul class="nav-list">
-          {{#each navigation.packages}}<li><a href="{{href}}">{{name}} <span>{{version}}</span></a></li>{{/each}}
-        </ul>
-      </nav>
-      {{#if navigation.has_modules}}
-      <div class="sidebar-heading sidebar-heading-modules">Modules</div>
-      <nav>
-        <ul class="nav-list module-list">
-          {{#each navigation.modules}}<li><a href="{{href}}"><code>{{name}}</code></a></li>{{/each}}
-        </ul>
-      </nav>
+    <aside class="sidebar" id="sidebar" data-drawer-panel aria-label="Documentation navigation">
+      {{#if page.has_outline}}
+      <div class="sidebar-section">
+        <div class="sidebar-heading">On this page</div>
+        <nav aria-label="On this page">
+          <ul class="nav-list outline-list">
+            {{#each page.outline}}<li><a href="{{href}}">{{label}}</a></li>{{/each}}
+          </ul>
+        </nav>
+      </div>
+      {{/if}}
+      {{#if navigation.show_modules}}
+      <div class="sidebar-section">
+        <div class="sidebar-heading">Modules</div>
+        <nav aria-label="Package modules">
+          <ul class="nav-list module-list">
+            {{#each navigation.modules}}<li><a href="{{href}}"><code>{{label}}</code></a></li>{{/each}}
+          </ul>
+        </nav>
+      </div>
       {{/if}}
     </aside>
     <main id="content" class="content">

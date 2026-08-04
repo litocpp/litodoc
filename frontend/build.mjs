@@ -5,6 +5,7 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,6 +13,7 @@ const root = dirname(fileURLToPath(import.meta.url));
 const dist = join(root, "dist");
 const generated = join(root, "..", "src", "frontend", "generated", "default-bundle.inc");
 const check = process.argv.includes("--check");
+const runTests = process.argv.includes("--test");
 
 const templates = {
   root: "templates/root.html",
@@ -137,4 +139,21 @@ if (check) {
   await mkdir(dirname(generated), { recursive: true });
   await writeFile(generated, include);
   process.stdout.write(`bundled ${loaded.length} resources (${digest})\n`);
+}
+
+if (runTests) {
+  const testDirectory = join(root, "node_modules", ".cache", "tenon-doc-tests");
+  const testBundle = join(testDirectory, "runtime.test.mjs");
+  await mkdir(testDirectory, { recursive: true });
+  await build({
+    entryPoints: [join(root, "test", "runtime.test.ts")],
+    bundle: true,
+    platform: "node",
+    format: "esm",
+    target: ["node20"],
+    outfile: testBundle,
+  });
+  const tested = spawnSync(process.execPath, ["--test", testBundle], { stdio: "inherit" });
+  if (tested.error) throw tested.error;
+  if (tested.status !== 0) process.exitCode = tested.status ?? 1;
 }
