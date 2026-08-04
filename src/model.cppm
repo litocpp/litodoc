@@ -22,8 +22,17 @@ struct PackageInput {
 };
 
 struct SiteInput {
-    rstd::path::PathBuf output;
-    Vec<PackageInput>   packages;
+    rstd::path::PathBuf         output;
+    rstd::path::PathBuf         data_output;
+    Option<rstd::path::PathBuf> frontend;
+    bool                        data_only { false };
+    Vec<PackageInput>           packages;
+};
+
+struct RenderInput {
+    rstd::path::PathBuf         data;
+    rstd::path::PathBuf         output;
+    Option<rstd::path::PathBuf> frontend;
 };
 
 struct Source {
@@ -89,10 +98,28 @@ struct Database {
     Vec<Package> packages;
 };
 
+struct Dataset {
+    String       title;
+    Vec<Package> packages;
+};
+
+struct PackageDataSummary {
+    String              name;
+    rstd::path::PathBuf json;
+};
+
+struct DataSummary {
+    rstd::path::PathBuf     root;
+    rstd::path::PathBuf     manifest;
+    String                  digest;
+    Vec<PackageDataSummary> packages;
+};
+
 struct PackageSummary {
     String              name;
     rstd::path::PathBuf directory;
     rstd::path::PathBuf json;
+    rstd::path::PathBuf data_json;
     rstd::path::PathBuf index;
     usize               symbols {};
     usize               documented {};
@@ -105,6 +132,8 @@ struct PackageSummary {
 struct Summary {
     rstd::path::PathBuf output;
     rstd::path::PathBuf index;
+    bool                site_generated { false };
+    DataSummary         data;
     Vec<PackageSummary> packages;
 };
 
