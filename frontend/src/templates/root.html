@@ -1,0 +1,19 @@
+{{> templates/partials/head.html}}
+<section class="identity-block identity-root">
+  <p class="eyebrow">Module-first C++ reference</p>
+  <h1>Workspace documentation</h1>
+  <p class="lede">Choose a package to trace its public modules, partitions, symbols, and source.</p>
+</section>
+<section class="api-section" id="packages">
+  <div class="section-heading"><span>Packages</span><span>{{site.package_count}} total</span></div>
+  <div class="package-grid">
+    {{#each packages}}
+    <a class="package-entry" href="{{href}}">
+      <span class="package-name">{{name}}</span>
+      <span class="package-version">{{version}}</span>
+      <span class="package-module"><code>{{root_module}}</code></span>
+    </a>
+    {{/each}}
+  </div>
+</section>
+{{> templates/partials/foot.html}}

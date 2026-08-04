@@ -1,0 +1,10 @@
+    </main>
+    <aside class="page-outline" aria-label="On this page">
+      {{#if page.has_outline}}
+      <strong>On this page</strong>
+      <ul>{{#each page.outline}}<li><a href="{{href}}">{{label}}</a></li>{{/each}}</ul>
+      {{/if}}
+    </aside>
+  </div>
+</body>
+</html>

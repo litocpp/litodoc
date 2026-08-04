@@ -1,0 +1,11 @@
+{{> templates/partials/head.html}}
+<nav class="module-rail" aria-label="Source identity">
+  <a href="{{package.href}}">{{package.name}}</a><span aria-hidden="true">→</span><strong>source</strong>
+</nav>
+<section class="identity-block source-identity">
+  <p class="eyebrow">Package source</p>
+  <h1><code>{{source.path}}</code></h1>
+</section>
+<pre class="source-code" aria-label="Source code"><code>{{#each source.lines}}<span class="source-line" id="{{id}}"><a href="#{{id}}" aria-label="Line {{number}}">{{number}}</a><span>{{text}}</span></span>
+{{/each}}</code></pre>
+{{> templates/partials/foot.html}}

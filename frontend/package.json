@@ -1,0 +1,13 @@
+{
+  "name": "@tenon/doc-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bundle": "node build.mjs",
+    "check-bundle": "node build.mjs --check"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.1"
+  }
+}
