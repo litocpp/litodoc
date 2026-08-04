@@ -22,6 +22,7 @@ struct PackageInput {
 };
 
 struct SiteInput {
+    String                      title;
     rstd::path::PathBuf         output;
     rstd::path::PathBuf         data_output;
     Option<rstd::path::PathBuf> frontend;

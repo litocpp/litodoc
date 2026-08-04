@@ -613,9 +613,9 @@ auto validate_package_json(ref<str> contents) -> Result<empty, String> {
     return Ok(empty {});
 }
 
-auto make_dataset(Database database) -> Dataset {
+auto make_dataset(String title, Database database) -> Dataset {
     return Dataset {
-        .title    = String::make("Tenon documentation"_str),
+        .title    = rstd::move(title),
         .packages = rstd::move(database.packages),
     };
 }

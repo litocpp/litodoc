@@ -9,6 +9,7 @@ import :frontend;
 import :publish;
 
 using namespace rstd::prelude;
+using namespace rstd::literals;
 
 namespace tenon::doc
 {
@@ -23,13 +24,15 @@ export namespace tenon::doc
 {
 
 auto generate(SiteInput input) -> Result<Summary, String> {
+    auto title       = rstd::move(input.title);
     auto output      = input.output.clone();
     auto data_output = input.data_output.clone();
     auto frontend    = rstd::move(input.frontend);
     auto data_only   = input.data_only;
-    auto database    = make_database(rstd::move(input.packages));
+    if (title.is_empty()) return Err(String::make("doc site title must not be empty"_str));
+    auto database = make_database(rstd::move(input.packages));
     if (database.is_err()) return Err(rstd::move(database).unwrap_err());
-    auto dataset = make_dataset(rstd::move(database).unwrap());
+    auto dataset = make_dataset(rstd::move(title), rstd::move(database).unwrap());
     auto data    = publish_dataset(data_output.as_path(), dataset);
     if (data.is_err()) return Err(rstd::move(data).unwrap_err());
     if (data_only) return Ok(summary_for(output.as_path(), dataset, *data));

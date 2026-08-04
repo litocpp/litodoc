@@ -201,8 +201,7 @@ auto split_module(ref<str> name) -> rstd::tuple<String, String> {
 }
 
 auto root_context(const Dataset& dataset) -> TemplateValue {
-    auto context =
-        base_context(dataset, nullptr, "Workspace documentation"_str, "root"_str, ""_str, false);
+    auto context  = base_context(dataset, nullptr, "Overview"_str, "root"_str, ""_str, false);
     auto packages = TemplateValue::array_value();
     for (const auto& package : dataset.packages) {
         packages.array.push(
