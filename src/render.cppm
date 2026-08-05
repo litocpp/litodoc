@@ -60,6 +60,8 @@ auto page_value(ref<str> title, ref<str> kind, ref<str> asset_prefix) -> Templat
     page.insert("title"_str, template_text(title));
     page.insert("kind"_str, template_text(kind));
     page.insert("asset_prefix"_str, template_text(asset_prefix));
+    page.insert("search_package"_str, TemplateValue::text_value(String::make()));
+    page.insert("search_module"_str, TemplateValue::text_value(String::make()));
     page.insert("has_outline"_str, TemplateValue::boolean_value(false));
     page.insert("outline"_str, TemplateValue::array_value());
     return page;
@@ -110,6 +112,18 @@ auto package_render_index(const Package& package) -> PackageRenderIndex {
 
 auto is_record_member(const PackageRenderIndex& index, const Symbol& symbol) -> bool {
     return symbol.parent_key.is_some() && index.record_keys.contains(symbol.parent_key->as_str());
+}
+
+auto declaration_link_value(const Symbol& symbol, ref<str> href_prefix) -> TemplateValue {
+    auto item = TemplateValue::object_value();
+    item.insert("name"_str, template_text(symbol.name.as_str()));
+    item.insert("qualified_name"_str, template_text(symbol.qualified_name.as_str()));
+    item.insert("has_namespace"_str,
+                TemplateValue::boolean_value(! symbol.namespace_name.is_empty()));
+    item.insert("namespace"_str, template_text(symbol.namespace_name.as_str()));
+    item.insert("href"_str,
+                TemplateValue::text_value(rstd::format("{}{}", href_prefix, symbol.page)));
+    return item;
 }
 
 auto direct_module_links(const Package& package, ref<str> parent, ref<str> href_prefix)
@@ -173,7 +187,10 @@ auto base_context(const Dataset& dataset,
                   bool           show_module_supplement) -> TemplateValue {
     auto context = TemplateValue::object_value();
     context.insert("site"_str, site_value(dataset));
-    context.insert("page"_str, page_value(title, kind, asset_prefix));
+    auto page = page_value(title, kind, asset_prefix);
+    if (current != nullptr)
+        page.insert("search_package"_str, template_text(current->name.as_str()));
+    context.insert("page"_str, rstd::move(page));
     context.insert("navigation"_str,
                    navigation_value(dataset, current, asset_prefix, show_module_supplement));
     return context;
@@ -293,12 +310,24 @@ auto module_context(const Dataset&            dataset,
     module_value.insert("has_modules"_str, TemplateValue::boolean_value(modules.count != usize {}));
     module_value.insert("module_count"_str, template_number(modules.count));
     context.insert("modules"_str, rstd::move(modules.items));
-    auto symbols        = TemplateValue::array_value();
-    auto structs        = TemplateValue::array_value();
-    auto functions      = TemplateValue::array_value();
-    auto symbol_count   = usize {};
-    auto struct_count   = usize {};
-    auto function_count = usize {};
+    auto page = context.object.get_mut("page"_str).unwrap();
+    page->insert("search_module"_str, template_text(module.name.as_str()));
+    auto symbols         = TemplateValue::array_value();
+    auto namespaces      = TemplateValue::array_value();
+    auto structs         = TemplateValue::array_value();
+    auto enums           = TemplateValue::array_value();
+    auto concepts        = TemplateValue::array_value();
+    auto aliases         = TemplateValue::array_value();
+    auto functions       = TemplateValue::array_value();
+    auto variables       = TemplateValue::array_value();
+    auto symbol_count    = usize {};
+    auto namespace_count = usize {};
+    auto struct_count    = usize {};
+    auto enum_count      = usize {};
+    auto concept_count   = usize {};
+    auto alias_count     = usize {};
+    auto function_count  = usize {};
+    auto variable_count  = usize {};
     for (const auto& symbol : package.symbols) {
         if (symbol.module.as_str() != module.name.as_str()) continue;
         auto item = TemplateValue::object_value();
@@ -308,40 +337,76 @@ auto module_context(const Dataset&            dataset,
         symbols.array.push(rstd::move(item));
         ++symbol_count;
         if (is_record_member(index, symbol)) continue;
-        if (symbol.kind != frontend::DeclarationKind::Record &&
-            symbol.kind != frontend::DeclarationKind::Function)
-            continue;
-        auto category_item = TemplateValue::object_value();
-        category_item.insert("name"_str, template_text(symbol.name.as_str()));
-        category_item.insert("qualified_name"_str, template_text(symbol.qualified_name.as_str()));
-        category_item.insert("has_namespace"_str,
-                             TemplateValue::boolean_value(! symbol.namespace_name.is_empty()));
-        category_item.insert("namespace"_str, template_text(symbol.namespace_name.as_str()));
-        category_item.insert("href"_str,
-                             TemplateValue::text_value(rstd::format("../{}", symbol.page)));
-        if (symbol.kind == frontend::DeclarationKind::Record) {
-            structs.array.push(rstd::move(category_item));
+        switch (symbol.kind) {
+        case frontend::DeclarationKind::Namespace:
+            namespaces.array.push(declaration_link_value(symbol, "../"_str));
+            ++namespace_count;
+            break;
+        case frontend::DeclarationKind::Record:
+            structs.array.push(declaration_link_value(symbol, "../"_str));
             ++struct_count;
-        } else {
-            functions.array.push(rstd::move(category_item));
+            break;
+        case frontend::DeclarationKind::Enum:
+            enums.array.push(declaration_link_value(symbol, "../"_str));
+            ++enum_count;
+            break;
+        case frontend::DeclarationKind::Concept:
+            concepts.array.push(declaration_link_value(symbol, "../"_str));
+            ++concept_count;
+            break;
+        case frontend::DeclarationKind::Alias:
+            aliases.array.push(declaration_link_value(symbol, "../"_str));
+            ++alias_count;
+            break;
+        case frontend::DeclarationKind::Function:
+            functions.array.push(declaration_link_value(symbol, "../"_str));
             ++function_count;
+            break;
+        case frontend::DeclarationKind::Variable:
+            variables.array.push(declaration_link_value(symbol, "../"_str));
+            ++variable_count;
+            break;
+        default: break;
         }
     }
     module_value.insert("symbol_count"_str, template_number(symbol_count));
+    module_value.insert("has_namespaces"_str,
+                        TemplateValue::boolean_value(namespace_count != usize {}));
+    module_value.insert("namespace_count"_str, template_number(namespace_count));
     module_value.insert("has_structs"_str, TemplateValue::boolean_value(struct_count != usize {}));
     module_value.insert("struct_count"_str, template_number(struct_count));
+    module_value.insert("has_enums"_str, TemplateValue::boolean_value(enum_count != usize {}));
+    module_value.insert("enum_count"_str, template_number(enum_count));
+    module_value.insert("has_concepts"_str,
+                        TemplateValue::boolean_value(concept_count != usize {}));
+    module_value.insert("concept_count"_str, template_number(concept_count));
+    module_value.insert("has_aliases"_str, TemplateValue::boolean_value(alias_count != usize {}));
+    module_value.insert("alias_count"_str, template_number(alias_count));
     module_value.insert("has_functions"_str,
                         TemplateValue::boolean_value(function_count != usize {}));
     module_value.insert("function_count"_str, template_number(function_count));
+    module_value.insert("has_variables"_str,
+                        TemplateValue::boolean_value(variable_count != usize {}));
+    module_value.insert("variable_count"_str, template_number(variable_count));
     context.insert("module"_str, rstd::move(module_value));
     context.insert("symbols"_str, rstd::move(symbols));
+    context.insert("namespaces"_str, rstd::move(namespaces));
     context.insert("structs"_str, rstd::move(structs));
+    context.insert("enums"_str, rstd::move(enums));
+    context.insert("concepts"_str, rstd::move(concepts));
+    context.insert("aliases"_str, rstd::move(aliases));
     context.insert("functions"_str, rstd::move(functions));
-    auto page = context.object.get_mut("page"_str).unwrap();
+    context.insert("variables"_str, rstd::move(variables));
+    page = context.object.get_mut("page"_str).unwrap();
     if (module.comment.is_some()) append_outline(*page, "#documentation"_str, "Documentation"_str);
     if (modules.count != usize {}) append_outline(*page, "#modules"_str, "Modules"_str);
+    if (namespace_count != usize {}) append_outline(*page, "#namespaces"_str, "Namespaces"_str);
     if (struct_count != usize {}) append_outline(*page, "#structs"_str, "Structs"_str);
+    if (enum_count != usize {}) append_outline(*page, "#enums"_str, "Enums"_str);
+    if (concept_count != usize {}) append_outline(*page, "#concepts"_str, "Concepts"_str);
+    if (alias_count != usize {}) append_outline(*page, "#aliases"_str, "Aliases"_str);
     if (function_count != usize {}) append_outline(*page, "#functions"_str, "Functions"_str);
+    if (variable_count != usize {}) append_outline(*page, "#variables"_str, "Variables"_str);
     return context;
 }
 
@@ -361,6 +426,8 @@ auto symbol_context(const Dataset& dataset, const Package& package, const Symbol
     module_value.insert("href"_str,
                         TemplateValue::text_value(rstd::format("../{}", symbol.module_page)));
     context.insert("module"_str, rstd::move(module_value));
+    auto page = context.object.get_mut("page"_str).unwrap();
+    page->insert("search_module"_str, template_text(symbol.module.as_str()));
     auto symbol_value = TemplateValue::object_value();
     symbol_value.insert("name"_str, template_text(symbol.name.as_str()));
     symbol_value.insert("qualified_name"_str, template_text(symbol.qualified_name.as_str()));
@@ -379,7 +446,7 @@ auto symbol_context(const Dataset& dataset, const Package& package, const Symbol
                             rstd::format("../{}#L{}", symbol.source_page, symbol.source_line)));
     context.insert("symbol"_str, rstd::move(symbol_value));
     if (symbol.comment.is_some()) {
-        auto page = context.object.get_mut("page"_str).unwrap();
+        page = context.object.get_mut("page"_str).unwrap();
         append_outline(*page, "#documentation"_str, "Documentation"_str);
     }
     return context;

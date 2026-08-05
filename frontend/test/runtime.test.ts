@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { readSearchCatalog, searchCatalog } from "../src/search/catalog";
+import { loadSearchCatalog, readSearchCatalog, searchCatalog } from "../src/search/catalog";
 import { applyTheme, parseTheme } from "../src/theme";
 
 test("search catalog validates once and filters deterministically", () => {
@@ -22,13 +22,79 @@ test("search catalog validates once and filters deterministically", () => {
       "qualified-name": "rstd::sync::Mutex",
       url: "package/rstd-std/symbol/mutex.html",
     },
+    {
+      package: "rstd-core",
+      module: "rstd.core:alloc",
+      kind: "alias",
+      name: "Funcs",
+      "qualified-name": "rstd::alloc::Allocator::Funcs",
+      url: "package/rstd-core/symbol/allocator-funcs.html",
+    },
+    {
+      package: "rstd-core",
+      module: "rstd.core:alloc",
+      kind: "record",
+      name: "Allocator",
+      "qualified-name": "rstd::alloc::Allocator",
+      url: "package/rstd-core/symbol/allocator.html",
+    },
+    {
+      package: "rstd-cppstd",
+      module: "cppstd",
+      kind: "alias",
+      name: "allocator",
+      "qualified-name": "std::allocator",
+      url: "package/rstd-cppstd/symbol/allocator.html",
+    },
   ]);
   assert.deepEqual(searchCatalog(catalog, "  MUTEX  "), [catalog[1]]);
-  assert.deepEqual(searchCatalog(catalog, "rstd", 1), [catalog[0]]);
+  assert.deepEqual(
+    searchCatalog(catalog, "Allocator", 12, {
+      package: "rstd-core",
+      module: "rstd.core:alloc",
+    }),
+    [catalog[3], catalog[4], catalog[2]],
+  );
+  assert.deepEqual(searchCatalog(catalog, "rstd::alloc::Allocator"), [catalog[3], catalog[2]]);
   assert.deepEqual(searchCatalog(catalog, ""), []);
   assert.throws(
     () => readSearchCatalog([{ package: "rstd" }]),
     /search entry 0 has no string 'module'/,
+  );
+});
+
+test("search catalog loads through its published JSON URL", async () => {
+  let requested = "";
+  const catalog = await loadSearchCatalog("../../search-index.json", async (url) => {
+    requested = url;
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return [
+          {
+            package: "rstd-core",
+            module: "rstd.core:alloc",
+            kind: "record",
+            name: "Allocator",
+            "qualified-name": "rstd::alloc::Allocator",
+            url: "package/rstd-core/symbol/allocator.html",
+          },
+        ];
+      },
+    };
+  });
+  assert.equal(requested, "../../search-index.json");
+  assert.equal(catalog[0]["qualified-name"], "rstd::alloc::Allocator");
+  await assert.rejects(
+    loadSearchCatalog("missing.json", async () => ({
+      ok: false,
+      status: 404,
+      async json() {
+        return [];
+      },
+    })),
+    /status 404/,
   );
 });
 

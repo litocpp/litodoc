@@ -15,16 +15,46 @@
   <ul class="api-list">{{#each modules}}<li><a href="{{href}}"><code>{{label}}</code></a></li>{{/each}}</ul>
 </section>
 {{/if}}
+{{#if module.has_namespaces}}
+<section class="api-section" id="namespaces">
+  <div class="section-heading"><span>Namespaces</span><span>{{module.namespace_count}}</span></div>
+  <ul class="api-list declaration-list">{{#each namespaces}}<li><a href="{{href}}"><code>{{name}}</code></a>{{#if has_namespace}}<span class="namespace-label">{{namespace}}</span>{{/if}}</li>{{/each}}</ul>
+</section>
+{{/if}}
 {{#if module.has_structs}}
 <section class="api-section" id="structs">
   <div class="section-heading"><span>Structs</span><span>{{module.struct_count}}</span></div>
   <ul class="api-list declaration-list">{{#each structs}}<li><a href="{{href}}"><code>{{name}}</code></a>{{#if has_namespace}}<span class="namespace-label">{{namespace}}</span>{{/if}}</li>{{/each}}</ul>
 </section>
 {{/if}}
+{{#if module.has_enums}}
+<section class="api-section" id="enums">
+  <div class="section-heading"><span>Enums</span><span>{{module.enum_count}}</span></div>
+  <ul class="api-list declaration-list">{{#each enums}}<li><a href="{{href}}"><code>{{name}}</code></a>{{#if has_namespace}}<span class="namespace-label">{{namespace}}</span>{{/if}}</li>{{/each}}</ul>
+</section>
+{{/if}}
+{{#if module.has_concepts}}
+<section class="api-section" id="concepts">
+  <div class="section-heading"><span>Concepts</span><span>{{module.concept_count}}</span></div>
+  <ul class="api-list declaration-list">{{#each concepts}}<li><a href="{{href}}"><code>{{name}}</code></a>{{#if has_namespace}}<span class="namespace-label">{{namespace}}</span>{{/if}}</li>{{/each}}</ul>
+</section>
+{{/if}}
+{{#if module.has_aliases}}
+<section class="api-section" id="aliases">
+  <div class="section-heading"><span>Aliases</span><span>{{module.alias_count}}</span></div>
+  <ul class="api-list declaration-list">{{#each aliases}}<li><a href="{{href}}"><code>{{name}}</code></a>{{#if has_namespace}}<span class="namespace-label">{{namespace}}</span>{{/if}}</li>{{/each}}</ul>
+</section>
+{{/if}}
 {{#if module.has_functions}}
 <section class="api-section" id="functions">
   <div class="section-heading"><span>Functions</span><span>{{module.function_count}}</span></div>
   <ul class="api-list declaration-list">{{#each functions}}<li><a href="{{href}}"><code>{{name}}</code></a>{{#if has_namespace}}<span class="namespace-label">{{namespace}}</span>{{/if}}</li>{{/each}}</ul>
+</section>
+{{/if}}
+{{#if module.has_variables}}
+<section class="api-section" id="variables">
+  <div class="section-heading"><span>Variables</span><span>{{module.variable_count}}</span></div>
+  <ul class="api-list declaration-list">{{#each variables}}<li><a href="{{href}}"><code>{{name}}</code></a>{{#if has_namespace}}<span class="namespace-label">{{namespace}}</span>{{/if}}</li>{{/each}}</ul>
 </section>
 {{/if}}
 {{> templates/partials/foot.html}}

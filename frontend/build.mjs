@@ -24,6 +24,7 @@ const templates = {
 };
 const partials = ["templates/partials/head.html", "templates/partials/foot.html"];
 const assets = [
+  { path: "static/favicon.svg", "media-type": "image/svg+xml" },
   { path: "static/style.css", "media-type": "text/css" },
   { path: "static/theme-bootstrap.js", "media-type": "text/javascript" },
   { path: "static/app.js", "media-type": "text/javascript" },
@@ -43,6 +44,11 @@ for (const path of [...Object.values(templates), ...partials]) {
   const source = await readFile(join(root, "src", path), "utf8");
   await writeFile(join(dist, path), source);
 }
+
+await writeFile(
+  join(dist, "static", "favicon.svg"),
+  await readFile(join(root, "src", "static", "favicon.svg")),
+);
 
 await build({
   entryPoints: [join(root, "src", "app.ts")],

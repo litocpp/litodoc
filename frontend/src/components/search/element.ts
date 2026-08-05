@@ -1,11 +1,18 @@
-import { searchCatalog, type SearchEntry } from "../../search/catalog";
+import {
+  loadSearchCatalog,
+  searchCatalog,
+  type SearchContext,
+  type SearchEntry,
+} from "../../search/catalog";
 
 export class TenonDocSearchElement extends HTMLElement {
-  static observedAttributes = ["root-prefix"];
+  static observedAttributes = ["catalog-url", "current-module", "current-package", "root-prefix"];
 
-  #entries: readonly SearchEntry[] = [];
+  #entries?: readonly SearchEntry[];
   #events?: AbortController;
   #input?: HTMLInputElement;
+  #load?: Promise<void>;
+  #loadError?: unknown;
   #results?: HTMLElement;
 
   connectedCallback(): void {
@@ -22,7 +29,8 @@ export class TenonDocSearchElement extends HTMLElement {
     this.#input = input;
     this.#results = results;
     input.setAttribute("aria-expanded", "false");
-    input.addEventListener("input", () => this.updateResults(), { signal: events.signal });
+    input.addEventListener("focus", () => void this.loadEntries(), { signal: events.signal });
+    input.addEventListener("input", () => void this.updateResults(), { signal: events.signal });
     input.addEventListener(
       "keydown",
       (event) => {
@@ -61,7 +69,7 @@ export class TenonDocSearchElement extends HTMLElement {
       { signal: events.signal },
     );
     this.toggleAttribute("data-ready", true);
-    this.updateResults();
+    void this.updateResults();
   }
 
   disconnectedCallback(): void {
@@ -72,21 +80,39 @@ export class TenonDocSearchElement extends HTMLElement {
     this.removeAttribute("data-ready");
   }
 
-  attributeChangedCallback(): void {
-    this.updateResults();
+  attributeChangedCallback(name: string, previous: string | null, current: string | null): void {
+    if (name === "catalog-url" && previous !== current) {
+      this.#entries = undefined;
+      this.#load = undefined;
+      this.#loadError = undefined;
+    }
+    void this.updateResults();
   }
 
   get entries(): readonly SearchEntry[] {
-    return this.#entries;
+    return this.#entries ?? [];
   }
 
   set entries(entries: readonly SearchEntry[]) {
     this.#entries = entries;
-    this.updateResults();
+    this.#load = undefined;
+    this.#loadError = undefined;
+    void this.updateResults();
+  }
+
+  get catalogUrl(): string {
+    return this.getAttribute("catalog-url") ?? "";
   }
 
   get rootPrefix(): string {
     return this.getAttribute("root-prefix") ?? "";
+  }
+
+  get searchContext(): SearchContext {
+    return {
+      package: this.getAttribute("current-package") || undefined,
+      module: this.getAttribute("current-module") || undefined,
+    };
   }
 
   hideResults(): void {
@@ -96,13 +122,60 @@ export class TenonDocSearchElement extends HTMLElement {
     this.#input.setAttribute("aria-expanded", "false");
   }
 
-  updateResults(): void {
+  async loadEntries(): Promise<void> {
+    if (this.#entries || this.#loadError) return;
+    if (!this.#load) {
+      const url = this.catalogUrl;
+      if (!url) {
+        this.#loadError = new Error("tenon-doc-search requires catalog-url or entries");
+        console.error(this.#loadError);
+        return;
+      }
+      this.#load = loadSearchCatalog(url)
+        .then((entries) => {
+          this.#entries = entries;
+        })
+        .catch((error: unknown) => {
+          this.#loadError = error;
+          console.error(error);
+        });
+    }
+    await this.#load;
+  }
+
+  showStatus(message: string): void {
+    if (!this.#results || !this.#input) return;
+    this.#results.replaceChildren();
+    const status = document.createElement("div");
+    status.className = "search-status";
+    status.setAttribute("role", "status");
+    status.textContent = message;
+    this.#results.append(status);
+    this.#results.hidden = false;
+    this.#input.setAttribute("aria-expanded", "true");
+  }
+
+  async updateResults(): Promise<void> {
     if (!this.#input || !this.#results) return;
-    const matches = searchCatalog(this.#entries, this.#input.value);
     if (!this.#input.value.trim()) {
       this.hideResults();
       return;
     }
+
+    if (!this.#entries) {
+      this.showStatus("Loading search index…");
+      await this.loadEntries();
+    }
+    if (!this.#input.value.trim()) {
+      this.hideResults();
+      return;
+    }
+    if (this.#loadError || !this.#entries) {
+      this.showStatus("Search index unavailable");
+      return;
+    }
+
+    const matches = searchCatalog(this.#entries, this.#input.value, 12, this.searchContext);
 
     this.#results.replaceChildren();
     const status = document.createElement("div");

@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="generator" content="Tenon">
   <title>{{page.title}} · {{site.title}}</title>
+  <link rel="icon" href="{{page.asset_prefix}}static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="{{page.asset_prefix}}static/style.css">
   <script src="{{page.asset_prefix}}static/theme-bootstrap.js"></script>
-  <script src="{{page.asset_prefix}}static/search-index.js"></script>
   <script defer src="{{page.asset_prefix}}static/app.js"></script>
 </head>
 <body data-page-kind="{{page.kind}}">
@@ -21,7 +21,7 @@
       <span class="brand-mark" aria-hidden="true">:</span>
       <span>{{site.title}}</span>
     </a>
-    <tenon-doc-search root-prefix="{{page.asset_prefix}}">
+    <tenon-doc-search root-prefix="{{page.asset_prefix}}" catalog-url="{{page.asset_prefix}}search-index.json" current-package="{{page.search_package}}" current-module="{{page.search_module}}">
       <label for="doc-search">Search API</label>
       <input id="doc-search" data-search-input type="search" autocomplete="off" spellcheck="false" placeholder="Symbol or module" aria-controls="search-results">
       <div id="search-results" data-search-results hidden aria-live="polite"></div>
