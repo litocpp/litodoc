@@ -1,15 +1,15 @@
-tenon-doc-search {
+lito-doc-search {
   position: relative;
   display: block;
   width: 100%;
 }
 
-tenon-doc-search:not([data-ready]) {
+lito-doc-search:not([data-ready]) {
   visibility: hidden;
   pointer-events: none;
 }
 
-tenon-doc-search > label {
+lito-doc-search > label {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -17,7 +17,7 @@ tenon-doc-search > label {
   clip: rect(0, 0, 0, 0);
 }
 
-tenon-doc-search [data-search-input] {
+lito-doc-search [data-search-input] {
   width: 100%;
   min-height: 2.45rem;
   padding: 0.45rem 0.8rem;
@@ -28,7 +28,7 @@ tenon-doc-search [data-search-input] {
   font: inherit;
 }
 
-tenon-doc-search [data-search-results] {
+lito-doc-search [data-search-results] {
   position: absolute;
   z-index: 70;
   top: calc(100% + 0.4rem);
@@ -41,8 +41,8 @@ tenon-doc-search [data-search-results] {
   box-shadow: 0 1.2rem 3rem rgb(0 0 0 / 0.16);
 }
 
-tenon-doc-search [data-search-results] a,
-tenon-doc-search .search-status {
+lito-doc-search [data-search-results] a,
+lito-doc-search .search-status {
   display: flex;
   justify-content: space-between;
   gap: 1rem;
@@ -50,36 +50,36 @@ tenon-doc-search .search-status {
   border-bottom: 1px solid var(--border);
 }
 
-tenon-doc-search [data-search-results] a {
+lito-doc-search [data-search-results] a {
   color: var(--ink);
   text-decoration: none;
 }
 
-tenon-doc-search [data-search-results] a > * {
+lito-doc-search [data-search-results] a > * {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-tenon-doc-search [data-search-results] a:hover {
+lito-doc-search [data-search-results] a:hover {
   background: var(--surface-raised);
 }
 
-tenon-doc-search [data-search-results] small,
-tenon-doc-search .search-status {
+lito-doc-search [data-search-results] small,
+lito-doc-search .search-status {
   color: var(--muted);
 }
 
-tenon-doc-search [data-search-results] small {
+lito-doc-search [data-search-results] small {
   text-align: right;
 }
 
 @media (max-width: 34rem) {
-  tenon-doc-search [data-search-results] a {
+  lito-doc-search [data-search-results] a {
     flex-direction: column;
     gap: 0.2rem;
   }
 
-  tenon-doc-search [data-search-results] small {
+  lito-doc-search [data-search-results] small {
     text-align: left;
   }
 }

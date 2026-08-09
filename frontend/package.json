@@ -1,5 +1,5 @@
 {
-  "name": "@tenon/doc-frontend",
+  "name": "@lito/doc-frontend",
   "version": "0.1.0",
   "private": true,
   "type": "module",

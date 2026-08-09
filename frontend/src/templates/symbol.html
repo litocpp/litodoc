@@ -1,9 +1,9 @@
 {{> templates/partials/head.html}}
-<tenon-doc-module-identity variant="module">
+<lito-doc-module-identity variant="module">
   <nav aria-label="Module identity">
     <a href="{{package.href}}">{{package.name}}</a><span aria-hidden="true">→</span><a href="{{module.href}}">{{module.prefix}}</a>{{#if module.partition}}<span class="partition-mark">:</span><a class="partition-name" href="{{module.href}}">{{module.partition}}</a>{{/if}}<span aria-hidden="true">→</span><strong>{{symbol.name}}</strong>
   </nav>
-</tenon-doc-module-identity>
+</lito-doc-module-identity>
 <section class="identity-block symbol-identity">
   <p class="eyebrow">{{symbol.kind}}</p>
   <h1>{{symbol.qualified_name}}</h1>

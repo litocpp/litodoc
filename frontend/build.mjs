@@ -72,7 +72,7 @@ await build({
 });
 
 const manifest = {
-  format: "tenon-doc-frontend",
+  format: "lito-doc-frontend",
   version: 1,
   "data-api": 1,
   "template-api": 1,
@@ -110,19 +110,19 @@ for (const resource of resources) {
 const digest = hash.toString(16).padStart(16, "0");
 
 const lines = [];
-lines.push(`inline constexpr auto TENON_DOC_DEFAULT_FRONTEND_DIGEST = "${digest}"_str;`);
+lines.push(`inline constexpr auto LITO_DOC_DEFAULT_FRONTEND_DIGEST = "${digest}"_str;`);
 loaded.forEach((resource, index) => {
   const bytes = [...resource.contents].map((byte) => `0x${byte.toString(16).padStart(2, "0")}`);
-  lines.push(`inline constexpr unsigned char TENON_DOC_FRONTEND_DATA_${index}[] = {`);
+  lines.push(`inline constexpr unsigned char LITO_DOC_FRONTEND_DATA_${index}[] = {`);
   for (let begin = 0; begin < bytes.length; begin += 16) {
     lines.push(`    ${bytes.slice(begin, begin + 16).join(", ")},`);
   }
   lines.push("};");
 });
-lines.push("inline constexpr EmbeddedFrontendResourceLiteral TENON_DOC_DEFAULT_FRONTEND_RESOURCES[] = {");
+lines.push("inline constexpr EmbeddedFrontendResourceLiteral LITO_DOC_DEFAULT_FRONTEND_RESOURCES[] = {");
 loaded.forEach((resource, index) => {
   lines.push(
-    `    { "${resource.path}", "${resource["media-type"]}", TENON_DOC_FRONTEND_DATA_${index}, sizeof(TENON_DOC_FRONTEND_DATA_${index}) },`,
+    `    { "${resource.path}", "${resource["media-type"]}", LITO_DOC_FRONTEND_DATA_${index}, sizeof(LITO_DOC_FRONTEND_DATA_${index}) },`,
   );
 });
 lines.push("};");
@@ -148,7 +148,7 @@ if (check) {
 }
 
 if (runTests) {
-  const testDirectory = join(root, "node_modules", ".cache", "tenon-doc-tests");
+  const testDirectory = join(root, "node_modules", ".cache", "lito-doc-tests");
   const testBundle = join(testDirectory, "runtime.test.mjs");
   await mkdir(testDirectory, { recursive: true });
   await build({

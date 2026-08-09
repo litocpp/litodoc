@@ -1,10 +1,10 @@
 [package]
-name = "tenon-doc"
+name = "lito-doc"
 version.workspace = true
-module = "tenon.doc"
+module = "lito.doc"
 
 [library]
-archive = "tenon.doc"
+archive = "lito.doc"
 discovery = "module"
 
 [usage]
@@ -18,7 +18,7 @@ private-options = [
   "-fsized-deallocation",
 ]
 
-[dependencies.tenon-frontend]
+[dependencies.lito-frontend]
 path = "../frontend"
 visibility = "public"
 

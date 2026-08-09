@@ -1,6 +1,6 @@
 export type ThemeMode = "auto" | "light" | "dark";
 
-export const THEME_STORAGE_KEY = "tenon-doc-theme";
+export const THEME_STORAGE_KEY = "lito-doc-theme";
 
 export function parseTheme(value: unknown): ThemeMode {
   return value === "light" || value === "dark" ? value : "auto";

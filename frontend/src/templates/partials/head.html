@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="generator" content="Tenon">
+  <meta name="generator" content="Lito">
   <title>{{page.title}} · {{site.title}}</title>
   <link rel="icon" href="{{page.asset_prefix}}static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="{{page.asset_prefix}}static/style.css">
@@ -12,7 +12,7 @@
 </head>
 <body data-page-kind="{{page.kind}}">
   <a class="skip-link" href="#content">Skip to documentation</a>
-  <tenon-doc-shell>
+  <lito-doc-shell>
   <header class="topbar">
     <button class="menu-button" type="button" data-drawer-trigger aria-controls="sidebar" aria-expanded="false">
       <span aria-hidden="true">☰</span><span class="sr-only">Open documentation navigation</span>
@@ -21,12 +21,12 @@
       <span class="brand-mark" aria-hidden="true">:</span>
       <span>{{site.title}}</span>
     </a>
-    <tenon-doc-search root-prefix="{{page.asset_prefix}}" catalog-url="{{page.asset_prefix}}search-index.json" current-package="{{page.search_package}}" current-module="{{page.search_module}}">
+    <lito-doc-search root-prefix="{{page.asset_prefix}}" catalog-url="{{page.asset_prefix}}search-index.json" current-package="{{page.search_package}}" current-module="{{page.search_module}}">
       <label for="doc-search">Search API</label>
       <input id="doc-search" data-search-input type="search" autocomplete="off" spellcheck="false" placeholder="Symbol or module" aria-controls="search-results">
       <div id="search-results" data-search-results hidden aria-live="polite"></div>
-    </tenon-doc-search>
-    <tenon-doc-theme-picker>
+    </lito-doc-search>
+    <lito-doc-theme-picker>
       <label for="theme-mode">
         <span>Theme</span>
         <select id="theme-mode" data-theme-select>
@@ -35,7 +35,7 @@
           <option value="dark">Dark</option>
         </select>
       </label>
-    </tenon-doc-theme-picker>
+    </lito-doc-theme-picker>
     </header>
   <div class="doc-shell">
     <aside class="sidebar" id="sidebar" data-drawer-panel aria-label="Documentation navigation">

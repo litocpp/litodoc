@@ -1,4 +1,4 @@
-export class TenonDocShellElement extends HTMLElement {
+export class LitoDocShellElement extends HTMLElement {
   #events?: AbortController;
   #narrow?: MediaQueryList;
   #panel?: HTMLElement;
@@ -9,7 +9,7 @@ export class TenonDocShellElement extends HTMLElement {
     const trigger = this.querySelector("[data-drawer-trigger]");
     const panel = this.querySelector("[data-drawer-panel]");
     if (!(trigger instanceof HTMLButtonElement) || !(panel instanceof HTMLElement)) {
-      console.error("tenon-doc-shell requires a drawer trigger and panel");
+      console.error("lito-doc-shell requires a drawer trigger and panel");
       return;
     }
 

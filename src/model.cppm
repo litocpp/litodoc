@@ -1,12 +1,12 @@
-export module tenon.doc:model;
+export module lito.doc:model;
 
 import rstd;
-import tenon.frontend;
+import lito.frontend;
 
 using namespace rstd::prelude;
 using namespace rstd::literals;
 
-export namespace tenon::doc
+export namespace lito::doc
 {
 
 struct PackageInput {
@@ -142,9 +142,9 @@ struct Summary {
 auto declaration_kind_name(frontend::DeclarationKind kind) -> ref<str>;
 auto declaration_kind_slug(frontend::DeclarationKind kind) -> ref<str>;
 
-} // namespace tenon::doc
+} // namespace lito::doc
 
-namespace tenon::doc
+namespace lito::doc
 {
 
 auto declaration_kind_name(frontend::DeclarationKind kind) -> ref<str> {
@@ -179,4 +179,4 @@ auto declaration_kind_slug(frontend::DeclarationKind kind) -> ref<str> {
     __builtin_unreachable();
 }
 
-} // namespace tenon::doc
+} // namespace lito::doc

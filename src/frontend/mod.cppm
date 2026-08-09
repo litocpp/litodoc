@@ -1,4 +1,4 @@
-export module tenon.doc:frontend;
+export module lito.doc:frontend;
 
 import rstd;
 import rstd.json;
@@ -9,7 +9,7 @@ using namespace rstd::literals;
 using FrontendJson      = rstd::json::Value;
 using FrontendJsonArray = rstd::json::Array;
 
-namespace tenon::doc
+namespace lito::doc
 {
 
 struct FrontendResource {
@@ -46,7 +46,7 @@ struct EmbeddedFrontendResourceLiteral {
 #if __has_include("generated/default-bundle.inc")
 #include "generated/default-bundle.inc"
 #else
-#error "Tenon doc frontend bundle is missing; run 'npm ci' and 'npm run bundle' in doc/frontend"
+#error "Lito doc frontend bundle is missing; run 'npm ci' and 'npm run bundle' in doc/frontend"
 #endif
 
 inline constexpr uint64_t FRONTEND_FNV_OFFSET = 14695981039346656037ull;
@@ -146,7 +146,7 @@ auto parse_frontend_manifest(ref<str> contents) -> Result<FrontendJson, String> 
     if (version.is_err()) return Err(rstd::move(version).unwrap_err());
     if (data_api.is_err()) return Err(rstd::move(data_api).unwrap_err());
     if (template_api.is_err()) return Err(rstd::move(template_api).unwrap_err());
-    if (format->as_str() != "tenon-doc-frontend"_str)
+    if (format->as_str() != "lito-doc-frontend"_str)
         return Err(rstd::format("unsupported frontend format '{}'", format->as_str()));
     if (*version != usize(1))
         return Err(rstd::format("unsupported frontend bundle version {}", *version));
@@ -282,7 +282,7 @@ auto make_frontend_bundle(String                                                
 
 auto load_builtin_frontend() -> Result<FrontendBundle, String> {
     auto resources = rstd::collections::BTreeMap<String, FrontendResource>::make();
-    for (const auto& literal : TENON_DOC_DEFAULT_FRONTEND_RESOURCES) {
+    for (const auto& literal : LITO_DOC_DEFAULT_FRONTEND_RESOURCES) {
         auto path = ref<str>::from_raw_parts_unchecked(reinterpret_cast<const byte*>(literal.path),
                                                        usize(__builtin_strlen(literal.path)));
         auto media_type =
@@ -303,7 +303,7 @@ auto load_builtin_frontend() -> Result<FrontendBundle, String> {
     auto manifest = parse_frontend_manifest((**manifest_resource).contents.as_str());
     if (manifest.is_err()) return Err(rstd::move(manifest).unwrap_err());
     auto digest = frontend_digest(resources);
-    if (digest.as_str() != TENON_DOC_DEFAULT_FRONTEND_DIGEST)
+    if (digest.as_str() != LITO_DOC_DEFAULT_FRONTEND_DIGEST)
         return Err(String::make("embedded frontend digest mismatch"_str));
     return make_frontend_bundle(String::make("builtin:default"_str),
                                 rstd::move(digest),
@@ -424,4 +424,4 @@ auto load_frontend_directory(ref<rstd::path::Path> root) -> Result<FrontendBundl
                                 rstd::move(manifest).unwrap());
 }
 
-} // namespace tenon::doc
+} // namespace lito::doc

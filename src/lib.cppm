@@ -1,4 +1,4 @@
-export module tenon.doc;
+export module lito.doc;
 
 export import :model;
 
@@ -11,16 +11,16 @@ import :publish;
 using namespace rstd::prelude;
 using namespace rstd::literals;
 
-namespace tenon::doc
+namespace lito::doc
 {
 
 auto selected_frontend(const Option<rstd::path::PathBuf>& path) -> Result<FrontendBundle, String> {
     return path.is_some() ? load_frontend_directory(path->as_path()) : load_builtin_frontend();
 }
 
-} // namespace tenon::doc
+} // namespace lito::doc
 
-export namespace tenon::doc
+export namespace lito::doc
 {
 
 auto generate(SiteInput input) -> Result<Summary, String> {
@@ -60,4 +60,4 @@ auto validate_data(ref<rstd::path::Path> root) -> Result<DataSummary, String> {
     return Ok(summarize_dataset(root, *dataset));
 }
 
-} // namespace tenon::doc
+} // namespace lito::doc

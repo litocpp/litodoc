@@ -1,11 +1,11 @@
-export module tenon.doc:html;
+export module lito.doc:html;
 
 import rstd;
 
 using namespace rstd::prelude;
 using namespace rstd::literals;
 
-namespace tenon::doc
+namespace lito::doc
 {
 
 auto escape_html(ref<str> value) -> String {
@@ -34,4 +34,4 @@ auto safe_link(ref<str> value) -> bool {
            value.starts_with("#"_str);
 }
 
-} // namespace tenon::doc
+} // namespace lito::doc

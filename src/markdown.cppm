@@ -1,4 +1,4 @@
-export module tenon.doc:markdown;
+export module lito.doc:markdown;
 
 import rstd;
 import :html;
@@ -6,7 +6,7 @@ import :html;
 using namespace rstd::prelude;
 using namespace rstd::literals;
 
-namespace tenon::doc
+namespace lito::doc
 {
 
 auto find_byte(ref<str> value, usize begin, u8 needle) -> Option<usize> {
@@ -174,4 +174,4 @@ auto render_markdown(ref<str> value) -> String {
     return output;
 }
 
-} // namespace tenon::doc
+} // namespace lito::doc

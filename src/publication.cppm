@@ -1,11 +1,11 @@
-export module tenon.doc:publication;
+export module lito.doc:publication;
 
 import rstd;
 
 using namespace rstd::prelude;
 using namespace rstd::literals;
 
-namespace tenon::doc
+namespace lito::doc
 {
 
 struct Publication {
@@ -42,8 +42,8 @@ auto remove_publication_directory(ref<rstd::path::Path> path) -> Result<empty, S
 
 auto begin_publication(ref<rstd::path::Path> output, ref<str> owner)
     -> Result<Publication, String> {
-    auto staging_suffix = rstd::format(".tenon-{}-staging", owner);
-    auto backup_suffix  = rstd::format(".tenon-{}-backup", owner);
+    auto staging_suffix = rstd::format(".lito-{}-staging", owner);
+    auto backup_suffix  = rstd::format(".lito-{}-backup", owner);
     auto staging        = publication_sibling(output, staging_suffix.as_str());
     auto backup         = publication_sibling(output, backup_suffix.as_str());
     if (staging.is_err()) return Err(rstd::move(staging).unwrap_err());
@@ -96,4 +96,4 @@ auto commit_publication(const Publication& publication) -> Result<empty, String>
     return Ok(empty {});
 }
 
-} // namespace tenon::doc
+} // namespace lito::doc

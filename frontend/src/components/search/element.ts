@@ -5,7 +5,7 @@ import {
   type SearchEntry,
 } from "../../search/catalog";
 
-export class TenonDocSearchElement extends HTMLElement {
+export class LitoDocSearchElement extends HTMLElement {
   static observedAttributes = ["catalog-url", "current-module", "current-package", "root-prefix"];
 
   #entries?: readonly SearchEntry[];
@@ -20,7 +20,7 @@ export class TenonDocSearchElement extends HTMLElement {
     const input = this.querySelector("[data-search-input]");
     const results = this.querySelector("[data-search-results]");
     if (!(input instanceof HTMLInputElement) || !(results instanceof HTMLElement)) {
-      console.error("tenon-doc-search requires an input and results container");
+      console.error("lito-doc-search requires an input and results container");
       return;
     }
 
@@ -127,7 +127,7 @@ export class TenonDocSearchElement extends HTMLElement {
     if (!this.#load) {
       const url = this.catalogUrl;
       if (!url) {
-        this.#loadError = new Error("tenon-doc-search requires catalog-url or entries");
+        this.#loadError = new Error("lito-doc-search requires catalog-url or entries");
         console.error(this.#loadError);
         return;
       }

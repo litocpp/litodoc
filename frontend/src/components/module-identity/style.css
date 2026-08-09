@@ -1,4 +1,4 @@
-tenon-doc-module-identity {
+lito-doc-module-identity {
   display: block;
   min-height: 2.4rem;
   padding: 0.55rem 0.75rem;
@@ -9,25 +9,25 @@ tenon-doc-module-identity {
   font-size: 0.82rem;
 }
 
-tenon-doc-module-identity > nav {
+lito-doc-module-identity > nav {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
 }
 
-tenon-doc-module-identity a,
-tenon-doc-module-identity strong {
+lito-doc-module-identity a,
+lito-doc-module-identity strong {
   color: var(--module);
 }
 
-tenon-doc-module-identity .partition-mark,
-tenon-doc-module-identity .partition-name {
+lito-doc-module-identity .partition-mark,
+lito-doc-module-identity .partition-name {
   color: var(--partition);
 }
 
 @media (max-width: 50rem) {
-  tenon-doc-module-identity {
+  lito-doc-module-identity {
     margin-bottom: 1.5rem;
   }
 }

@@ -1,8 +1,8 @@
-export module tenon.doc:data;
+export module lito.doc:data;
 
 import rstd;
 import rstd.json;
-import tenon.frontend;
+import lito.frontend;
 import :model;
 import :publication;
 
@@ -12,7 +12,7 @@ using Json      = rstd::json::Value;
 using JsonMap   = rstd::json::Map;
 using JsonArray = rstd::json::Array;
 
-namespace tenon::doc
+namespace lito::doc
 {
 
 inline constexpr uint64_t DATA_FNV_OFFSET = 14695981039346656037ull;
@@ -72,7 +72,7 @@ auto json_text(const Json& value) -> String {
 auto source_data_path(ref<str> package, ref<str> source) -> String {
     return rstd::format("packages/{}/sources/{}.json",
                         package,
-                        data_identity("tenon-doc-source-data-v1"_str, source).as_str());
+                        data_identity("lito-doc-source-data-v1"_str, source).as_str());
 }
 
 auto package_data_path(ref<str> package) -> String {
@@ -122,7 +122,7 @@ auto write_data_file(ref<rstd::path::Path> root, ref<str> relative, ref<str> con
 
 auto encode_source_fragment(ref<str> package, const Source& source) -> Json {
     auto root = JsonMap::make();
-    root.insert(String::make("format"_str), json_string("tenon-doc-source"_str));
+    root.insert(String::make("format"_str), json_string("lito-doc-source"_str));
     root.insert(String::make("version"_str), json_usize(usize(1)));
     root.insert(String::make("package"_str), json_string(package));
     root.insert(String::make("path"_str), json_string(source.path.as_str()));
@@ -133,12 +133,12 @@ auto encode_source_fragment(ref<str> package, const Source& source) -> Json {
 
 auto encode_package(const Package& package) -> Json {
     auto root = JsonMap::make();
-    root.insert(String::make("format"_str), json_string("tenon-doc"_str));
+    root.insert(String::make("format"_str), json_string("lito-doc"_str));
     root.insert(String::make("version"_str), json_usize(usize(2)));
     auto generator = JsonMap::make();
-    generator.insert(String::make("frontend"_str), json_string("tenon-native-frontend-v1"_str));
-    generator.insert(String::make("parser"_str), json_string("tenon-doc-outline-v1"_str));
-    generator.insert(String::make("dataset"_str), json_string("tenon-doc-data-v2"_str));
+    generator.insert(String::make("frontend"_str), json_string("lito-native-frontend-v1"_str));
+    generator.insert(String::make("parser"_str), json_string("lito-doc-outline-v1"_str));
+    generator.insert(String::make("dataset"_str), json_string("lito-doc-data-v2"_str));
     generator.insert(String::make("toolchain-version"_str),
                      json_string(package.toolchain_version.as_str()));
     generator.insert(String::make("toolchain-target"_str),
@@ -381,7 +381,7 @@ auto decode_source(ref<rstd::path::Path> root,
         return Err(rstd::format("doc source '{}' digest mismatch", data->as_str()));
     auto parsed = parse_json_text(contents->as_str(), "doc source"_str);
     if (parsed.is_err()) return Err(rstd::move(parsed).unwrap_err());
-    auto header = expect_header(*parsed, "tenon-doc-source"_str, usize(1), "doc source"_str);
+    auto header = expect_header(*parsed, "lito-doc-source"_str, usize(1), "doc source"_str);
     if (header.is_err()) return Err(rstd::move(header).unwrap_err());
     auto fragment_package = required_string(*parsed, "package"_str, "doc source"_str);
     auto fragment_path    = required_string(*parsed, "path"_str, "doc source"_str);
@@ -404,7 +404,7 @@ auto decode_source(ref<rstd::path::Path> root,
 auto decode_package(const Json&                   document,
                     Option<ref<rstd::path::Path>> root,
                     Option<ref<JsonArray>>        manifest_sources) -> Result<Package, String> {
-    auto header = expect_header(document, "tenon-doc"_str, usize(2), "doc package"_str);
+    auto header = expect_header(document, "lito-doc"_str, usize(2), "doc package"_str);
     if (header.is_err()) return Err(rstd::move(header).unwrap_err());
     auto generator = required_member(document, "generator"_str, "doc package"_str);
     auto metadata  = required_member(document, "package"_str, "doc package"_str);
@@ -606,7 +606,7 @@ auto decode_package(const Json&                   document,
 }
 
 auto validate_package_json(ref<str> contents) -> Result<empty, String> {
-    auto parsed = parse_json_text(contents, "tenon doc package"_str);
+    auto parsed = parse_json_text(contents, "lito doc package"_str);
     if (parsed.is_err()) return Err(rstd::move(parsed).unwrap_err());
     auto package = decode_package(*parsed, None(), None());
     if (package.is_err()) return Err(rstd::move(package).unwrap_err());
@@ -651,10 +651,10 @@ auto dataset_manifest_json(const Dataset& dataset) -> String {
                     ? Json::Null()
                     : json_string(dataset.packages[usize {}].name.as_str()));
     auto manifest = JsonMap::make();
-    manifest.insert(String::make("format"_str), json_string("tenon-doc-dataset"_str));
+    manifest.insert(String::make("format"_str), json_string("lito-doc-dataset"_str));
     manifest.insert(String::make("version"_str), json_usize(usize(1)));
     manifest.insert(String::make("data-api"_str), json_usize(usize(1)));
-    manifest.insert(String::make("generator"_str), json_string("tenon-doc-data-v2"_str));
+    manifest.insert(String::make("generator"_str), json_string("lito-doc-data-v2"_str));
     manifest.insert(String::make("site"_str), Json::Object(rstd::move(site)));
     manifest.insert(String::make("packages"_str), Json::Array(rstd::move(manifest_packages)));
     return json_text(Json::Object(rstd::move(manifest)));
@@ -685,7 +685,7 @@ auto load_dataset(ref<rstd::path::Path> root) -> Result<Dataset, String> {
     auto manifest = parse_json_text(manifest_text->as_str(), "doc dataset manifest"_str);
     if (manifest.is_err()) return Err(rstd::move(manifest).unwrap_err());
     auto header =
-        expect_header(*manifest, "tenon-doc-dataset"_str, usize(1), "doc dataset manifest"_str);
+        expect_header(*manifest, "lito-doc-dataset"_str, usize(1), "doc dataset manifest"_str);
     if (header.is_err()) return Err(rstd::move(header).unwrap_err());
     auto data_api = required_usize(*manifest, "data-api"_str, "doc dataset manifest"_str);
     if (data_api.is_err()) return Err(rstd::move(data_api).unwrap_err());
@@ -694,7 +694,7 @@ auto load_dataset(ref<rstd::path::Path> root) -> Result<Dataset, String> {
     auto site      = required_member(*manifest, "site"_str, "doc dataset manifest"_str);
     if (generator.is_err()) return Err(rstd::move(generator).unwrap_err());
     if (site.is_err()) return Err(rstd::move(site).unwrap_err());
-    if (generator->as_str() != "tenon-doc-data-v2"_str)
+    if (generator->as_str() != "lito-doc-data-v2"_str)
         return Err(rstd::format("unsupported doc data generator '{}'", generator->as_str()));
     auto title           = required_string(**site, "title"_str, "doc dataset site"_str);
     auto default_package = optional_string(**site, "default-package"_str, "doc dataset site"_str);
@@ -814,7 +814,7 @@ auto search_json(const Dataset& dataset) -> String {
 }
 
 auto search_script(const Dataset& dataset) -> String {
-    auto result = String::make("window.__TENON_DOC_SEARCH__ = "_str);
+    auto result = String::make("window.__LITO_DOC_SEARCH__ = "_str);
     auto json   = search_json(dataset);
     auto body   = json.as_str().trim_ascii();
     result.push_str(body);
@@ -822,4 +822,4 @@ auto search_script(const Dataset& dataset) -> String {
     return result;
 }
 
-} // namespace tenon::doc
+} // namespace lito::doc

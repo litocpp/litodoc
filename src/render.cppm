@@ -1,4 +1,4 @@
-export module tenon.doc:render;
+export module lito.doc:render;
 
 import rstd;
 import rstd.json;
@@ -13,7 +13,7 @@ using namespace rstd::literals;
 using RenderJson    = rstd::json::Value;
 using RenderJsonMap = rstd::json::Map;
 
-namespace tenon::doc
+namespace lito::doc
 {
 
 auto doc_path(ref<rstd::path::Path> root, ref<str> relative) -> rstd::path::PathBuf {
@@ -566,7 +566,7 @@ auto render_site(ref<rstd::path::Path> root,
     }
     auto site_manifest_object = RenderJsonMap::make();
     site_manifest_object.insert(String::make("format"_str),
-                                RenderJson::String(String::make("tenon-doc-site"_str)));
+                                RenderJson::String(String::make("lito-doc-site"_str)));
     site_manifest_object.insert(String::make("version"_str),
                                 RenderJson::Number(rstd::json::Number::from_u64(u64(1))));
     site_manifest_object.insert(String::make("data-api"_str),
@@ -584,4 +584,4 @@ auto render_site(ref<rstd::path::Path> root,
     return write_doc_file(root, "site-manifest.json"_str, site_manifest.as_str());
 }
 
-} // namespace tenon::doc
+} // namespace lito::doc

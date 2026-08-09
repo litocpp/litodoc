@@ -7,7 +7,7 @@ import {
   type ThemeMode,
 } from "../../theme";
 
-export class TenonDocThemePickerElement extends HTMLElement {
+export class LitoDocThemePickerElement extends HTMLElement {
   #events?: AbortController;
   #select?: HTMLSelectElement;
 
@@ -15,7 +15,7 @@ export class TenonDocThemePickerElement extends HTMLElement {
     if (this.#events) return;
     const select = this.querySelector("[data-theme-select]");
     if (!(select instanceof HTMLSelectElement)) {
-      console.error("tenon-doc-theme-picker requires a select");
+      console.error("lito-doc-theme-picker requires a select");
       return;
     }
 
@@ -29,7 +29,7 @@ export class TenonDocThemePickerElement extends HTMLElement {
         const mode = parseTheme(select.value);
         this.apply(mode, true);
         this.dispatchEvent(
-          new CustomEvent<ThemeMode>("tenon-theme-change", {
+          new CustomEvent<ThemeMode>("lito-theme-change", {
             bubbles: true,
             composed: true,
             detail: mode,

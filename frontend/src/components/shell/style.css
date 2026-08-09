@@ -1,4 +1,4 @@
-tenon-doc-shell {
+lito-doc-shell {
   display: block;
   min-height: 100vh;
 }
@@ -141,7 +141,7 @@ tenon-doc-shell {
     display: none;
   }
 
-  tenon-doc-shell[data-ready] .menu-button {
+  lito-doc-shell[data-ready] .menu-button {
     display: inline-grid;
     width: 2.5rem;
     height: 2.5rem;
@@ -166,7 +166,7 @@ tenon-doc-shell {
     border-bottom: 1px solid var(--border);
   }
 
-  tenon-doc-shell[data-ready] .sidebar {
+  lito-doc-shell[data-ready] .sidebar {
     position: fixed;
     z-index: 50;
     top: var(--topbar-height);
@@ -183,11 +183,11 @@ tenon-doc-shell {
     transform: translateX(-105%);
   }
 
-  tenon-doc-shell[data-ready][data-motion] .sidebar {
+  lito-doc-shell[data-ready][data-motion] .sidebar {
     transition: transform 160ms ease;
   }
 
-  tenon-doc-shell[data-ready][drawer-open] .sidebar {
+  lito-doc-shell[data-ready][drawer-open] .sidebar {
     transform: translateX(0);
   }
 

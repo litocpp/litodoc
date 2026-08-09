@@ -1,3 +1,3 @@
-import { defineTenonDocComponents } from "./components/registry";
+import { defineLitoDocComponents } from "./components/registry";
 
-defineTenonDocComponents();
+defineLitoDocComponents();

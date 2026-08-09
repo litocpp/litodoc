@@ -1,16 +1,16 @@
-import { TenonDocModuleIdentityElement } from "./module-identity/element";
-import { TenonDocSearchElement } from "./search/element";
-import { TenonDocShellElement } from "./shell/element";
-import { TenonDocThemePickerElement } from "./theme-picker/element";
+import { LitoDocModuleIdentityElement } from "./module-identity/element";
+import { LitoDocSearchElement } from "./search/element";
+import { LitoDocShellElement } from "./shell/element";
+import { LitoDocThemePickerElement } from "./theme-picker/element";
 
 const definitions: ReadonlyArray<readonly [string, CustomElementConstructor]> = [
-  ["tenon-doc-shell", TenonDocShellElement],
-  ["tenon-doc-search", TenonDocSearchElement],
-  ["tenon-doc-theme-picker", TenonDocThemePickerElement],
-  ["tenon-doc-module-identity", TenonDocModuleIdentityElement],
+  ["lito-doc-shell", LitoDocShellElement],
+  ["lito-doc-search", LitoDocSearchElement],
+  ["lito-doc-theme-picker", LitoDocThemePickerElement],
+  ["lito-doc-module-identity", LitoDocModuleIdentityElement],
 ];
 
-export function defineTenonDocComponents(registry = window.customElements): void {
+export function defineLitoDocComponents(registry = window.customElements): void {
   for (const [tag, constructor] of definitions) {
     const existing = registry.get(tag);
     if (existing === undefined) {

@@ -1,4 +1,4 @@
-export module tenon.doc:publish;
+export module lito.doc:publish;
 
 import rstd;
 import :model;
@@ -9,7 +9,7 @@ import :render;
 using namespace rstd::prelude;
 using namespace rstd::literals;
 
-namespace tenon::doc
+namespace lito::doc
 {
 
 auto copy_data_summary(const DataSummary& source) -> DataSummary {
@@ -91,4 +91,4 @@ auto publish_site(ref<rstd::path::Path> output,
     return Ok(rstd::move(summary));
 }
 
-} // namespace tenon::doc
+} // namespace lito::doc

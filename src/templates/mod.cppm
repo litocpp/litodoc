@@ -1,4 +1,4 @@
-export module tenon.doc:templates;
+export module lito.doc:templates;
 
 import rstd;
 import :html;
@@ -6,7 +6,7 @@ import :html;
 using namespace rstd::prelude;
 using namespace rstd::literals;
 
-namespace tenon::doc
+namespace lito::doc
 {
 
 enum class TemplateValueKind
@@ -384,4 +384,4 @@ auto render_template(const TemplateSet& templates, ref<str> path, const Template
     return Ok(rstd::move(output));
 }
 
-} // namespace tenon::doc
+} // namespace lito::doc

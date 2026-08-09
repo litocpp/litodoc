@@ -111,7 +111,7 @@ test("theme parsing and application share one rule", () => {
 
 test("component registration is idempotent and detects conflicts", async () => {
   globalThis.HTMLElement = class {} as typeof HTMLElement;
-  const { defineTenonDocComponents } = await import("../src/components/registry");
+  const { defineLitoDocComponents } = await import("../src/components/registry");
   class Registry {
     definitions = new Map<string, CustomElementConstructor>();
 
@@ -126,14 +126,14 @@ test("component registration is idempotent and detects conflicts", async () => {
   }
 
   const registry = new Registry();
-  defineTenonDocComponents(registry as CustomElementRegistry);
-  defineTenonDocComponents(registry as CustomElementRegistry);
+  defineLitoDocComponents(registry as CustomElementRegistry);
+  defineLitoDocComponents(registry as CustomElementRegistry);
   assert.equal(registry.definitions.size, 4);
 
   const conflict = new Registry();
-  conflict.define("tenon-doc-shell", class extends HTMLElement {});
+  conflict.define("lito-doc-shell", class extends HTMLElement {});
   assert.throws(
-    () => defineTenonDocComponents(conflict as CustomElementRegistry),
-    /custom element 'tenon-doc-shell' is already registered by another frontend/,
+    () => defineLitoDocComponents(conflict as CustomElementRegistry),
+    /custom element 'lito-doc-shell' is already registered by another frontend/,
   );
 });

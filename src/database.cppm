@@ -1,13 +1,13 @@
-export module tenon.doc:database;
+export module lito.doc:database;
 
 import rstd;
-import tenon.frontend;
+import lito.frontend;
 import :model;
 
 using namespace rstd::prelude;
 using namespace rstd::literals;
 
-namespace tenon::doc
+namespace lito::doc
 {
 
 inline constexpr uint64_t FNV_OFFSET = 14695981039346656037ull;
@@ -108,7 +108,7 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
             if (existing_source.is_none()) {
                 auto source_page =
                     rstd::format("source/src-{}.html",
-                                 identity_hash("tenon-doc-source-v1"_str, path->as_str()).as_str());
+                                 identity_hash("lito-doc-source-v1"_str, path->as_str()).as_str());
                 sources.insert(path->clone(),
                                Source {
                                    .path     = path->clone(),
@@ -132,7 +132,7 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
             } else {
                 auto module_page =
                     rstd::format("module/mod-{}.html",
-                                 identity_hash("tenon-doc-module-v1"_str, module_name).as_str());
+                                 identity_hash("lito-doc-module-v1"_str, module_name).as_str());
                 modules.insert(String::make(module_name),
                                Module {
                                    .name    = String::make(module_name),
@@ -230,7 +230,7 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
                 auto page =
                     rstd::format("symbol/{}-{}.html",
                                  declaration_kind_slug(declaration.kind),
-                                 identity_hash("tenon-doc-symbol-v1"_str, key.as_str()).as_str());
+                                 identity_hash("lito-doc-symbol-v1"_str, key.as_str()).as_str());
                 symbols.insert(key.clone(),
                                Symbol {
                                    .key               = rstd::move(key),
@@ -276,4 +276,4 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
     return Ok(rstd::move(database));
 }
 
-} // namespace tenon::doc
+} // namespace lito::doc
