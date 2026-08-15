@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/litocpp/litodoc/main/schema/extract-response.schema.json",
+  "title": "litodoc extraction response v1",
+  "type": "object",
+  "required": [
+    "format",
+    "version",
+    "request_id",
+    "producer",
+    "package",
+    "package_identity",
+    "target",
+    "unit_identity",
+    "source",
+    "source_contents",
+    "logical_module",
+    "is_interface",
+    "declarations",
+    "reexports",
+    "diagnostics",
+    "documented",
+    "undocumented",
+    "unsupported"
+  ],
+  "properties": {
+    "format": { "const": "litodoc-extract-result" },
+    "version": { "const": 1 },
+    "request_id": { "$ref": "#/$defs/nonEmptyString" },
+    "producer": {
+      "type": "object",
+      "required": ["litodoc", "clang"],
+      "properties": {
+        "litodoc": { "$ref": "#/$defs/nonEmptyString" },
+        "clang": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "package": { "$ref": "#/$defs/nonEmptyString" },
+    "package_identity": { "$ref": "#/$defs/nonEmptyString" },
+    "target": { "$ref": "#/$defs/nonEmptyString" },
+    "unit_identity": { "$ref": "#/$defs/nonEmptyString" },
+    "source": { "$ref": "#/$defs/path" },
+    "source_contents": { "type": "string" },
+    "logical_module": { "type": "string" },
+    "is_interface": { "type": "boolean" },
+    "declarations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/declaration" }
+    },
+    "reexports": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["module", "span"],
+        "properties": {
+          "module": { "$ref": "#/$defs/nonEmptyString" },
+          "span": { "$ref": "#/$defs/span" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "code", "message", "span"],
+        "properties": {
+          "severity": { "enum": ["warning", "error"] },
+          "code": { "type": "string" },
+          "message": { "$ref": "#/$defs/nonEmptyString" },
+          "span": { "$ref": "#/$defs/span" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "documented": { "$ref": "#/$defs/count" },
+    "undocumented": { "$ref": "#/$defs/count" },
+    "unsupported": { "$ref": "#/$defs/count" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "span": {
+      "type": "object",
+      "required": ["path", "begin_line", "begin_column", "end_line", "end_column"],
+      "properties": {
+        "path": { "type": "string" },
+        "begin_line": { "$ref": "#/$defs/count" },
+        "begin_column": { "$ref": "#/$defs/count" },
+        "end_line": { "$ref": "#/$defs/count" },
+        "end_column": { "$ref": "#/$defs/count" }
+      },
+      "additionalProperties": false
+    },
+    "comment": {
+      "type": "object",
+      "required": ["kind", "text", "span"],
+      "properties": {
+        "kind": { "enum": ["outer", "inner"] },
+        "text": { "type": "string" },
+        "span": { "$ref": "#/$defs/span" }
+      },
+      "additionalProperties": false
+    },
+    "declaration": {
+      "type": "object",
+      "required": [
+        "semantic_identity",
+        "kind",
+        "name",
+        "qualified_name",
+        "namespace",
+        "signature",
+        "is_definition",
+        "exported",
+        "access",
+        "spelling_span",
+        "expansion_span",
+        "parent",
+        "comment"
+      ],
+      "properties": {
+        "semantic_identity": { "$ref": "#/$defs/nonEmptyString" },
+        "kind": {
+          "enum": [
+            "module",
+            "namespace",
+            "record",
+            "enum",
+            "concept",
+            "alias",
+            "function",
+            "variable",
+            "field"
+          ]
+        },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "qualified_name": { "$ref": "#/$defs/nonEmptyString" },
+        "namespace": { "type": "string" },
+        "signature": { "$ref": "#/$defs/nonEmptyString" },
+        "is_definition": { "type": "boolean" },
+        "exported": { "type": "boolean" },
+        "access": { "enum": ["public", "protected", "private"] },
+        "spelling_span": { "$ref": "#/$defs/span" },
+        "expansion_span": { "$ref": "#/$defs/span" },
+        "parent": {
+          "oneOf": [
+            { "$ref": "#/$defs/count" },
+            { "type": "null" }
+          ]
+        },
+        "comment": {
+          "oneOf": [
+            { "$ref": "#/$defs/comment" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

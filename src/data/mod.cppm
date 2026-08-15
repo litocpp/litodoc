@@ -2,7 +2,6 @@ export module lito.doc:data;
 
 import rstd;
 import rstd.json;
-import lito.frontend;
 import :model;
 import :publication;
 
@@ -222,7 +221,7 @@ auto encode_package(const Package& package) -> Json {
     for (const auto& diagnostic : package.diagnostics) {
         auto object = JsonMap::make();
         object.insert(String::make("severity"_str),
-                      json_string(diagnostic.severity == frontend::DocumentationSeverity::Error
+                      json_string(diagnostic.severity == DocumentationSeverity::Error
                                       ? "error"_str
                                       : "warning"_str));
         object.insert(String::make("code"_str), json_string(diagnostic.code.as_str()));
@@ -319,8 +318,7 @@ auto expect_header(const Json& value, ref<str> format, usize version, ref<str> c
     return Ok(empty {});
 }
 
-auto parse_kind(ref<str> value) -> Option<frontend::DeclarationKind> {
-    using frontend::DeclarationKind;
+auto parse_kind(ref<str> value) -> Option<DeclarationKind> {
     if (value == "module"_str) return Some(DeclarationKind::Module);
     if (value == "namespace"_str) return Some(DeclarationKind::Namespace);
     if (value == "record"_str) return Some(DeclarationKind::Record);
@@ -578,9 +576,8 @@ auto decode_package(const Json&                   document,
         if (severity->as_str() != "warning"_str && severity->as_str() != "error"_str)
             return Err(rstd::format("invalid doc diagnostic severity '{}'", severity->as_str()));
         package.diagnostics.push(Diagnostic {
-            .severity = severity->as_str() == "error"_str
-                            ? frontend::DocumentationSeverity::Error
-                            : frontend::DocumentationSeverity::Warning,
+            .severity = severity->as_str() == "error"_str ? DocumentationSeverity::Error
+                                                          : DocumentationSeverity::Warning,
             .code     = rstd::move(code).unwrap(),
             .message  = rstd::move(message).unwrap(),
             .path     = rstd::move(path).unwrap(),
@@ -653,7 +650,7 @@ auto dataset_manifest_json(const Dataset& dataset) -> String {
     auto manifest = JsonMap::make();
     manifest.insert(String::make("format"_str), json_string("lito-doc-dataset"_str));
     manifest.insert(String::make("version"_str), json_usize(usize(1)));
-    manifest.insert(String::make("data-api"_str), json_usize(usize(1)));
+    manifest.insert(String::make("data-api"_str), json_usize(usize(2)));
     manifest.insert(String::make("generator"_str), json_string("lito-doc-data-v2"_str));
     manifest.insert(String::make("site"_str), Json::Object(rstd::move(site)));
     manifest.insert(String::make("packages"_str), Json::Array(rstd::move(manifest_packages)));
@@ -689,7 +686,7 @@ auto load_dataset(ref<rstd::path::Path> root) -> Result<Dataset, String> {
     if (header.is_err()) return Err(rstd::move(header).unwrap_err());
     auto data_api = required_usize(*manifest, "data-api"_str, "doc dataset manifest"_str);
     if (data_api.is_err()) return Err(rstd::move(data_api).unwrap_err());
-    if (*data_api != usize(1)) return Err(rstd::format("unsupported doc data API {}", *data_api));
+    if (*data_api != usize(2)) return Err(rstd::format("unsupported doc data API {}", *data_api));
     auto generator = required_string(*manifest, "generator"_str, "doc dataset manifest"_str);
     auto site      = required_member(*manifest, "site"_str, "doc dataset manifest"_str);
     if (generator.is_err()) return Err(rstd::move(generator).unwrap_err());

@@ -36,19 +36,6 @@ struct FrontendBundle {
     Vec<FrontendAsset> assets;
 };
 
-struct EmbeddedFrontendResourceLiteral {
-    const char*          path;
-    const char*          media_type;
-    const unsigned char* data;
-    size_t               size;
-};
-
-#if __has_include("generated/default-bundle.inc")
-#include "generated/default-bundle.inc"
-#else
-#error "Lito doc frontend bundle is missing; run 'npm ci' and 'npm run bundle' in doc/frontend"
-#endif
-
 inline constexpr uint64_t FRONTEND_FNV_OFFSET = 14695981039346656037ull;
 inline constexpr uint64_t FRONTEND_FNV_PRIME  = 1099511628211ull;
 
@@ -150,7 +137,7 @@ auto parse_frontend_manifest(ref<str> contents) -> Result<FrontendJson, String> 
         return Err(rstd::format("unsupported frontend format '{}'", format->as_str()));
     if (*version != usize(1))
         return Err(rstd::format("unsupported frontend bundle version {}", *version));
-    if (*data_api != usize(1))
+    if (*data_api != usize(2))
         return Err(rstd::format("frontend requires unsupported doc data API {}", *data_api));
     if (*template_api != usize(1))
         return Err(rstd::format("frontend requires unsupported template API {}", *template_api));
@@ -278,37 +265,6 @@ auto make_frontend_bundle(String                                                
         .templates        = rstd::move(set),
         .assets           = rstd::move(frontend_assets),
     });
-}
-
-auto load_builtin_frontend() -> Result<FrontendBundle, String> {
-    auto resources = rstd::collections::BTreeMap<String, FrontendResource>::make();
-    for (const auto& literal : LITO_DOC_DEFAULT_FRONTEND_RESOURCES) {
-        auto path = ref<str>::from_raw_parts_unchecked(reinterpret_cast<const byte*>(literal.path),
-                                                       usize(__builtin_strlen(literal.path)));
-        auto media_type =
-            ref<str>::from_raw_parts_unchecked(reinterpret_cast<const byte*>(literal.media_type),
-                                               usize(__builtin_strlen(literal.media_type)));
-        auto contents = ref<str>::from_raw_parts_unchecked(
-            reinterpret_cast<const byte*>(literal.data), usize(literal.size));
-        resources.insert(String::make(path),
-                         FrontendResource {
-                             .path       = String::make(path),
-                             .media_type = String::make(media_type),
-                             .contents   = String::make(contents),
-                         });
-    }
-    auto manifest_resource = resources.get("frontend.json"_str);
-    if (manifest_resource.is_none())
-        return Err(String::make("embedded frontend has no frontend.json"_str));
-    auto manifest = parse_frontend_manifest((**manifest_resource).contents.as_str());
-    if (manifest.is_err()) return Err(rstd::move(manifest).unwrap_err());
-    auto digest = frontend_digest(resources);
-    if (digest.as_str() != LITO_DOC_DEFAULT_FRONTEND_DIGEST)
-        return Err(String::make("embedded frontend digest mismatch"_str));
-    return make_frontend_bundle(String::make("builtin:default"_str),
-                                rstd::move(digest),
-                                rstd::move(resources),
-                                rstd::move(manifest).unwrap());
 }
 
 auto read_frontend_file(ref<rstd::path::Path> root, ref<str> relative, ref<str> media_type)

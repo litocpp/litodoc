@@ -15,7 +15,9 @@ namespace lito::doc
 {
 
 auto selected_frontend(const Option<rstd::path::PathBuf>& path) -> Result<FrontendBundle, String> {
-    return path.is_some() ? load_frontend_directory(path->as_path()) : load_builtin_frontend();
+    if (path.is_none())
+        return Err(String::make("site generation requires an explicit frontend directory"_str));
+    return load_frontend_directory(path->as_path());
 }
 
 } // namespace lito::doc

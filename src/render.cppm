@@ -104,8 +104,7 @@ auto package_render_index(const Package& package) -> PackageRenderIndex {
         .record_keys = rstd::collections::BTreeSet<String>::make(),
     };
     for (const auto& symbol : package.symbols) {
-        if (symbol.kind == frontend::DeclarationKind::Record)
-            index.record_keys.insert(symbol.key.clone());
+        if (symbol.kind == DeclarationKind::Record) index.record_keys.insert(symbol.key.clone());
     }
     return index;
 }
@@ -338,31 +337,31 @@ auto module_context(const Dataset&            dataset,
         ++symbol_count;
         if (is_record_member(index, symbol)) continue;
         switch (symbol.kind) {
-        case frontend::DeclarationKind::Namespace:
+        case DeclarationKind::Namespace:
             namespaces.array.push(declaration_link_value(symbol, "../"_str));
             ++namespace_count;
             break;
-        case frontend::DeclarationKind::Record:
+        case DeclarationKind::Record:
             structs.array.push(declaration_link_value(symbol, "../"_str));
             ++struct_count;
             break;
-        case frontend::DeclarationKind::Enum:
+        case DeclarationKind::Enum:
             enums.array.push(declaration_link_value(symbol, "../"_str));
             ++enum_count;
             break;
-        case frontend::DeclarationKind::Concept:
+        case DeclarationKind::Concept:
             concepts.array.push(declaration_link_value(symbol, "../"_str));
             ++concept_count;
             break;
-        case frontend::DeclarationKind::Alias:
+        case DeclarationKind::Alias:
             aliases.array.push(declaration_link_value(symbol, "../"_str));
             ++alias_count;
             break;
-        case frontend::DeclarationKind::Function:
+        case DeclarationKind::Function:
             functions.array.push(declaration_link_value(symbol, "../"_str));
             ++function_count;
             break;
-        case frontend::DeclarationKind::Variable:
+        case DeclarationKind::Variable:
             variables.array.push(declaration_link_value(symbol, "../"_str));
             ++variable_count;
             break;

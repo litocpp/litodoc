@@ -1,0 +1,125 @@
+{
+  "format": "litodoc-extract-result",
+  "version": 1,
+  "request_id": "fixture-basic-response-v1",
+  "producer": {
+    "litodoc": "0.1.0",
+    "clang": "fixture"
+  },
+  "package": "litodoc-fixture",
+  "package_identity": "litodoc-fixture@0.1.0",
+  "target": "fixture",
+  "unit_identity": "fixture-basic",
+  "source": "tests/fixtures/basic.cpp",
+  "source_contents": "/// Adds two values.\nint add(int left, int right) {\n    return left + right;\n}\n\nstruct Point {\n    /// Horizontal coordinate.\n    int x;\n};\n",
+  "logical_module": "",
+  "is_interface": false,
+  "declarations": [
+    {
+      "semantic_identity": "fixture:add",
+      "kind": "function",
+      "name": "add",
+      "qualified_name": "add",
+      "namespace": "",
+      "signature": "int add(int left, int right)",
+      "is_definition": true,
+      "exported": true,
+      "access": "public",
+      "spelling_span": {
+        "path": "tests/fixtures/basic.cpp",
+        "begin_line": 2,
+        "begin_column": 1,
+        "end_line": 4,
+        "end_column": 1
+      },
+      "expansion_span": {
+        "path": "tests/fixtures/basic.cpp",
+        "begin_line": 2,
+        "begin_column": 1,
+        "end_line": 4,
+        "end_column": 1
+      },
+      "parent": null,
+      "comment": {
+        "kind": "outer",
+        "text": "Adds two values.",
+        "span": {
+          "path": "tests/fixtures/basic.cpp",
+          "begin_line": 1,
+          "begin_column": 1,
+          "end_line": 1,
+          "end_column": 20
+        }
+      }
+    },
+    {
+      "semantic_identity": "fixture:Point",
+      "kind": "record",
+      "name": "Point",
+      "qualified_name": "Point",
+      "namespace": "",
+      "signature": "struct Point",
+      "is_definition": true,
+      "exported": true,
+      "access": "public",
+      "spelling_span": {
+        "path": "tests/fixtures/basic.cpp",
+        "begin_line": 6,
+        "begin_column": 1,
+        "end_line": 9,
+        "end_column": 1
+      },
+      "expansion_span": {
+        "path": "tests/fixtures/basic.cpp",
+        "begin_line": 6,
+        "begin_column": 1,
+        "end_line": 9,
+        "end_column": 1
+      },
+      "parent": null,
+      "comment": null
+    },
+    {
+      "semantic_identity": "fixture:Point:x",
+      "kind": "field",
+      "name": "x",
+      "qualified_name": "Point::x",
+      "namespace": "",
+      "signature": "int x",
+      "is_definition": true,
+      "exported": true,
+      "access": "public",
+      "spelling_span": {
+        "path": "tests/fixtures/basic.cpp",
+        "begin_line": 8,
+        "begin_column": 5,
+        "end_line": 8,
+        "end_column": 9
+      },
+      "expansion_span": {
+        "path": "tests/fixtures/basic.cpp",
+        "begin_line": 8,
+        "begin_column": 5,
+        "end_line": 8,
+        "end_column": 9
+      },
+      "parent": 1,
+      "comment": {
+        "kind": "outer",
+        "text": "Horizontal coordinate.",
+        "span": {
+          "path": "tests/fixtures/basic.cpp",
+          "begin_line": 7,
+          "begin_column": 5,
+          "end_line": 7,
+          "end_column": 30
+        }
+      }
+    }
+  ],
+  "reexports": [],
+  "diagnostics": [],
+  "documented": 2,
+  "undocumented": 1,
+  "unsupported": 0
+}

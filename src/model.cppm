@@ -1,7 +1,6 @@
 export module lito.doc:model;
 
 import rstd;
-import lito.frontend;
 
 using namespace rstd::prelude;
 using namespace rstd::literals;
@@ -9,16 +8,105 @@ using namespace rstd::literals;
 export namespace lito::doc
 {
 
+enum class DocumentationCommentKind
+{
+    Outer,
+    Inner,
+};
+
+enum class DeclarationKind
+{
+    Module,
+    Namespace,
+    Record,
+    Enum,
+    Concept,
+    Alias,
+    Function,
+    Variable,
+    Field,
+};
+
+enum class DeclarationAccess
+{
+    Public,
+    Protected,
+    Private,
+};
+
+enum class DocumentationSeverity
+{
+    Warning,
+    Error,
+};
+
+struct DocumentationSpan {
+    rstd::path::PathBuf path;
+    usize               begin_line {};
+    usize               begin_column {};
+    usize               end_line {};
+    usize               end_column {};
+};
+
+struct DocumentationComment {
+    DocumentationCommentKind kind { DocumentationCommentKind::Outer };
+    String                   text;
+    DocumentationSpan        span;
+};
+
+struct DeclarationOutline {
+    String                       semantic_identity;
+    DeclarationKind              kind { DeclarationKind::Variable };
+    String                       name;
+    String                       qualified_name;
+    String                       namespace_name;
+    String                       signature;
+    bool                         is_definition { false };
+    bool                         exported { false };
+    DeclarationAccess            access { DeclarationAccess::Public };
+    Option<usize>                parent;
+    Option<String>               group;
+    Option<DocumentationComment> comment;
+    DocumentationSpan            spelling_span;
+    DocumentationSpan            expansion_span;
+};
+
+struct DocumentationReexport {
+    String            logical_module;
+    DocumentationSpan span;
+};
+
+struct DocumentationDiagnostic {
+    DocumentationSeverity severity { DocumentationSeverity::Warning };
+    String                code;
+    String                message;
+    DocumentationSpan     span;
+};
+
+struct DocumentationUnit {
+    rstd::path::PathBuf          source;
+    String                       source_contents;
+    String                       logical_module;
+    bool                         is_interface { false };
+    Vec<DeclarationOutline>      declarations;
+    Vec<DocumentationReexport>   reexports;
+    Option<DocumentationComment> module_comment;
+    Vec<DocumentationDiagnostic> diagnostics;
+    usize                        documented {};
+    usize                        undocumented {};
+    usize                        unsupported {};
+};
+
 struct PackageInput {
-    String                           name;
-    String                           version;
-    String                           root_module;
-    String                           profile;
-    rstd::path::PathBuf              root;
-    String                           toolchain_version;
-    String                           toolchain_target;
-    String                           language_standard;
-    Vec<frontend::DocumentationUnit> units;
+    String                 name;
+    String                 version;
+    String                 root_module;
+    String                 profile;
+    rstd::path::PathBuf    root;
+    String                 toolchain_version;
+    String                 toolchain_target;
+    String                 language_standard;
+    Vec<DocumentationUnit> units;
 };
 
 struct SiteInput {
@@ -43,25 +131,25 @@ struct Source {
 };
 
 struct Symbol {
-    String                    key;
-    String                    page;
-    String                    module;
-    String                    module_page;
-    frontend::DeclarationKind kind { frontend::DeclarationKind::Variable };
-    String                    name;
-    String                    qualified_name;
-    String                    namespace_name;
-    String                    signature;
-    bool                      is_definition { false };
-    Option<String>            parent_key;
-    Option<String>            group;
-    Option<String>            comment;
-    String                    source_page;
-    String                    source_path;
-    usize                     source_line {};
-    usize                     source_column {};
-    usize                     source_end_line {};
-    usize                     source_end_column {};
+    String          key;
+    String          page;
+    String          module;
+    String          module_page;
+    DeclarationKind kind { DeclarationKind::Variable };
+    String          name;
+    String          qualified_name;
+    String          namespace_name;
+    String          signature;
+    bool            is_definition { false };
+    Option<String>  parent_key;
+    Option<String>  group;
+    Option<String>  comment;
+    String          source_page;
+    String          source_path;
+    usize           source_line {};
+    usize           source_column {};
+    usize           source_end_line {};
+    usize           source_end_column {};
 };
 
 struct Module {
@@ -72,11 +160,11 @@ struct Module {
 };
 
 struct Diagnostic {
-    frontend::DocumentationSeverity severity { frontend::DocumentationSeverity::Warning };
-    String                          code;
-    String                          message;
-    String                          path;
-    usize                           line {};
+    DocumentationSeverity severity { DocumentationSeverity::Warning };
+    String                code;
+    String                message;
+    String                path;
+    usize                 line {};
 };
 
 struct Package {
@@ -139,16 +227,15 @@ struct Summary {
     Vec<PackageSummary> packages;
 };
 
-auto declaration_kind_name(frontend::DeclarationKind kind) -> ref<str>;
-auto declaration_kind_slug(frontend::DeclarationKind kind) -> ref<str>;
+auto declaration_kind_name(DeclarationKind kind) -> ref<str>;
+auto declaration_kind_slug(DeclarationKind kind) -> ref<str>;
 
 } // namespace lito::doc
 
 namespace lito::doc
 {
 
-auto declaration_kind_name(frontend::DeclarationKind kind) -> ref<str> {
-    using frontend::DeclarationKind;
+auto declaration_kind_name(DeclarationKind kind) -> ref<str> {
     switch (kind) {
     case DeclarationKind::Module: return "module"_str;
     case DeclarationKind::Namespace: return "namespace"_str;
@@ -163,8 +250,7 @@ auto declaration_kind_name(frontend::DeclarationKind kind) -> ref<str> {
     __builtin_unreachable();
 }
 
-auto declaration_kind_slug(frontend::DeclarationKind kind) -> ref<str> {
-    using frontend::DeclarationKind;
+auto declaration_kind_slug(DeclarationKind kind) -> ref<str> {
     switch (kind) {
     case DeclarationKind::Module: return "mod"_str;
     case DeclarationKind::Namespace: return "ns"_str;

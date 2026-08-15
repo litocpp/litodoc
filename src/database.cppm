@@ -1,7 +1,6 @@
 export module lito.doc:database;
 
 import rstd;
-import lito.frontend;
 import :model;
 
 using namespace rstd::prelude;
@@ -56,8 +55,11 @@ auto package_path(ref<rstd::path::Path> root, ref<rstd::path::Path> source)
     return Ok(String::make(*path));
 }
 
-auto stable_key(ref<str> package, ref<str> module, const frontend::DeclarationOutline& declaration)
+auto stable_key(ref<str> package, ref<str> module, const DeclarationOutline& declaration)
     -> String {
+    if (! declaration.semantic_identity.is_empty()) {
+        return rstd::format("{}|{}|{}", package, module, declaration.semantic_identity.as_str());
+    }
     auto signature = declaration.signature.as_str().trim_ascii();
     if (signature.ends_with(";"_str) || signature.ends_with("{"_str))
         signature = signature.get(usize {}, signature.len() - usize(1)).unwrap().trim_ascii();
@@ -69,7 +71,7 @@ auto stable_key(ref<str> package, ref<str> module, const frontend::DeclarationOu
                         signature);
 }
 
-auto clone_optional_text(const Option<frontend::DocumentationComment>& comment) -> Option<String> {
+auto clone_optional_text(const Option<DocumentationComment>& comment) -> Option<String> {
     return comment.is_some() ? Some(comment->text.clone()) : Option<String> {};
 }
 
@@ -100,8 +102,8 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
             auto path = package_path(source_package.root.as_path(), unit.source.as_path());
             if (path.is_err()) return Err(rstd::move(path).unwrap_err());
             auto existing_source = sources.get(path->as_str());
-            if (existing_source.is_some() && (**existing_source).contents.as_str() !=
-                                                 unit.source_snapshot.get()->contents.as_str()) {
+            if (existing_source.is_some() &&
+                (**existing_source).contents.as_str() != unit.source_contents.as_str()) {
                 return Err(
                     rstd::format("conflicting doc snapshots for source '{}'", path->as_str()));
             }
@@ -113,7 +115,7 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
                                Source {
                                    .path     = path->clone(),
                                    .page     = rstd::move(source_page),
-                                   .contents = unit.source_snapshot.get()->contents.clone(),
+                                   .contents = unit.source_contents.clone(),
                                });
             }
             auto source_record   = sources.get(path->as_str()).unwrap();
@@ -168,8 +170,7 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
                 });
             }
             for (const auto& declaration : unit.declarations) {
-                if (! declaration.exported ||
-                    declaration.access != frontend::DeclarationAccess::Public)
+                if (! declaration.exported || declaration.access != DeclarationAccess::Public)
                     continue;
                 auto key      = stable_key(package.name.as_str(), module_name, declaration);
                 auto comment  = clone_optional_text(declaration.comment);
@@ -181,10 +182,10 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
                     auto        prefer_incoming =
                         declaration.is_definition && ! (**existing).is_definition;
                     if (conflict) {
-                        auto message = rstd::format(
-                            "conflicting documentation for '{}'; kept the first entry at the "
-                            "same precedence",
-                            declaration.qualified_name.as_str());
+                        auto message = rstd::format("conflicting documentation for '{}'; "
+                                                    "kept the first entry at the "
+                                                    "same precedence",
+                                                    declaration.qualified_name.as_str());
                         if (prefer_incoming) {
                             message = rstd::format(
                                 "definition documentation replaced declaration documentation "
@@ -197,11 +198,11 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
                                              declaration.qualified_name.as_str());
                         }
                         package.diagnostics.push(Diagnostic {
-                            .severity = frontend::DocumentationSeverity::Warning,
+                            .severity = DocumentationSeverity::Warning,
                             .code     = String::make("conflicting-symbol-documentation"_str),
                             .message  = rstd::move(message),
                             .path     = path->clone(),
-                            .line     = declaration.span.begin_line,
+                            .line     = declaration.spelling_span.begin_line,
                         });
                     }
                     if (prefer_incoming) {
@@ -212,10 +213,10 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
                             (**existing).group = Some(declaration.group->clone());
                         (**existing).source_page       = source_record->page.clone();
                         (**existing).source_path       = path->clone();
-                        (**existing).source_line       = declaration.span.begin_line;
-                        (**existing).source_column     = declaration.span.begin_column;
-                        (**existing).source_end_line   = declaration.span.end_line;
-                        (**existing).source_end_column = declaration.span.end_column;
+                        (**existing).source_line       = declaration.spelling_span.begin_line;
+                        (**existing).source_column     = declaration.spelling_span.begin_column;
+                        (**existing).source_end_line   = declaration.spelling_span.end_line;
+                        (**existing).source_end_column = declaration.spelling_span.end_column;
                     } else if (previous.is_none() && comment.is_some()) {
                         (**existing).comment = rstd::move(comment);
                     }
@@ -250,10 +251,10 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
                                    .comment           = rstd::move(comment),
                                    .source_page       = source_record->page.clone(),
                                    .source_path       = path->clone(),
-                                   .source_line       = declaration.span.begin_line,
-                                   .source_column     = declaration.span.begin_column,
-                                   .source_end_line   = declaration.span.end_line,
-                                   .source_end_column = declaration.span.end_column,
+                                   .source_line       = declaration.spelling_span.begin_line,
+                                   .source_column     = declaration.spelling_span.begin_column,
+                                   .source_end_line   = declaration.spelling_span.end_line,
+                                   .source_end_column = declaration.spelling_span.end_column,
                                });
             }
         }

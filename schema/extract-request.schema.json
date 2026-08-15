@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/litocpp/litodoc/main/schema/extract-request.schema.json",
+  "title": "litodoc extraction request v1",
+  "type": "object",
+  "required": [
+    "format",
+    "version",
+    "request_id",
+    "package",
+    "target",
+    "unit",
+    "invocation",
+    "compiler",
+    "package_root",
+    "imported_artifacts"
+  ],
+  "properties": {
+    "format": { "const": "litodoc-extract" },
+    "version": { "const": 1 },
+    "request_id": { "$ref": "#/$defs/nonEmptyString" },
+    "package": {
+      "type": "object",
+      "required": ["name", "version", "identity"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "version": { "type": "string" },
+        "identity": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "target": {
+      "type": "object",
+      "required": ["name", "kind"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "kind": { "const": "library" }
+      },
+      "additionalProperties": false
+    },
+    "unit": {
+      "type": "object",
+      "required": ["identity", "kind", "is_interface", "source", "module"],
+      "properties": {
+        "identity": { "$ref": "#/$defs/nonEmptyString" },
+        "kind": {
+          "enum": [
+            "translation-unit",
+            "module-interface",
+            "module-partition",
+            "module-implementation"
+          ]
+        },
+        "is_interface": { "type": "boolean" },
+        "source": { "$ref": "#/$defs/path" },
+        "module": {
+          "oneOf": [
+            { "$ref": "#/$defs/nonEmptyString" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "invocation": {
+      "type": "object",
+      "required": ["cwd", "arguments"],
+      "properties": {
+        "cwd": { "$ref": "#/$defs/path" },
+        "arguments": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "compiler": {
+      "type": "object",
+      "required": ["identity", "target"],
+      "properties": {
+        "identity": { "$ref": "#/$defs/nonEmptyString" },
+        "target": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "package_root": { "$ref": "#/$defs/path" },
+    "imported_artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["module", "path", "identity"],
+        "properties": {
+          "module": { "$ref": "#/$defs/nonEmptyString" },
+          "path": { "$ref": "#/$defs/path" },
+          "identity": { "$ref": "#/$defs/nonEmptyString" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}
