@@ -46,12 +46,10 @@ sha256 = "2145e9e686c95ee47c1181f83f272f0ff95820e52d7736fdcd9eeb106fd6456a"
 
 [dependencies.rstd-std]
 git = "https://github.com/litocpp/rstd.git"
-commit = "6336d550b46c4bf7941a9f9acba0527c3baf1c6d"
 visibility = "public"
 
 [dependencies.rstd-json]
 git = "https://github.com/litocpp/rstd.git"
-commit = "6336d550b46c4bf7941a9f9acba0527c3baf1c6d"
 visibility = "private"
 
 [external-dependencies.cmake.clang]
