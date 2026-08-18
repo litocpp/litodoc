@@ -1,0 +1,95 @@
+name: Build
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Linux ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install LLVM 22
+        run: |
+          wget --quiet https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 22
+          sudo apt-get install --yes lld-22 llvm-22
+          echo "/usr/lib/llvm-22/bin" >> "$GITHUB_PATH"
+
+      - name: Install Lito
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/litocpp/lito/main/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Package
+        env:
+          LITOBOOK_ARCH: ${{ matrix.arch }}
+        run: |
+          test "$(uname -m)" = "$LITOBOOK_ARCH"
+          package="litobook-linux-$LITOBOOK_ARCH"
+          lito install \
+            --package litobook \
+            --profile release \
+            --locked \
+            --prefix "dist/$package" \
+            --bin litobook \
+            --no-timing
+          llvm-strip "dist/$package/bin/litobook"
+          "dist/$package/bin/litobook" --help >/dev/null
+          tar -C dist -czf "dist/$package.tar.gz" "$package"
+          tar -tzf "dist/$package.tar.gz"
+          cd dist
+          sha256sum "$package.tar.gz" >"$package.tar.gz.sha256"
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: litobook-linux-${{ matrix.arch }}
+          path: |
+            dist/litobook-linux-${{ matrix.arch }}.tar.gz
+            dist/litobook-linux-${{ matrix.arch }}.tar.gz.sha256
+          if-no-files-found: error
+
+  release:
+    name: Release
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: linux
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: litobook-linux-*
+          path: dist
+          merge-multiple: true
+
+      - name: Publish immutable release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "dist/*.tar.gz,dist/*.tar.gz.sha256"
+          artifactErrorsFailBuild: true
+          generateReleaseNotes: true
+          immutableCreate: true
+          tag: ${{ github.ref_name }}
