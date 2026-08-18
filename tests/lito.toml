@@ -1,8 +1,6 @@
 [package]
 name = "litodoc-tests"
 version.workspace = true
-language = "cpp"
-minimum-standard = "c++20"
 
 [[test]]
 name = "litodoc-tests"
