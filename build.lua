@@ -1,8 +1,12 @@
+if not lito.package_selected("litodoc-core") then
+  return
+end
+
 local esbuild = lito.tool("esbuild")
 
 local function copy(input, output)
   lito.configure_file({
-    package = "litodoc",
+    package = "litodoc-core",
     input = input,
     output = output,
     values = {},
@@ -42,7 +46,7 @@ local function bundle(entry, output, target)
   end
   lito.run({
     tool = esbuild,
-    package = "litodoc",
+    package = "litodoc-core",
     cwd = "frontend",
     args = args,
     inputs = frontend_sources,
@@ -61,5 +65,7 @@ copy("frontend/src/templates/package.html", "frontend/default/templates/package.
 copy("frontend/src/templates/module.html", "frontend/default/templates/module.html")
 copy("frontend/src/templates/symbol.html", "frontend/default/templates/symbol.html")
 copy("frontend/src/templates/source.html", "frontend/default/templates/source.html")
+copy("frontend/src/templates/book-root.html", "frontend/default/templates/book-root.html")
+copy("frontend/src/templates/book-page.html", "frontend/default/templates/book-page.html")
 copy("frontend/src/templates/partials/head.html", "frontend/default/templates/partials/head.html")
 copy("frontend/src/templates/partials/foot.html", "frontend/default/templates/partials/foot.html")

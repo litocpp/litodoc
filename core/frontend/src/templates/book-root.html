@@ -1,0 +1,16 @@
+{{> templates/partials/head.html}}
+{{#if book.has_breadcrumbs}}
+<nav class="book-breadcrumbs" aria-label="Breadcrumb">{{#each book.breadcrumbs}}<a href="{{href}}">{{title}}</a>{{/each}}</nav>
+{{/if}}
+<section class="identity-block identity-root">
+  <p class="eyebrow">Book{{#if site.has_version}} · {{site.version}}{{/if}}</p>
+  <h1>{{book.title}}</h1>
+</section>
+{{#if book.has_page}}<article class="book-content prose">{{{book.content}}}</article>{{/if}}
+{{#if book.has_page}}
+<nav class="book-pagination" aria-label="Chapter navigation">
+  {{#if book.has_previous}}<a class="book-previous" href="{{book.previous.href}}"><span>Previous</span><strong>{{book.previous.title}}</strong></a>{{/if}}
+  {{#if book.has_next}}<a class="book-next" href="{{book.next.href}}"><span>Next</span><strong>{{book.next.title}}</strong></a>{{/if}}
+</nav>
+{{/if}}
+{{> templates/partials/foot.html}}

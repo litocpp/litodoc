@@ -1,0 +1,30 @@
+[package]
+name = "litodoc"
+version.workspace = true
+
+[[bin]]
+name = "litodoc"
+module = "litodoc.executable"
+sources = ["src/tool.cppm", "src/main.cppm"]
+resources = [
+  { name = "default-frontend", package = "litodoc-core", root = "generated", path = "frontend/default" },
+]
+
+[dependencies.litodoc-core]
+workspace = true
+visibility = "private"
+
+[dependencies.rstd-std]
+workspace = true
+visibility = "private"
+
+[dependencies.rstd-json]
+workspace = true
+visibility = "private"
+
+[external-dependencies.cmake.clang]
+package = "Clang"
+targets = [
+  { name = "clang-cpp", visibility = "private" },
+  { name = "LLVM", visibility = "private" },
+]

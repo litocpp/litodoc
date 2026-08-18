@@ -1,0 +1,39 @@
+{
+  "format": "lito-doc-frontend",
+  "version": 2,
+  "capabilities": ["api", "book"],
+  "data-api": 2,
+  "book-data-api": 1,
+  "template-api": 1,
+  "templates": {
+    "root": "templates/root.html",
+    "package": "templates/package.html",
+    "module": "templates/module.html",
+    "symbol": "templates/symbol.html",
+    "source": "templates/source.html",
+    "book-root": "templates/book-root.html",
+    "book-page": "templates/book-page.html"
+  },
+  "partials": [
+    "templates/partials/head.html",
+    "templates/partials/foot.html"
+  ],
+  "assets": [
+    {
+      "path": "static/favicon.svg",
+      "media-type": "image/svg+xml"
+    },
+    {
+      "path": "static/style.css",
+      "media-type": "text/css"
+    },
+    {
+      "path": "static/theme-bootstrap.js",
+      "media-type": "text/javascript"
+    },
+    {
+      "path": "static/app.js",
+      "media-type": "text/javascript"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+[package]
+name = "litobook"
+version.workspace = true
+
+[[bin]]
+name = "litobook"
+module = "litobook.executable"
+sources = ["src/tool.cppm", "src/main.cppm"]
+resources = [
+  { name = "default-frontend", package = "litodoc-core", root = "generated", path = "frontend/default" },
+]
+
+[dependencies.litodoc-core]
+workspace = true
+visibility = "private"
+
+[dependencies.rstd-std]
+workspace = true
+visibility = "private"
+
+[dependencies.rstd-argparse]
+workspace = true
+visibility = "private"

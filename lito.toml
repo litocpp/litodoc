@@ -1,60 +1,29 @@
-[package]
+[workspace]
 name = "litodoc"
+members = ["core", "protocol", "book", "tests"]
+default-members = ["book"]
+
+[workspace.package]
 version = "0.1.0"
+
+[workspace.dependencies.litodoc-core]
+path = "core"
+
+[workspace.dependencies.rstd-std]
+git = "https://github.com/litocpp/rstd.git"
+
+[workspace.dependencies.rstd-json]
+git = "https://github.com/litocpp/rstd.git"
+
+[workspace.dependencies.rstd-toml]
+git = "https://github.com/litocpp/rstd.git"
+
+[workspace.dependencies.rstd-argparse]
+git = "https://github.com/litocpp/rstd.git"
+
+[workspace.dependencies.rstd-test]
+git = "https://github.com/litocpp/rstd.git"
 
 [profile]
 exceptions = false
 rtti = false
-
-[lib]
-name = "litodoc"
-module = "lito.doc"
-archive = "lito.doc"
-sources = [
-  "src/model.cppm",
-  "src/database.cppm",
-  "src/data/mod.cppm",
-  "src/html.cppm",
-  "src/markdown.cppm",
-  "src/templates/mod.cppm",
-  "src/frontend/mod.cppm",
-  "src/publication.cppm",
-  "src/render.cppm",
-  "src/publish.cppm",
-  "src/lib.cppm",
-]
-
-[[bin]]
-name = "litodoc"
-module = "litodoc.executable"
-sources = ["src/tool.cppm", "src/main.cppm"]
-resources = [
-  { name = "default-frontend", root = "generated", path = "frontend/default" },
-]
-
-[build-tools.esbuild]
-version = "0.28.1"
-executable = "bin/esbuild"
-
-[build-tools.esbuild.archives.linux-x86_64]
-url = "https://registry.npmjs.org/@esbuild/linux-x64/-/linux-x64-0.28.1.tgz"
-sha256 = "9ed00ab5330c94386f3273eda99a1fb0e8f37cfd6cb5270e4ad2fe3527da3546"
-
-[build-tools.esbuild.archives.linux-aarch64]
-url = "https://registry.npmjs.org/@esbuild/linux-arm64/-/linux-arm64-0.28.1.tgz"
-sha256 = "2145e9e686c95ee47c1181f83f272f0ff95820e52d7736fdcd9eeb106fd6456a"
-
-[dependencies.rstd-std]
-git = "https://github.com/litocpp/rstd.git"
-visibility = "public"
-
-[dependencies.rstd-json]
-git = "https://github.com/litocpp/rstd.git"
-visibility = "private"
-
-[external-dependencies.cmake.clang]
-package = "Clang"
-targets = [
-  { name = "clang-cpp", visibility = "private" },
-  { name = "LLVM", visibility = "private" },
-]

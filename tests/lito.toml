@@ -1,0 +1,19 @@
+[package]
+name = "litodoc-tests"
+version.workspace = true
+
+[[test]]
+name = "litodoc-tests"
+sources = ["src/main.cpp", "src/book.cpp"]
+
+[dependencies.litodoc-core]
+workspace = true
+visibility = "private"
+
+[dependencies.rstd-std]
+workspace = true
+visibility = "private"
+
+[dependencies.rstd-test]
+workspace = true
+visibility = "private"

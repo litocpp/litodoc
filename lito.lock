@@ -1,52 +1,85 @@
 {
-  "externals": [
-    {
-      "alias": "esbuild",
-      "architectures": [
-        "aarch64"
-      ],
-      "build-tool": {
-        "executable": "bin/esbuild",
-        "operating-system": "linux",
-        "schema-version": 1,
-        "version": "0.28.1"
-      },
-      "package": "litodoc",
-      "provider": "build-tool:linux",
-      "source": {
-        "kind": "archive",
-        "sha256": "2145e9e686c95ee47c1181f83f272f0ff95820e52d7736fdcd9eeb106fd6456a",
-        "url": "https://registry.npmjs.org/@esbuild/linux-arm64/-/linux-arm64-0.28.1.tgz"
-      }
-    },
-    {
-      "alias": "esbuild",
-      "architectures": [
-        "x86_64"
-      ],
-      "build-tool": {
-        "executable": "bin/esbuild",
-        "operating-system": "linux",
-        "schema-version": 1,
-        "version": "0.28.1"
-      },
-      "package": "litodoc",
-      "provider": "build-tool:linux",
-      "source": {
-        "kind": "archive",
-        "sha256": "9ed00ab5330c94386f3273eda99a1fb0e8f37cfd6cb5270e4ad2fe3527da3546",
-        "url": "https://registry.npmjs.org/@esbuild/linux-x64/-/linux-x64-0.28.1.tgz"
-      }
-    }
-  ],
   "packages": [
     {
       "dependencies": [
+        "litodoc-core",
+        "rstd-argparse",
+        "rstd-std"
+      ],
+      "externals": [],
+      "manifest": "book/lito.toml",
+      "name": "litobook",
+      "runtime-dependencies": [],
+      "source": {
+        "kind": "path",
+        "path": "."
+      },
+      "version": "0.1.0"
+    },
+    {
+      "dependencies": [
+        "litodoc-core",
         "rstd-json",
         "rstd-std"
       ],
-      "manifest": "lito.toml",
+      "externals": [],
+      "manifest": "protocol/lito.toml",
       "name": "litodoc",
+      "runtime-dependencies": [],
+      "source": {
+        "kind": "path",
+        "path": "."
+      },
+      "version": "0.1.0"
+    },
+    {
+      "dependencies": [
+        "rstd-json",
+        "rstd-std",
+        "rstd-toml"
+      ],
+      "externals": [
+        {
+          "architectures": [
+            "aarch64"
+          ],
+          "name": "build-tool:esbuild:linux",
+          "source": {
+            "kind": "archive",
+            "sha256": "2145e9e686c95ee47c1181f83f272f0ff95820e52d7736fdcd9eeb106fd6456a",
+            "url": "https://registry.npmjs.org/@esbuild/linux-arm64/-/linux-arm64-0.28.1.tgz"
+          }
+        },
+        {
+          "architectures": [
+            "x86_64"
+          ],
+          "name": "build-tool:esbuild:linux",
+          "source": {
+            "kind": "archive",
+            "sha256": "9ed00ab5330c94386f3273eda99a1fb0e8f37cfd6cb5270e4ad2fe3527da3546",
+            "url": "https://registry.npmjs.org/@esbuild/linux-x64/-/linux-x64-0.28.1.tgz"
+          }
+        }
+      ],
+      "manifest": "core/lito.toml",
+      "name": "litodoc-core",
+      "runtime-dependencies": [],
+      "source": {
+        "kind": "path",
+        "path": "."
+      },
+      "version": "0.1.0"
+    },
+    {
+      "dependencies": [
+        "litodoc-core",
+        "rstd-std",
+        "rstd-test"
+      ],
+      "externals": [],
+      "manifest": "tests/lito.toml",
+      "name": "litodoc-tests",
       "runtime-dependencies": [],
       "source": {
         "kind": "path",
@@ -59,6 +92,7 @@
         "rstd-core",
         "rstd-runtime"
       ],
+      "externals": [],
       "manifest": "src/alloc/lito.toml",
       "name": "rstd-alloc",
       "runtime-dependencies": [],
@@ -74,7 +108,27 @@
       "version": "0.1.0"
     },
     {
+      "dependencies": [
+        "rstd-std"
+      ],
+      "externals": [],
+      "manifest": "src/argparse/lito.toml",
+      "name": "rstd-argparse",
+      "runtime-dependencies": [],
+      "source": {
+        "commit": "6a7376b99d1e9b56818f091cc6abece69322b19f",
+        "kind": "git",
+        "reference": {
+          "kind": "default",
+          "value": ""
+        },
+        "url": "https://github.com/litocpp/rstd.git"
+      },
+      "version": "0.1.0"
+    },
+    {
       "dependencies": [],
+      "externals": [],
       "manifest": "src/basic/lito.toml",
       "name": "rstd-basic",
       "runtime-dependencies": [],
@@ -94,6 +148,7 @@
         "rstd-basic",
         "rstd-runtime"
       ],
+      "externals": [],
       "manifest": "src/core/lito.toml",
       "name": "rstd-core",
       "runtime-dependencies": [],
@@ -113,6 +168,7 @@
         "rstd-core",
         "rstd-std"
       ],
+      "externals": [],
       "manifest": "src/json/lito.toml",
       "name": "rstd-json",
       "runtime-dependencies": [],
@@ -131,6 +187,7 @@
       "dependencies": [
         "rstd-basic"
       ],
+      "externals": [],
       "manifest": "src/runtime/lito.toml",
       "name": "rstd-runtime",
       "runtime-dependencies": [],
@@ -150,6 +207,7 @@
         "rstd-alloc",
         "rstd-core"
       ],
+      "externals": [],
       "manifest": "src/std/lito.toml",
       "name": "rstd-std",
       "runtime-dependencies": [],
@@ -163,7 +221,46 @@
         "url": "https://github.com/litocpp/rstd.git"
       },
       "version": "0.1.0"
+    },
+    {
+      "dependencies": [
+        "rstd-std"
+      ],
+      "externals": [],
+      "manifest": "src/test/lito.toml",
+      "name": "rstd-test",
+      "runtime-dependencies": [],
+      "source": {
+        "commit": "6a7376b99d1e9b56818f091cc6abece69322b19f",
+        "kind": "git",
+        "reference": {
+          "kind": "default",
+          "value": ""
+        },
+        "url": "https://github.com/litocpp/rstd.git"
+      },
+      "version": "0.1.0"
+    },
+    {
+      "dependencies": [
+        "rstd-alloc",
+        "rstd-core"
+      ],
+      "externals": [],
+      "manifest": "src/toml/lito.toml",
+      "name": "rstd-toml",
+      "runtime-dependencies": [],
+      "source": {
+        "commit": "6a7376b99d1e9b56818f091cc6abece69322b19f",
+        "kind": "git",
+        "reference": {
+          "kind": "default",
+          "value": ""
+        },
+        "url": "https://github.com/litocpp/rstd.git"
+      },
+      "version": "0.1.0"
     }
   ],
-  "version": 1
+  "version": 2
 }
