@@ -3,6 +3,7 @@
 import rstd;
 import rstd.test;
 import lito.book;
+import lito.doc.web;
 import lito.site;
 
 using namespace rstd::prelude;
@@ -265,4 +266,62 @@ TEST(Book, PreservesVersionOneApiFrontendCompatibility) {
   ASSERT_TRUE(frontend.is_ok());
   EXPECT_TRUE(frontend->supports_api);
   EXPECT_FALSE(frontend->supports_book);
+}
+
+TEST(Frontend, DirectoryAndEmbeddedResourcesShareValidation) {
+  auto temporary = rstd::test::TempDir::make();
+  ASSERT_TRUE(temporary.is_ok());
+  auto root = temporary->path();
+  constexpr auto manifest = R"json({
+  "format": "lito-doc-frontend",
+  "version": 2,
+  "template-api": 1,
+  "book-data-api": 1,
+  "capabilities": ["book"],
+  "templates": {
+    "book-root": "templates/root.html",
+    "book-page": "templates/page.html"
+  },
+  "partials": [],
+  "assets": []
+}
+)json"_str;
+  constexpr auto root_template = "{{site.title}}"_str;
+  constexpr auto page_template = "{{book.title}}"_str;
+  ASSERT_TRUE(write_text(root, "frontend.json"_str, manifest).is_ok());
+  ASSERT_TRUE(
+      write_text(root, "templates/root.html"_str, root_template).is_ok());
+  ASSERT_TRUE(
+      write_text(root, "templates/page.html"_str, page_template).is_ok());
+
+  auto directory = lito::site::load_frontend_directory(root);
+  ASSERT_TRUE(directory.is_ok());
+  const lito::site::FrontendResourceInput resources[] = {
+      {.path = "frontend.json"_str,
+       .media_type = "application/json"_str,
+       .contents = manifest.as_bytes()},
+      {.path = "templates/page.html"_str,
+       .media_type = "text/html"_str,
+       .contents = page_template.as_bytes()},
+      {.path = "templates/root.html"_str,
+       .media_type = "text/html"_str,
+       .contents = root_template.as_bytes()},
+  };
+  auto embedded = lito::site::load_frontend_resources(
+      "embedded:test"_str,
+      slice<lito::site::FrontendResourceInput>::from_raw_parts(
+          resources, usize(sizeof(resources) / sizeof(resources[0]))));
+  ASSERT_TRUE(embedded.is_ok());
+  EXPECT_EQ(embedded->digest.as_str(), directory->digest.as_str());
+  EXPECT_FALSE(embedded->supports_api);
+  EXPECT_TRUE(embedded->supports_book);
+}
+
+TEST(Frontend, LoadsEmbeddedDefaultBundle) {
+  auto frontend = lito::doc::web::load_default_frontend();
+  ASSERT_TRUE(frontend.is_ok());
+  EXPECT_TRUE(frontend->supports_api);
+  EXPECT_TRUE(frontend->supports_book);
+  EXPECT_EQ(frontend->assets.len(), usize(4));
+  EXPECT_FALSE(frontend->digest.is_empty());
 }

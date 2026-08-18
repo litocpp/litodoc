@@ -1,12 +1,18 @@
 [package]
 name = "litodoc-tests"
 version.workspace = true
+language = "cpp"
+minimum-standard = "c++20"
 
 [[test]]
 name = "litodoc-tests"
 sources = ["src/main.cpp", "src/book.cpp"]
 
 [dependencies.litodoc-core]
+workspace = true
+visibility = "private"
+
+[dependencies.litodoc-web]
 workspace = true
 visibility = "private"
 

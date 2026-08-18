@@ -56,19 +56,23 @@ auto prepare_book(ref<rstd::path::Path> directory,
 }
 
 auto load_book_frontend(const BookProject &project,
-                        ref<rstd::path::Path> default_frontend)
+                        Option<FrontendBundle> default_frontend)
     -> Result<FrontendBundle, String> {
-  auto selected = project.frontend.is_some() ? project.frontend->as_path()
-                                             : default_frontend;
-  if (selected.is_empty())
-    return Err(String::make("default Book frontend path is required"_str));
-  auto frontend = load_frontend_directory(selected);
-  if (frontend.is_err())
-    return Err(rstd::move(frontend).unwrap_err());
+  auto frontend = Option<FrontendBundle>{};
+  if (project.frontend.is_some()) {
+    auto loaded = load_frontend_directory(project.frontend->as_path());
+    if (loaded.is_err())
+      return Err(rstd::move(loaded).unwrap_err());
+    frontend = Some(rstd::move(loaded).unwrap());
+  } else if (default_frontend.is_some()) {
+    frontend = rstd::move(default_frontend);
+  } else {
+    return Err(String::make("default Book frontend is required"_str));
+  }
   if (!frontend->supports_book)
     return Err(rstd::format("frontend '{}' does not support Book documentation",
                             frontend->identity.as_str()));
-  return frontend;
+  return Ok(rstd::move(frontend).unwrap());
 }
 
 } // namespace lito::book
@@ -77,10 +81,6 @@ export namespace lito::book {
 
 auto check(BookCheckInput input) -> Result<BookCheckSummary, String> {
   auto prepared = rstd_try(prepare_book(input.directory.as_path(), {}, {}));
-  auto frontend =
-      load_book_frontend(prepared.project, input.default_frontend.as_path());
-  if (frontend.is_err())
-    return Err(rstd::move(frontend).unwrap_err());
   auto headings = usize{};
   auto links = usize{};
   for (const auto &page : prepared.content.pages) {
@@ -95,11 +95,12 @@ auto check(BookCheckInput input) -> Result<BookCheckSummary, String> {
   });
 }
 
-auto build(BookBuildInput input) -> Result<BookSummary, String> {
+auto build(BookBuildInput input, Option<FrontendBundle> default_frontend = {})
+    -> Result<BookSummary, String> {
   auto prepared = rstd_try(
       prepare_book(input.directory.as_path(), input.output, input.frontend));
   auto frontend = rstd_try(
-      load_book_frontend(prepared.project, input.default_frontend.as_path()));
+      load_book_frontend(prepared.project, rstd::move(default_frontend)));
   return publish_book_site(prepared.project, prepared.graph, prepared.content,
                            prepared.dataset, frontend);
 }

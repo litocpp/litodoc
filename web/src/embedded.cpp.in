@@ -1,0 +1,33 @@
+module lito.doc.web;
+
+import rstd;
+import lito.site;
+
+using namespace rstd::prelude;
+using namespace rstd::literals;
+using lito::site::FrontendResourceInput;
+
+namespace lito::doc::web {
+
+template <rstd::size_t Size>
+auto embedded_bytes(const unsigned char (&value)[Size]) noexcept -> slice<u8> {
+  return slice<u8>::from_raw_parts(reinterpret_cast<const byte *>(value),
+                                   usize(Size));
+}
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wc23-extensions"
+
+@resource_arrays@
+#pragma clang diagnostic pop
+
+auto load_default_frontend() -> Result<site::FrontendBundle, String> {
+  const FrontendResourceInput resources[] = {
+@resource_entries@  };
+  return site::load_frontend_resources(
+      "embedded:litodoc-default"_str,
+      slice<FrontendResourceInput>::from_raw_parts(resources,
+                                                    usize(sizeof(resources) / sizeof(resources[0]))));
+}
+
+} // namespace lito::doc::web

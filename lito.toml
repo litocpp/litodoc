@@ -1,6 +1,6 @@
 [workspace]
 name = "litodoc"
-members = ["core", "protocol", "book", "tests"]
+members = ["core", "web", "protocol", "book", "tests"]
 default-members = ["book"]
 
 [workspace.package]
@@ -8,6 +8,9 @@ version = "0.1.0"
 
 [workspace.dependencies.litodoc-core]
 path = "core"
+
+[workspace.dependencies.litodoc-web]
+path = "web"
 
 [workspace.dependencies.rstd-std]
 git = "https://github.com/litocpp/rstd.git"

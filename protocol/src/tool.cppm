@@ -32,6 +32,7 @@ module litodoc.executable;
 
 import rstd;
 import lito.doc;
+import lito.doc.web;
 
 using namespace rstd::prelude;
 using namespace rstd::literals;
@@ -1004,19 +1005,23 @@ auto execute_generate(ref<rstd::path::Path> manifest_path)
         "site manifest requires unsupported template API"_str);
   auto packages =
       rstd_try(required_array(*root, "packages", "site manifest"_str));
+  auto frontend =
+      rstd_try(optional_string(*root, "frontend", "site manifest"_str))
+          .map([](String value) { return PathBuf::from(rstd::move(value)); });
+  auto data_only =
+      rstd_try(required_bool(*root, "data_only", "site manifest"_str));
+  auto default_frontend = Option<lito::site::FrontendBundle>{};
+  if (frontend.is_none() && !data_only) {
+    default_frontend = Some(rstd_try(lito::doc::web::load_default_frontend()));
+  }
   auto input = SiteInput{
       .title = rstd_try(required_string(*root, "title", "site manifest"_str)),
       .output = PathBuf::from(
           rstd_try(required_string(*root, "output", "site manifest"_str))),
       .data_output = PathBuf::from(
           rstd_try(required_string(*root, "data_output", "site manifest"_str))),
-      .frontend =
-          rstd_try(optional_string(*root, "frontend", "site manifest"_str))
-              .map([](String value) {
-                return PathBuf::from(rstd::move(value));
-              }),
-      .data_only =
-          rstd_try(required_bool(*root, "data_only", "site manifest"_str)),
+      .frontend = rstd::move(frontend),
+      .data_only = data_only,
   };
   for (const auto &item : *packages) {
     auto package = rstd_try(json_object(item, "site manifest package"_str));
@@ -1054,7 +1059,7 @@ auto execute_generate(ref<rstd::path::Path> manifest_path)
     }
     input.packages.push(rstd::move(package_input));
   }
-  return generate(rstd::move(input));
+  return generate(rstd::move(input), rstd::move(default_frontend));
 }
 
 auto capabilities() -> String {
@@ -1064,12 +1069,15 @@ auto capabilities() -> String {
   site_versions.push_back(1);
   auto data_versions = llvm::json::Array{};
   data_versions.push_back(2);
+  auto features = llvm::json::Array{};
+  features.push_back("embedded-default-frontend");
   return json_text(llvm::json::Object{
       {"format", "litodoc-capabilities"},
       {"version", 1},
       {"extract_protocols", rstd::move(protocols)},
       {"site_manifest_versions", rstd::move(site_versions)},
       {"data_api_versions", rstd::move(data_versions)},
+      {"features", rstd::move(features)},
       {"litodoc_build", "0.1.0"},
       {"clang_version", CLANG_VERSION_STRING},
       {"clang_build", clang::getClangFullVersion()},

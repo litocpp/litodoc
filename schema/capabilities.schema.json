@@ -9,6 +9,7 @@
     "extract_protocols",
     "site_manifest_versions",
     "data_api_versions",
+    "features",
     "litodoc_build",
     "clang_version",
     "clang_build"
@@ -19,6 +20,11 @@
     "extract_protocols": { "$ref": "#/$defs/versions" },
     "site_manifest_versions": { "$ref": "#/$defs/versions" },
     "data_api_versions": { "$ref": "#/$defs/versions" },
+    "features": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/nonEmptyString" }
+    },
     "litodoc_build": { "$ref": "#/$defs/nonEmptyString" },
     "clang_version": { "$ref": "#/$defs/nonEmptyString" },
     "clang_build": { "$ref": "#/$defs/nonEmptyString" }

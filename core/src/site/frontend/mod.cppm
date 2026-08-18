@@ -20,6 +20,12 @@ struct FrontendResource {
   String contents;
 };
 
+struct FrontendResourceInput {
+  ref<str> path;
+  ref<str> media_type;
+  slice<u8> contents;
+};
+
 struct FrontendAsset {
   String path;
   String media_type;
@@ -324,6 +330,30 @@ auto frontend_manifest_paths(const FrontendJson &manifest)
   return Ok(rstd::move(paths));
 }
 
+struct FrontendManifestDescription {
+  FrontendJson manifest;
+  Vec<String> paths;
+  rstd::collections::BTreeSet<String> declared;
+};
+
+auto describe_frontend_manifest(ref<str> contents)
+    -> Result<FrontendManifestDescription, String> {
+  auto manifest = rstd_try(parse_frontend_manifest(contents));
+  auto paths = rstd_try(frontend_manifest_paths(manifest));
+  auto declared = rstd::collections::BTreeSet<String>::make();
+  declared.insert(String::make("frontend.json"_str));
+  for (const auto &path : paths) {
+    if (!declared.insert(path.clone()))
+      return Err(rstd::format("frontend manifest repeats resource '{}'",
+                              path.as_str()));
+  }
+  return Ok(FrontendManifestDescription{
+      .manifest = rstd::move(manifest),
+      .paths = rstd::move(paths),
+      .declared = rstd::move(declared),
+  });
+}
+
 auto make_frontend_bundle(
     String identity, String digest,
     rstd::collections::BTreeMap<String, FrontendResource> resources,
@@ -443,6 +473,29 @@ auto make_frontend_bundle(
   });
 }
 
+auto finish_frontend_resources(
+    String identity,
+    rstd::collections::BTreeMap<String, FrontendResource> resources,
+    FrontendManifestDescription description) -> Result<FrontendBundle, String> {
+  auto iterator = resources.iter();
+  for (auto item = iterator.next(); item.is_some(); item = iterator.next()) {
+    auto path = (*(*item).template get<0>()).as_str();
+    if (!description.declared.contains(path))
+      return Err(rstd::format(
+          "frontend resource '{}' is not declared by frontend.json", path));
+  }
+  auto declared = description.declared.iter();
+  for (auto path = declared.next(); path.is_some(); path = declared.next()) {
+    if (!resources.contains_key((**path).as_str()))
+      return Err(rstd::format("frontend '{}' is missing resource '{}'",
+                              identity.as_str(), (**path).as_str()));
+  }
+  auto digest = frontend_digest(resources);
+  return make_frontend_bundle(rstd::move(identity), rstd::move(digest),
+                              rstd::move(resources),
+                              rstd::move(description.manifest));
+}
+
 auto read_frontend_file(ref<rstd::path::Path> root, ref<str> relative,
                         ref<str> media_type)
     -> Result<FrontendResource, String> {
@@ -522,28 +575,20 @@ auto load_frontend_directory(ref<rstd::path::Path> root)
       read_frontend_file(root, "frontend.json"_str, "application/json"_str);
   if (manifest_resource.is_err())
     return Err(rstd::move(manifest_resource).unwrap_err());
-  auto manifest = parse_frontend_manifest(manifest_resource->contents.as_str());
-  if (manifest.is_err())
-    return Err(rstd::move(manifest).unwrap_err());
-  auto paths = frontend_manifest_paths(*manifest);
-  if (paths.is_err())
-    return Err(rstd::move(paths).unwrap_err());
-  auto declared = rstd::collections::BTreeSet<String>::make();
-  declared.insert(String::make("frontend.json"_str));
-  for (const auto &path : *paths) {
-    if (!declared.insert(path.clone()))
-      return Err(rstd::format("frontend manifest repeats resource '{}'",
-                              path.as_str()));
-  }
-  auto valid_directory = validate_frontend_directory(root, root, declared);
+  auto description =
+      describe_frontend_manifest(manifest_resource->contents.as_str());
+  if (description.is_err())
+    return Err(rstd::move(description).unwrap_err());
+  auto valid_directory =
+      validate_frontend_directory(root, root, description->declared);
   if (valid_directory.is_err())
     return Err(rstd::move(valid_directory).unwrap_err());
   auto resources =
       rstd::collections::BTreeMap<String, FrontendResource>::make();
   resources.insert(String::make("frontend.json"_str),
                    rstd::move(manifest_resource).unwrap());
-  auto assets =
-      frontend_array(*manifest, "assets"_str, "frontend manifest"_str);
+  auto assets = frontend_array(description->manifest, "assets"_str,
+                               "frontend manifest"_str);
   if (assets.is_err())
     return Err(rstd::move(assets).unwrap_err());
   auto media = rstd::collections::BTreeMap<String, String>::make();
@@ -557,7 +602,7 @@ auto load_frontend_directory(ref<rstd::path::Path> root)
       return Err(rstd::move(media_type).unwrap_err());
     media.insert(rstd::move(path).unwrap(), rstd::move(media_type).unwrap());
   }
-  for (const auto &path : *paths) {
+  for (const auto &path : description->paths) {
     if (resources.contains_key(path.as_str()))
       continue;
     auto media_type = media.get(path.as_str());
@@ -571,10 +616,52 @@ auto load_frontend_directory(ref<rstd::path::Path> root)
   auto root_text = root.to_str();
   if (root_text.is_none())
     return Err(String::make("frontend root is not valid UTF-8"_str));
-  auto digest = frontend_digest(resources);
-  return make_frontend_bundle(rstd::format("directory:{}", *root_text),
-                              rstd::move(digest), rstd::move(resources),
-                              rstd::move(manifest).unwrap());
+  return finish_frontend_resources(rstd::format("directory:{}", *root_text),
+                                   rstd::move(resources),
+                                   rstd::move(description).unwrap());
+}
+
+auto load_frontend_resources(ref<str> identity,
+                             slice<FrontendResourceInput> inputs)
+    -> Result<FrontendBundle, String> {
+  if (identity.is_empty())
+    return Err(
+        String::make("frontend resource identity must not be empty"_str));
+  auto resources =
+      rstd::collections::BTreeMap<String, FrontendResource>::make();
+  for (const auto &input : inputs) {
+    if (!safe_frontend_path(input.path))
+      return Err(
+          rstd::format("invalid frontend resource path '{}'", input.path));
+    if (input.media_type.is_empty())
+      return Err(
+          rstd::format("frontend resource '{}' has no media type", input.path));
+    auto text = rstd::str_::from_utf8(input.contents);
+    if (text.is_err())
+      return Err(rstd::format("frontend resource '{}' is not valid UTF-8",
+                              input.path));
+    auto previous =
+        resources.insert(String::make(input.path),
+                         FrontendResource{
+                             .path = String::make(input.path),
+                             .media_type = String::make(input.media_type),
+                             .contents = String::make(*text),
+                         });
+    if (previous.is_some())
+      return Err(
+          rstd::format("frontend resource '{}' is repeated", input.path));
+  }
+  auto manifest_resource = resources.get("frontend.json"_str);
+  if (manifest_resource.is_none())
+    return Err(
+        String::make("frontend resources are missing frontend.json"_str));
+  if ((**manifest_resource).media_type.as_str() != "application/json"_str)
+    return Err(String::make(
+        "frontend.json must use media type 'application/json'"_str));
+  auto description = rstd_try(
+      describe_frontend_manifest((**manifest_resource).contents.as_str()));
+  return finish_frontend_resources(
+      String::make(identity), rstd::move(resources), rstd::move(description));
 }
 
 } // namespace lito::site

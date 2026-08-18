@@ -1,15 +1,9 @@
-module;
-#include <rstd/macro.hpp>
-
-#ifndef LITO_RESOURCE_DEFAULT_FRONTEND
-#error "litobook requires the default-frontend runtime resource"
-#endif
-
 export module litobook.executable:tool;
 
 import rstd;
 import rstd.argparse;
 import lito.book;
+import lito.doc.web;
 
 using namespace rstd::prelude;
 using namespace rstd::literals;
@@ -21,20 +15,11 @@ namespace lito::book::tool {
 inline constexpr auto LITOBOOK_VERSION = LITO_PKG_VERSION;
 inline constexpr auto LITOBOOK_VERSION_SIZE =
     sizeof(LITO_PKG_VERSION) - sizeof(char);
-inline constexpr auto DEFAULT_FRONTEND = LITO_RESOURCE_DEFAULT_FRONTEND;
-inline constexpr auto DEFAULT_FRONTEND_SIZE =
-    sizeof(LITO_RESOURCE_DEFAULT_FRONTEND) - sizeof(char);
 
 auto litobook_version() noexcept -> ref<str> {
   return ref<str>::from_raw_parts_unchecked(
       reinterpret_cast<const byte *>(LITOBOOK_VERSION),
       usize(LITOBOOK_VERSION_SIZE));
-}
-
-auto default_frontend_path() noexcept -> ref<str> {
-  return ref<str>::from_raw_parts_unchecked(
-      reinterpret_cast<const byte *>(DEFAULT_FRONTEND),
-      usize(DEFAULT_FRONTEND_SIZE));
 }
 
 struct CliSchema {
@@ -149,11 +134,9 @@ auto run() -> int {
   auto directory = argument(matches, schema->directory);
   if (directory.is_err())
     return fail(directory.unwrap_err().as_str());
-  auto default_frontend = rstd::path::PathBuf::from(default_frontend_path());
   if (matches.subcommand_matches(schema->check).is_some()) {
     auto checked = lito::book::check(BookCheckInput{
         .directory = rstd::move(directory).unwrap().unwrap(),
-        .default_frontend = rstd::move(default_frontend),
     });
     if (checked.is_err())
       return fail(checked.unwrap_err().as_str());
@@ -171,12 +154,21 @@ auto run() -> int {
     return fail(output.unwrap_err().as_str());
   if (frontend.is_err())
     return fail(frontend.unwrap_err().as_str());
-  auto built = lito::book::build(BookBuildInput{
-      .directory = rstd::move(directory).unwrap().unwrap(),
-      .output = rstd::move(output).unwrap(),
-      .frontend = rstd::move(frontend).unwrap(),
-      .default_frontend = rstd::move(default_frontend),
-  });
+  auto frontend_path = rstd::move(frontend).unwrap();
+  auto default_frontend = Option<lito::site::FrontendBundle>{};
+  if (frontend_path.is_none()) {
+    auto loaded = lito::doc::web::load_default_frontend();
+    if (loaded.is_err())
+      return fail(loaded.unwrap_err().as_str());
+    default_frontend = Some(rstd::move(loaded).unwrap());
+  }
+  auto built = lito::book::build(
+      BookBuildInput{
+          .directory = rstd::move(directory).unwrap().unwrap(),
+          .output = rstd::move(output).unwrap(),
+          .frontend = rstd::move(frontend_path),
+      },
+      rstd::move(default_frontend));
   if (built.is_err())
     return fail(built.unwrap_err().as_str());
   rstd::io::println("generated {} pages at {}", built->pages,

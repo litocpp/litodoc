@@ -177,14 +177,12 @@ struct BookSummary {
 
 struct BookCheckInput {
   rstd::path::PathBuf directory;
-  rstd::path::PathBuf default_frontend;
 };
 
 struct BookBuildInput {
   rstd::path::PathBuf directory;
   Option<rstd::path::PathBuf> output;
   Option<rstd::path::PathBuf> frontend;
-  rstd::path::PathBuf default_frontend;
 };
 
 struct BookCheckSummary {
