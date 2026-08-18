@@ -4,10 +4,7 @@
     <a href="{{package.href}}">{{package.name}}</a><span aria-hidden="true">→</span><strong>source</strong>
   </nav>
 </lito-doc-module-identity>
-<section class="identity-block source-identity">
-  <p class="eyebrow">Package source</p>
-  <h1><code>{{source.path}}</code></h1>
-</section>
+<h1 class="page-title source-identity"><code>{{source.path}}</code></h1>
 <pre class="source-code" aria-label="Source code"><code>{{#each source.lines}}<span class="source-line" id="{{id}}"><a href="#{{id}}" aria-label="Line {{number}}">{{number}}</a><span>{{text}}</span></span>
 {{/each}}</code></pre>
 {{> templates/partials/foot.html}}

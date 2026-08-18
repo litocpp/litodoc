@@ -1,4 +1,7 @@
 import { LitoDocModuleIdentityElement } from "./module-identity/element";
+import { LitoDocNavigationElement } from "./navigation/element";
+import { LitoDocPageNavigationElement } from "./page-navigation/element";
+import { LitoDocProseElement } from "./prose/element";
 import { LitoDocSearchElement } from "./search/element";
 import { LitoDocShellElement } from "./shell/element";
 import { LitoDocThemePickerElement } from "./theme-picker/element";
@@ -8,6 +11,9 @@ const definitions: ReadonlyArray<readonly [string, CustomElementConstructor]> = 
   ["lito-doc-search", LitoDocSearchElement],
   ["lito-doc-theme-picker", LitoDocThemePickerElement],
   ["lito-doc-module-identity", LitoDocModuleIdentityElement],
+  ["lito-doc-navigation", LitoDocNavigationElement],
+  ["lito-doc-page-navigation", LitoDocPageNavigationElement],
+  ["lito-doc-prose", LitoDocProseElement],
 ];
 
 export function defineLitoDocComponents(registry = window.customElements): void {

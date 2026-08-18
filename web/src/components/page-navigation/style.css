@@ -1,0 +1,67 @@
+lito-doc-page-navigation {
+  display: block;
+  max-width: var(--prose-width);
+}
+
+.book-pagination {
+  display: flex;
+  align-items: center;
+  padding-top: 2rem;
+  margin-top: 4rem;
+  margin-bottom: 2rem;
+  border-top: 1px solid var(--border);
+}
+
+.book-pagination a {
+  display: flex;
+  max-width: 50%;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 1rem 1rem 1rem 0;
+  color: var(--muted);
+  font-size: 1.125rem;
+  font-weight: 500;
+  text-decoration: none;
+  overflow-wrap: break-word;
+  transition: color 150ms ease;
+}
+
+.book-pagination a:hover {
+  color: var(--ink);
+}
+
+.book-pagination span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.book-previous::before,
+.book-next::after {
+  flex: 0 0 auto;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.book-previous::before {
+  content: "←";
+}
+
+.book-next {
+  padding-right: 0;
+  padding-left: 1rem !important;
+  margin-left: auto;
+  text-align: right;
+}
+
+.book-next::after {
+  content: "→";
+}
+
+@media (max-width: 47.999rem) {
+  .book-pagination a {
+    font-size: 1rem;
+  }
+}

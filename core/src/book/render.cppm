@@ -110,6 +110,8 @@ auto book_site_value(const BookProject &project, usize page_count)
 auto book_navigation(const BookGraph &graph, ref<str> current_output)
     -> TemplateValue {
   auto navigation = TemplateValue::object_value();
+  navigation.insert("has_packages"_str, TemplateValue::boolean_value(false));
+  navigation.insert("packages"_str, TemplateValue::array_value());
   navigation.insert("show_modules"_str, TemplateValue::boolean_value(false));
   navigation.insert("modules"_str, TemplateValue::array_value());
   navigation.insert("has_pages"_str,
@@ -124,6 +126,8 @@ auto book_navigation(const BookGraph &graph, ref<str> current_output)
                 book_template_number(page.breadcrumb.len() - usize(1)));
     item.insert("is_root"_str,
                 TemplateValue::boolean_value(page.parent.is_none()));
+    item.insert("has_children"_str,
+                TemplateValue::boolean_value(!page.children.is_empty()));
     pages.array.push(rstd::move(item));
   }
   navigation.insert("pages"_str, rstd::move(pages));
@@ -148,10 +152,13 @@ auto book_page_context(const BookProject &project, const BookGraph &graph,
   auto outline = TemplateValue::array_value();
   if (page != nullptr) {
     for (const auto &heading : page->headings) {
+      if (heading.level == usize(1))
+        continue;
       auto item = TemplateValue::object_value();
       item.insert("href"_str, TemplateValue::text_value(rstd::format(
                                   "#{}", heading.anchor.as_str())));
       item.insert("label"_str, book_template_text(heading.text.as_str()));
+      item.insert("level"_str, book_template_number(heading.level));
       outline.array.push(rstd::move(item));
     }
   }

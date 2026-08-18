@@ -2,13 +2,10 @@
 {{#if book.has_breadcrumbs}}
 <nav class="book-breadcrumbs" aria-label="Breadcrumb">{{#each book.breadcrumbs}}<a href="{{href}}">{{title}}</a>{{/each}}</nav>
 {{/if}}
-<section class="identity-block">
-  <p class="eyebrow">Chapter</p>
-  <h1>{{book.title}}</h1>
-</section>
-<article class="book-content prose">{{{book.content}}}</article>
-<nav class="book-pagination" aria-label="Chapter navigation">
+<h1 class="page-title">{{book.title}}</h1>
+<lito-doc-prose><article class="book-content prose">{{{book.content}}}</article></lito-doc-prose>
+<lito-doc-page-navigation><nav class="book-pagination" aria-label="Chapter navigation">
   {{#if book.has_previous}}<a class="book-previous" href="{{book.previous.href}}"><span>Previous</span><strong>{{book.previous.title}}</strong></a>{{/if}}
   {{#if book.has_next}}<a class="book-next" href="{{book.next.href}}"><span>Next</span><strong>{{book.next.title}}</strong></a>{{/if}}
-</nav>
+</nav></lito-doc-page-navigation>
 {{> templates/partials/foot.html}}

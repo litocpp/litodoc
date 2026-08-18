@@ -4,9 +4,16 @@ import {
   type SearchContext,
   type SearchEntry,
 } from "../../search/catalog";
+import { loadBookSearchCatalog } from "../../search/book";
 
 export class LitoDocSearchElement extends HTMLElement {
-  static observedAttributes = ["catalog-url", "current-module", "current-package", "root-prefix"];
+  static observedAttributes = [
+    "catalog-url",
+    "current-module",
+    "current-package",
+    "mode",
+    "root-prefix",
+  ];
 
   #entries?: readonly SearchEntry[];
   #events?: AbortController;
@@ -45,11 +52,15 @@ export class LitoDocSearchElement extends HTMLElement {
       "keydown",
       (event) => {
         const target = event.target;
-        if (
-          (event.key === "/" || event.key.toLowerCase() === "s") &&
+        const commandSearch =
+          event.key.toLowerCase() === "k" &&
           !event.altKey &&
-          !event.ctrlKey &&
-          !event.metaKey &&
+          !event.shiftKey &&
+          (event.ctrlKey || event.metaKey);
+        if (
+          (event.key === "/" || commandSearch) &&
+          !event.altKey &&
+          (commandSearch || (!event.ctrlKey && !event.metaKey)) &&
           !(target instanceof HTMLInputElement) &&
           !(target instanceof HTMLTextAreaElement) &&
           !(target instanceof HTMLSelectElement) &&
@@ -81,7 +92,7 @@ export class LitoDocSearchElement extends HTMLElement {
   }
 
   attributeChangedCallback(name: string, previous: string | null, current: string | null): void {
-    if (name === "catalog-url" && previous !== current) {
+    if ((name === "catalog-url" || name === "mode") && previous !== current) {
       this.#entries = undefined;
       this.#load = undefined;
       this.#loadError = undefined;
@@ -131,7 +142,9 @@ export class LitoDocSearchElement extends HTMLElement {
         console.error(this.#loadError);
         return;
       }
-      this.#load = loadSearchCatalog(url)
+      const load =
+        this.getAttribute("mode") === "book" ? loadBookSearchCatalog : loadSearchCatalog;
+      this.#load = load(url)
         .then((entries) => {
           this.#entries = entries;
         })
@@ -175,13 +188,18 @@ export class LitoDocSearchElement extends HTMLElement {
       return;
     }
 
-    const matches = searchCatalog(this.#entries, this.#input.value, 12, this.searchContext);
+    const matches = searchCatalog(
+      this.#entries,
+      this.#input.value,
+      12,
+      this.searchContext,
+    );
 
     this.#results.replaceChildren();
     const status = document.createElement("div");
     status.className = "search-status";
     status.setAttribute("role", "status");
-    status.textContent = matches.length ? `${matches.length} matches` : "No matching API";
+    status.textContent = matches.length ? `${matches.length} matches` : "No results found";
     this.#results.append(status);
     for (const entry of matches) {
       const link = document.createElement("a");

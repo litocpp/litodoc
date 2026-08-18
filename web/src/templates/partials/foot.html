@@ -1,4 +1,19 @@
     </main>
+    {{#if page.has_outline}}
+    <aside class="page-outline" aria-label="On this page">
+      <lito-doc-navigation>
+        <div class="sidebar-section" data-navigation-section>
+          <div class="sidebar-heading">On This Page</div>
+          <nav data-outline-navigation>
+            <ul class="nav-list outline-list">
+              {{#each page.outline}}<li data-depth="{{level}}"><a href="{{href}}">{{label}}</a></li>{{/each}}
+            </ul>
+          </nav>
+        </div>
+      </lito-doc-navigation>
+    </aside>
+    {{/if}}
+    <div class="page-outline-placeholder" aria-hidden="true"></div>
   </div>
   </lito-doc-shell>
 </body>

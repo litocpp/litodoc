@@ -68,7 +68,8 @@ auto make_book_project() -> rstd::io::Result<rstd::test::TempDir> {
                        "\n"
                        "> Keep the setup local.\n"
                        "\n"
-                       "1. Build\n"
+                       "1. Build and\n"
+                       "  keep the output local\n"
                        "  - Keep it local\n"
                        "2. Open the [reference](../reference.md).\n"
                        "\n"
@@ -108,9 +109,11 @@ auto make_book_project() -> rstd::io::Result<rstd::test::TempDir> {
                        "}\n"_str);
   if (written.is_err())
     return Err(rstd::move(written).unwrap_err());
-  written = write_text(
-      root, "frontend/templates/root.html"_str,
-      "<!doctype html><title>{{site.title}}</title>{{{book.content}}}"_str);
+  written = write_text(root, "frontend/templates/root.html"_str,
+                       "<!doctype html><title>{{site.title}}</title>"
+                       "{{#each page.outline}}<a class=\"outline\" "
+                       "href=\"{{href}}\">{{label}}</a>{{/each}}"
+                       "{{{book.content}}}"_str);
   if (written.is_err())
     return Err(rstd::move(written).unwrap_err());
   written = write_text(
@@ -156,12 +159,16 @@ TEST(Book, ChecksAndPublishesAnInlineProject) {
       "href=\"guide/install/index.html#install\""_str));
   EXPECT_TRUE(index->as_str().contains("href=\"#repeated-2\""_str));
   EXPECT_TRUE(index->as_str().contains("id=\"repeated-2\""_str));
+  EXPECT_TRUE(
+      index->as_str().contains("class=\"outline\" href=\"#repeated\""_str));
+  EXPECT_FALSE(
+      index->as_str().contains("class=\"outline\" href=\"#welcome\""_str));
   auto install = rstd::fs::read_to_string(
       child(project.path(), "build/book/guide/install/index.html"_str)
           .as_path());
   ASSERT_TRUE(install.is_ok());
   EXPECT_TRUE(install->as_str().contains(
-      "<ol><li>Build<ul><li>Keep it local</li></ul></li>"_str));
+      "<ol><li>Build and keep the output local<ul><li>Keep it local</li></ul></li>"_str));
   EXPECT_TRUE(install->as_str().contains("src=\"../../assets/"_str));
   auto reference = rstd::fs::read_to_string(
       child(project.path(), "build/book/reference/index.html"_str).as_path());

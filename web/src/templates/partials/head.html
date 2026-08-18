@@ -10,66 +10,93 @@
   <script src="{{page.asset_prefix}}static/theme-bootstrap.js"></script>
   <script defer src="{{page.asset_prefix}}static/app.js"></script>
 </head>
-<body data-page-kind="{{page.kind}}">
+<body data-page-kind="{{page.kind}}"{{#if page.has_outline}} data-has-outline{{/if}}{{#if page.is_book}} data-has-sidebar{{/if}}{{#if navigation.has_packages}} data-has-sidebar{{/if}}{{#if navigation.show_modules}} data-has-sidebar{{/if}}>
   <a class="skip-link" href="#content">Skip to documentation</a>
   <lito-doc-shell>
-  <header class="topbar">
-    <button class="menu-button" type="button" data-drawer-trigger aria-controls="sidebar" aria-expanded="false">
-      <span aria-hidden="true">☰</span><span class="sr-only">Open documentation navigation</span>
-    </button>
-    <a class="brand" href="{{page.asset_prefix}}index.html">
-      <span class="brand-mark" aria-hidden="true">:</span>
-      <span>{{site.title}}</span>
-    </a>
-    {{#if page.is_api}}<lito-doc-search root-prefix="{{page.asset_prefix}}" catalog-url="{{page.asset_prefix}}search-index.json" current-package="{{page.search_package}}" current-module="{{page.search_module}}">
-      <label for="doc-search">Search API</label>
-      <input id="doc-search" data-search-input type="search" autocomplete="off" spellcheck="false" placeholder="Symbol or module" aria-controls="search-results">
-      <div id="search-results" data-search-results hidden aria-live="polite"></div>
-    </lito-doc-search>{{/if}}
-    <lito-doc-theme-picker>
-      <label for="theme-mode">
-        <span>Theme</span>
-        <select id="theme-mode" data-theme-select>
-          <option value="auto">System</option>
-          <option value="light">Light</option>
-          <option value="dark">Dark</option>
-        </select>
-      </label>
-    </lito-doc-theme-picker>
+    <header class="topbar">
+      <div class="topbar-frame">
+        <a class="brand" href="{{page.asset_prefix}}index.html">
+          <strong>{{site.title}}</strong>
+        </a>
+        <div class="desktop-search">
+          {{#if page.is_api}}<lito-doc-search root-prefix="{{page.asset_prefix}}" catalog-url="{{page.asset_prefix}}search-index.json" current-package="{{page.search_package}}" current-module="{{page.search_module}}">
+            <label for="doc-search">Search documentation</label>
+            <input id="doc-search" data-search-input type="search" autocomplete="off" spellcheck="false" placeholder="Search documentation…" aria-controls="search-results">
+            <kbd aria-hidden="true">CTRL K</kbd>
+            <div id="search-results" data-search-results hidden aria-live="polite"></div>
+          </lito-doc-search>{{/if}}
+          {{#if page.is_book}}<lito-doc-search mode="book" root-prefix="{{page.asset_prefix}}" catalog-url="{{page.asset_prefix}}data/book.json">
+            <label for="doc-search">Search documentation</label>
+            <input id="doc-search" data-search-input type="search" autocomplete="off" spellcheck="false" placeholder="Search documentation…" aria-controls="search-results">
+            <kbd aria-hidden="true">CTRL K</kbd>
+            <div id="search-results" data-search-results hidden aria-live="polite"></div>
+          </lito-doc-search>{{/if}}
+        </div>
+        <button class="menu-button" type="button" data-drawer-trigger aria-controls="sidebar" aria-expanded="false">
+          <span class="menu-glyph" aria-hidden="true"></span><span class="sr-only">Open documentation navigation</span>
+        </button>
+      </div>
     </header>
-  <div class="doc-shell">
-    <aside class="sidebar" id="sidebar" data-drawer-panel aria-label="Documentation navigation">
-      {{#if page.is_book}}
-      {{#if navigation.has_pages}}
-      <div class="sidebar-section">
-        <div class="sidebar-heading">Chapters</div>
-        <nav aria-label="Book chapters">
-          <ul class="nav-list book-page-list">
-            {{#each navigation.pages}}<li data-depth="{{depth}}"><a href="{{href}}">{{title}}</a></li>{{/each}}
-          </ul>
-        </nav>
-      </div>
-      {{/if}}
-      {{/if}}
-      {{#if page.has_outline}}
-      <div class="sidebar-section">
-        <div class="sidebar-heading">On this page</div>
-        <nav aria-label="On this page">
-          <ul class="nav-list outline-list">
-            {{#each page.outline}}<li><a href="{{href}}">{{label}}</a></li>{{/each}}
-          </ul>
-        </nav>
-      </div>
-      {{/if}}
-      {{#if navigation.show_modules}}
-      <div class="sidebar-section">
-        <div class="sidebar-heading">Modules</div>
-        <nav aria-label="Package modules">
-          <ul class="nav-list module-list">
-            {{#each navigation.modules}}<li><a href="{{href}}"><code>{{label}}</code></a></li>{{/each}}
-          </ul>
-        </nav>
-      </div>
-      {{/if}}
-    </aside>
-    <main id="content" class="content">
+    <div class="doc-shell">
+      <div class="sidebar-placeholder" aria-hidden="true"></div>
+      <aside class="sidebar" id="sidebar" data-drawer-panel aria-label="Documentation navigation">
+        <div class="mobile-search">
+          {{#if page.is_api}}<lito-doc-search root-prefix="{{page.asset_prefix}}" catalog-url="{{page.asset_prefix}}search-index.json" current-package="{{page.search_package}}" current-module="{{page.search_module}}">
+            <label for="doc-search-mobile">Search documentation</label>
+            <input id="doc-search-mobile" data-search-input type="search" autocomplete="off" spellcheck="false" placeholder="Search documentation…" aria-controls="search-results-mobile">
+            <div id="search-results-mobile" data-search-results hidden aria-live="polite"></div>
+          </lito-doc-search>{{/if}}
+          {{#if page.is_book}}<lito-doc-search mode="book" root-prefix="{{page.asset_prefix}}" catalog-url="{{page.asset_prefix}}data/book.json">
+            <label for="doc-search-mobile">Search documentation</label>
+            <input id="doc-search-mobile" data-search-input type="search" autocomplete="off" spellcheck="false" placeholder="Search documentation…" aria-controls="search-results-mobile">
+            <div id="search-results-mobile" data-search-results hidden aria-live="polite"></div>
+          </lito-doc-search>{{/if}}
+        </div>
+        <div class="sidebar-scroll">
+          <lito-doc-navigation>
+          {{#if navigation.has_packages}}
+          <div class="sidebar-section" data-navigation-section>
+            <nav aria-label="Packages" data-page-navigation>
+              <ul class="nav-list package-list">
+                {{#each navigation.packages}}<li><a href="{{href}}">{{name}}</a></li>{{/each}}
+              </ul>
+            </nav>
+          </div>
+          {{/if}}
+          {{#if page.is_book}}
+          {{#if navigation.has_pages}}
+          <div class="sidebar-section" data-navigation-section>
+            <nav aria-label="Book chapters" data-page-navigation>
+              <ul class="nav-list book-page-list">
+                {{#each navigation.pages}}<li data-depth="{{depth}}"{{#if has_children}} data-folder{{/if}}><a href="{{href}}">{{title}}</a>{{#if has_children}}<button class="folder-toggle" type="button" aria-label="Toggle {{title}}"><span aria-hidden="true"></span></button>{{/if}}</li>{{/each}}
+              </ul>
+            </nav>
+          </div>
+          {{/if}}
+          {{/if}}
+          {{#if navigation.show_modules}}
+          <div class="sidebar-section" data-navigation-section>
+            <div class="sidebar-heading">Modules</div>
+            <nav aria-label="Package modules" data-page-navigation>
+              <ul class="nav-list module-list">
+                {{#each navigation.modules}}<li><a href="{{href}}"><code>{{label}}</code></a></li>{{/each}}
+              </ul>
+            </nav>
+          </div>
+          {{/if}}
+          </lito-doc-navigation>
+        </div>
+        <div class="sidebar-footer">
+          <lito-doc-theme-picker>
+            <label for="theme-mode">
+              <span>Theme</span>
+              <select id="theme-mode" data-theme-select>
+                <option value="auto">System</option>
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+              </select>
+            </label>
+          </lito-doc-theme-picker>
+        </div>
+      </aside>
+      <main id="content" class="content">

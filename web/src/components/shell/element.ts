@@ -14,7 +14,7 @@ export class LitoDocShellElement extends HTMLElement {
     }
 
     const events = new AbortController();
-    const narrow = matchMedia("(max-width: 50rem)");
+    const narrow = matchMedia("(max-width: 47.999rem)");
     this.#events = events;
     this.#narrow = narrow;
     this.#panel = panel;
@@ -69,6 +69,7 @@ export class LitoDocShellElement extends HTMLElement {
 
   set drawerOpen(open: boolean) {
     this.toggleAttribute("drawer-open", open);
+    document.body.toggleAttribute("data-navigation-open", open);
     this.#trigger?.setAttribute("aria-expanded", String(open));
     this.#syncPanelAvailability();
   }

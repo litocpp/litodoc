@@ -210,6 +210,15 @@ auto list_item(ref<str> line) -> Option<rstd::tuple<usize, bool, usize>> {
                                               marker + usize(1)});
 }
 
+auto list_continuation(ref<str> line, usize depth) -> Option<usize> {
+  auto spaces = usize{};
+  while (spaces < line.len() && line[spaces] == u8(' '))
+    ++spaces;
+  if (spaces < (depth + usize(1)) * usize(2) || spaces == line.len())
+    return None();
+  return Some(spaces);
+}
+
 auto heading_level(ref<str> line) -> usize {
   auto level = usize{};
   while (level < line.len() && level < usize(6) && line[level] == u8('#'))
@@ -392,6 +401,7 @@ auto parse_markdown(ref<rstd::path::Path> path, ref<str> source)
   auto line = usize(1);
   auto code = Option<MarkdownBlock>{};
   auto paragraph = Option<MarkdownBlock>{};
+  auto list_continuation_allowed = false;
   auto flush_paragraph = [&document, &paragraph]() {
     if (paragraph.is_some())
       document.blocks.push(paragraph.take().unwrap());
@@ -405,6 +415,7 @@ auto parse_markdown(ref<rstd::path::Path> path, ref<str> source)
     if (code.is_some()) {
       if (current.starts_with("```"_str)) {
         document.blocks.push(code.take().unwrap());
+        list_continuation_allowed = false;
       } else {
         if (!code->literal.is_empty())
           code->literal.push_ascii('\n');
@@ -412,6 +423,7 @@ auto parse_markdown(ref<rstd::path::Path> path, ref<str> source)
       }
     } else if (current.starts_with("```"_str)) {
       flush_paragraph();
+      list_continuation_allowed = false;
       code = Some(MarkdownBlock{
           .kind = MarkdownBlockKind::Code,
           .language = String::make(
@@ -421,10 +433,19 @@ auto parse_markdown(ref<rstd::path::Path> path, ref<str> source)
     } else {
       auto heading = heading_level(current);
       auto list = list_item(current);
+      auto continuation = Option<usize>{};
+      if (list_continuation_allowed && !document.blocks.is_empty() &&
+          document.blocks[document.blocks.len() - usize(1)].kind ==
+              MarkdownBlockKind::ListItem) {
+        continuation = list_continuation(
+            current, document.blocks[document.blocks.len() - usize(1)].depth);
+      }
       if (current.trim_ascii().is_empty()) {
         flush_paragraph();
+        list_continuation_allowed = false;
       } else if (heading != usize{}) {
         flush_paragraph();
+        list_continuation_allowed = false;
         auto text = current.get(heading + usize(1), current.len())
                         .unwrap()
                         .trim_ascii();
@@ -471,8 +492,19 @@ auto parse_markdown(ref<rstd::path::Path> path, ref<str> source)
             .inlines = rstd::move(inlines),
             .span = markdown_span(path, line, usize(1)),
         });
+        list_continuation_allowed = true;
+      } else if (continuation.is_some()) {
+        auto &previous = document.blocks[document.blocks.len() - usize(1)];
+        auto text = current.get(*continuation, current.len()).unwrap();
+        auto inlines = rstd_try(parse_inlines(
+            text, path, line, *continuation + usize(1), document.links));
+        push_inline_text(previous.inlines, " "_str, path, line,
+                         *continuation + usize(1));
+        for (auto &item : inlines)
+          previous.inlines.push(rstd::move(item));
       } else if (current.starts_with("> "_str)) {
         flush_paragraph();
+        list_continuation_allowed = false;
         auto inlines = rstd_try(
             parse_inlines(current.get(usize(2), current.len()).unwrap(), path,
                           line, usize(3), document.links));
@@ -482,6 +514,7 @@ auto parse_markdown(ref<rstd::path::Path> path, ref<str> source)
             .span = markdown_span(path, line, usize(1)),
         });
       } else {
+        list_continuation_allowed = false;
         auto inlines = rstd_try(parse_inlines(current.trim_ascii(), path, line,
                                               usize(1), document.links));
         if (paragraph.is_none()) {

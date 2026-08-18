@@ -1,0 +1,240 @@
+lito-doc-navigation {
+  display: block;
+}
+
+.sidebar-heading {
+  padding: 0.375rem 0.5rem;
+  margin: 0 0 0.5rem;
+  color: var(--ink-strong);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.sidebar-section + .sidebar-section {
+  margin-top: 1.25rem;
+}
+
+.nav-list {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.nav-list li {
+  position: relative;
+}
+
+.nav-list a {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  color: var(--muted);
+  border-radius: var(--radius-small);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+.nav-list a:hover {
+  color: var(--ink-strong);
+  background: #f3f4f6;
+}
+
+:root[data-theme="dark"] .nav-list a:hover {
+  color: #f9fafb;
+  background: hsl(var(--nextra-primary-hue) var(--nextra-primary-saturation) 94% / 0.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .nav-list a:hover {
+    color: #f9fafb;
+    background: hsl(var(--nextra-primary-hue) var(--nextra-primary-saturation) 94% / 0.05);
+  }
+}
+
+.nav-list a[aria-current] {
+  color: hsl(var(--nextra-primary-hue) var(--nextra-primary-saturation) 32%);
+  background: hsl(var(--nextra-primary-hue) var(--nextra-primary-saturation) 94%);
+  font-weight: 600;
+}
+
+:root[data-theme="dark"] .nav-list a[aria-current] {
+  color: var(--module);
+  background: var(--module-soft);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .nav-list a[aria-current] {
+    color: var(--module);
+    background: var(--module-soft);
+  }
+}
+
+.nav-list code {
+  color: inherit;
+  font-size: 0.8125rem;
+}
+
+.book-page-list li[data-depth]:not([data-depth="0"]):not([data-expanded]) {
+  display: none;
+}
+
+.book-page-list li[data-depth="0"]:not(:first-child) {
+  margin-top: 0.25rem;
+}
+
+.book-page-list li[data-depth="0"][data-current-section] > a:not([aria-current]) {
+  color: var(--ink-strong);
+  font-weight: 500;
+}
+
+.book-page-list li[data-folder] > a {
+  padding-right: 2rem;
+}
+
+.folder-toggle {
+  position: absolute;
+  top: 0.125rem;
+  right: 0.125rem;
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-small);
+}
+
+.folder-toggle:hover {
+  color: var(--ink-strong);
+  background: rgb(31 41 55 / 0.05);
+}
+
+.folder-toggle span {
+  display: block;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 150ms ease;
+}
+
+.book-page-list li[data-open] > .folder-toggle span {
+  transform: rotate(45deg);
+}
+
+.book-page-list li[data-depth="1"],
+.book-page-list li[data-depth="2"],
+.book-page-list li[data-depth="3"] {
+  margin-left: 0.75rem;
+  border-left: 1px solid var(--border);
+}
+
+.book-page-list li[data-depth="1"] > a {
+  padding-left: 0.75rem;
+}
+
+.book-page-list li[data-depth="2"] > a {
+  padding-left: 1.5rem;
+}
+
+.book-page-list li[data-depth="3"] > a {
+  padding-left: 2.25rem;
+}
+
+.outline-list {
+  gap: 0;
+}
+
+.page-outline > lito-doc-navigation {
+  position: sticky;
+  top: var(--topbar-height);
+  display: grid;
+  max-height: calc(100vh - var(--topbar-height));
+  grid-template-rows: min-content 1fr;
+  font-size: 0.875rem;
+}
+
+.page-outline .sidebar-heading {
+  padding: 1.5rem 1rem 0;
+  margin: 0;
+  color: var(--ink-strong);
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.page-outline nav {
+  padding: 1rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.page-outline .outline-list li {
+  margin: 0.5rem 0;
+}
+
+.page-outline .outline-list a {
+  display: block;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border-radius: 0;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.125rem;
+}
+
+.page-outline .outline-list a:hover {
+  color: var(--ink);
+  background: transparent;
+}
+
+.page-outline .outline-list a[aria-current] {
+  color: var(--module);
+  background: transparent;
+  font-weight: 600;
+}
+
+:root[data-theme="dark"] .page-outline .outline-list a[aria-current] {
+  background: transparent;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .page-outline .outline-list a[aria-current] {
+    background: transparent;
+  }
+}
+
+.page-outline .outline-list li[data-depth="3"] a {
+  margin-left: 0.75rem;
+}
+
+.page-outline .outline-list li[data-depth="4"] a {
+  margin-left: 1.5rem;
+}
+
+.page-outline .outline-list li[data-depth="5"] a {
+  margin-left: 2.25rem;
+}
+
+.page-outline .outline-list li[data-depth="6"] a {
+  margin-left: 3rem;
+}
+
+@media (max-width: 47.999rem) {
+  .nav-list a {
+    min-height: 2rem;
+  }
+}

@@ -4,11 +4,8 @@
     <a href="{{package.href}}">{{package.name}}</a><span aria-hidden="true">→</span><strong>{{module.prefix}}</strong>{{#if module.partition}}<span class="partition-mark">:</span><strong class="partition-name">{{module.partition}}</strong>{{/if}}
   </nav>
 </lito-doc-module-identity>
-<section class="identity-block">
-  <p class="eyebrow">C++ module</p>
-  <h1><code>{{module.name}}</code></h1>
-</section>
-{{#if module.has_documentation}}<section class="documentation prose" id="documentation">{{{module.documentation}}}</section>{{/if}}
+<h1 class="page-title"><code>{{module.name}}</code></h1>
+{{#if module.has_documentation}}<lito-doc-prose><section class="documentation prose" id="documentation">{{{module.documentation}}}</section></lito-doc-prose>{{/if}}
 {{#if module.has_modules}}
 <section class="api-section" id="modules">
   <div class="section-heading"><span>Modules</span><span>{{module.module_count}}</span></div>

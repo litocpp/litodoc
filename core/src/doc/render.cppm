@@ -54,6 +54,7 @@ auto append_outline(TemplateValue &page, ref<str> href, ref<str> label)
   auto item = TemplateValue::object_value();
   item.insert("href"_str, template_text(href));
   item.insert("label"_str, template_text(label));
+  item.insert("level"_str, template_number(usize(2)));
   outline->array.push(rstd::move(item));
   page.object.insert(String::make("has_outline"_str),
                      TemplateValue::boolean_value(true));

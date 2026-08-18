@@ -1,8 +1,11 @@
 @import "./tokens.css";
 @import "./base.css";
 @import "../components/shell/style.css";
+@import "../components/navigation/style.css";
 @import "../components/search/style.css";
 @import "../components/theme-picker/style.css";
 @import "../components/module-identity/style.css";
+@import "../components/prose/style.css";
+@import "../components/page-navigation/style.css";
 @import "./content.css";
 @import "./source.css";
