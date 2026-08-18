@@ -53,7 +53,7 @@ git = "https://github.com/litocpp/rstd.git"
 visibility = "private"
 
 [external-dependencies.cmake.clang]
-find-package = "Clang"
+package = "Clang"
 targets = [
   { name = "clang-cpp", visibility = "private" },
   { name = "LLVM", visibility = "private" },
