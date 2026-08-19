@@ -78,7 +78,7 @@ auto package_publication_json(const Package &package,
                    publish_json_string(frontend.digest.as_str()));
   generator.insert(String::make("data_digest"_str),
                    publish_json_string(data_digest));
-  generator.insert(String::make("data_api"_str), publish_json_number(usize(2)));
+  generator.insert(String::make("data_api"_str), publish_json_number(usize(3)));
   generator.insert(String::make("template_api"_str),
                    publish_json_number(usize(1)));
   generator.insert(String::make("toolchain_version"_str),

@@ -81,6 +81,20 @@ auto clone_optional_text(const Option<DocumentationComment> &comment)
   return comment.is_some() ? Some(comment->text.clone()) : Option<String>{};
 }
 
+auto symbol_page(DeclarationKind kind, ref<str> key) -> String {
+  return rstd::format("symbol/{}-{}.html", declaration_kind_slug(kind),
+                      identity_hash("lito-doc-symbol-v1"_str, key).as_str());
+}
+
+auto member_anchor(DeclarationKind kind, ref<str> key) -> Option<String> {
+  if (kind != DeclarationKind::Function && kind != DeclarationKind::Field)
+    return Option<String>{};
+  auto prefix = kind == DeclarationKind::Function ? "method"_str : "field"_str;
+  return Some(rstd::format(
+      "{}-{}", prefix,
+      identity_hash("lito-doc-record-member-v1"_str, key).as_str()));
+}
+
 auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
   auto database = Database{};
   auto package_names = rstd::collections::BTreeMap<String, empty>::make();
@@ -107,6 +121,8 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
     auto modules = rstd::collections::BTreeMap<String, Module>::make();
     auto sources = rstd::collections::BTreeMap<String, Source>::make();
     auto symbols = rstd::collections::BTreeMap<String, Symbol>::make();
+    auto symbol_order = Vec<String>::make();
+    auto declaration_order = usize{};
     for (auto &unit : source_package.units) {
       auto path =
           package_path(source_package.root.as_path(), unit.source.as_path());
@@ -185,30 +201,61 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
         });
       }
       for (const auto &declaration : unit.declarations) {
+        auto order = declaration_order;
+        ++declaration_order;
         if (!declaration.exported ||
             declaration.access != DeclarationAccess::Public)
           continue;
         auto key = stable_key(package.name.as_str(), module_name, declaration);
         auto comment = clone_optional_text(declaration.comment);
+        auto parent = Option<String>{};
+        auto record_member = false;
+        if (declaration.parent.is_some() &&
+            *declaration.parent < unit.declarations.len()) {
+          const auto &parent_declaration =
+              unit.declarations[*declaration.parent];
+          parent = Some(stable_key(package.name.as_str(), module_name,
+                                   parent_declaration));
+          record_member = parent_declaration.kind == DeclarationKind::Record &&
+                          (declaration.kind == DeclarationKind::Function ||
+                           declaration.kind == DeclarationKind::Field);
+          if (record_member && !symbols.contains_key(parent->as_str()))
+            record_member = false;
+        }
+        auto placement = record_member ? SymbolPlacement::RecordMember
+                                       : SymbolPlacement::Standalone;
+        auto page = record_member
+                        ? symbol_page(DeclarationKind::Record, parent->as_str())
+                        : symbol_page(declaration.kind, key.as_str());
+        auto anchor = record_member
+                          ? member_anchor(declaration.kind, key.as_str())
+                          : Option<String>{};
         auto existing = symbols.get_mut(key.as_str());
         if (existing.is_some()) {
           const auto &previous = (**existing).comment;
+          auto had_definition = (**existing).is_definition;
           auto conflict = previous.is_some() && comment.is_some() &&
                           previous->as_str() != comment->as_str();
+          auto merged_record_member =
+              record_member ||
+              (**existing).placement == SymbolPlacement::RecordMember;
           auto prefer_incoming =
-              declaration.is_definition && !(**existing).is_definition;
+              merged_record_member
+                  ? declaration.is_scope_declaration &&
+                        !(**existing).is_scope_declaration
+                  : declaration.is_definition && !had_definition;
+          auto prefer_comment = declaration.is_definition && !had_definition;
           if (conflict) {
             auto message = rstd::format("conflicting documentation for '{}'; "
                                         "kept the first entry at the "
                                         "same precedence",
                                         declaration.qualified_name.as_str());
-            if (prefer_incoming) {
+            if (prefer_comment) {
               message = rstd::format(
                   "definition documentation replaced declaration documentation "
                   "for '{}'",
                   declaration.qualified_name.as_str());
-            } else if ((**existing).is_definition &&
-                       !declaration.is_definition) {
+            } else if (had_definition && !declaration.is_definition) {
               message = rstd::format(
                   "definition documentation retained over declaration "
                   "documentation for '{}'",
@@ -223,10 +270,23 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
             });
           }
           if (prefer_incoming) {
-            (**existing).is_definition = true;
             (**existing).signature = declaration.signature.clone();
-            if (comment.is_some())
-              (**existing).comment = rstd::move(comment);
+            (**existing).scope_signature = declaration.scope_signature.clone();
+            (**existing).record_keyword =
+                declaration.record_keyword.is_some()
+                    ? Some(declaration.record_keyword->clone())
+                    : Option<String>{};
+            (**existing).record_header =
+                declaration.record_header.is_some()
+                    ? Some(declaration.record_header->clone())
+                    : Option<String>{};
+            (**existing).is_scope_declaration =
+                declaration.is_scope_declaration;
+            (**existing).placement = placement;
+            (**existing).page = rstd::move(page);
+            (**existing).anchor = rstd::move(anchor);
+            (**existing).declaration_order = order;
+            (**existing).parent_key = rstd::move(parent);
             if (declaration.group.is_some())
               (**existing).group = Some(declaration.group->clone());
             (**existing).source_page = source_record->page.clone();
@@ -236,20 +296,15 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
             (**existing).source_end_line = declaration.spelling_span.end_line;
             (**existing).source_end_column =
                 declaration.spelling_span.end_column;
-          } else if (previous.is_none() && comment.is_some()) {
+          }
+          if ((prefer_comment || previous.is_none()) && comment.is_some()) {
             (**existing).comment = rstd::move(comment);
           }
+          (**existing).is_definition =
+              had_definition || declaration.is_definition;
           continue;
         }
-        auto parent = Option<String>{};
-        if (declaration.parent.is_some() &&
-            *declaration.parent < unit.declarations.len()) {
-          parent = Some(stable_key(package.name.as_str(), module_name,
-                                   unit.declarations[*declaration.parent]));
-        }
-        auto page = rstd::format(
-            "symbol/{}-{}.html", declaration_kind_slug(declaration.kind),
-            identity_hash("lito-doc-symbol-v1"_str, key.as_str()).as_str());
+        symbol_order.push(key.clone());
         symbols.insert(
             key.clone(),
             Symbol{
@@ -262,7 +317,19 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
                 .qualified_name = declaration.qualified_name.clone(),
                 .namespace_name = declaration.namespace_name.clone(),
                 .signature = declaration.signature.clone(),
+                .scope_signature = declaration.scope_signature.clone(),
+                .record_keyword =
+                    declaration.record_keyword.is_some()
+                        ? Some(declaration.record_keyword->clone())
+                        : Option<String>{},
+                .record_header = declaration.record_header.is_some()
+                                     ? Some(declaration.record_header->clone())
+                                     : Option<String>{},
                 .is_definition = declaration.is_definition,
+                .is_scope_declaration = declaration.is_scope_declaration,
+                .placement = placement,
+                .anchor = rstd::move(anchor),
+                .declaration_order = order,
                 .parent_key = rstd::move(parent),
                 .group = declaration.group.is_some()
                              ? Some(declaration.group->clone())
@@ -285,14 +352,13 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
     for (auto item = source_values.next(); item.is_some();
          item = source_values.next())
       package.sources.push(rstd::move(**item));
-    auto symbol_values = symbols.values_mut();
-    for (auto item = symbol_values.next(); item.is_some();
-         item = symbol_values.next()) {
-      if ((**item).comment.is_some())
+    for (const auto &key : symbol_order) {
+      auto item = symbols.remove(key.as_str()).unwrap();
+      if (item.comment.is_some())
         ++package.documented;
       else
         ++package.undocumented;
-      package.symbols.push(rstd::move(**item));
+      package.symbols.push(rstd::move(item));
     }
     database.packages.push(rstd::move(package));
   }

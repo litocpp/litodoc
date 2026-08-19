@@ -30,6 +30,11 @@ enum class DeclarationAccess {
   Private,
 };
 
+enum class SymbolPlacement {
+  Standalone,
+  RecordMember,
+};
+
 enum class DocumentationSeverity {
   Warning,
   Error,
@@ -56,7 +61,11 @@ struct DeclarationOutline {
   String qualified_name;
   String namespace_name;
   String signature;
+  String scope_signature;
+  Option<String> record_keyword;
+  Option<String> record_header;
   bool is_definition{false};
+  bool is_scope_declaration{false};
   bool exported{false};
   DeclarationAccess access{DeclarationAccess::Public};
   Option<usize> parent;
@@ -142,7 +151,14 @@ struct Symbol {
   String qualified_name;
   String namespace_name;
   String signature;
+  String scope_signature;
+  Option<String> record_keyword;
+  Option<String> record_header;
   bool is_definition{false};
+  bool is_scope_declaration{false};
+  SymbolPlacement placement{SymbolPlacement::Standalone};
+  Option<String> anchor;
+  usize declaration_order{};
   Option<String> parent_key;
   Option<String> group;
   Option<String> comment;
@@ -153,6 +169,12 @@ struct Symbol {
   usize source_end_line{};
   usize source_end_column{};
 };
+
+auto symbol_href(const Symbol &symbol) -> String {
+  if (symbol.anchor.is_none())
+    return symbol.page.clone();
+  return rstd::format("{}#{}", symbol.page, symbol.anchor->as_str());
+}
 
 struct Module {
   String name;

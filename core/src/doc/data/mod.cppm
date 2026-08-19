@@ -139,14 +139,14 @@ auto encode_source_fragment(ref<str> package, const Source &source) -> Json {
 auto encode_package(const Package &package) -> Json {
   auto root = JsonMap::make();
   root.insert(String::make("format"_str), json_string("lito-doc"_str));
-  root.insert(String::make("version"_str), json_usize(usize(2)));
+  root.insert(String::make("version"_str), json_usize(usize(3)));
   auto generator = JsonMap::make();
   generator.insert(String::make("frontend"_str),
                    json_string("lito-native-frontend-v1"_str));
   generator.insert(String::make("parser"_str),
                    json_string("lito-doc-outline-v1"_str));
   generator.insert(String::make("dataset"_str),
-                   json_string("lito-doc-data-v2"_str));
+                   json_string("lito-doc-data-v3"_str));
   generator.insert(String::make("toolchain-version"_str),
                    json_string(package.toolchain_version.as_str()));
   generator.insert(String::make("toolchain-target"_str),
@@ -202,8 +202,27 @@ auto encode_package(const Package &package) -> Json {
                   json_string(symbol.namespace_name.as_str()));
     object.insert(String::make("signature"_str),
                   json_string(symbol.signature.as_str()));
+    object.insert(String::make("scope-signature"_str),
+                  json_string(symbol.scope_signature.as_str()));
+    object.insert(String::make("record-keyword"_str),
+                  symbol.record_keyword.is_some()
+                      ? json_string(symbol.record_keyword->as_str())
+                      : Json::Null());
+    object.insert(String::make("record-header"_str),
+                  symbol.record_header.is_some()
+                      ? json_string(symbol.record_header->as_str())
+                      : Json::Null());
     object.insert(String::make("is-definition"_str),
                   Json::Bool(symbol.is_definition));
+    object.insert(String::make("placement"_str),
+                  json_string(symbol.placement == SymbolPlacement::RecordMember
+                                  ? "record-member"_str
+                                  : "standalone"_str));
+    object.insert(String::make("anchor"_str),
+                  symbol.anchor.is_some() ? json_string(symbol.anchor->as_str())
+                                          : Json::Null());
+    object.insert(String::make("declaration-order"_str),
+                  json_usize(symbol.declaration_order));
     object.insert(String::make("parent"_str),
                   symbol.parent_key.is_some()
                       ? json_string(symbol.parent_key->as_str())
@@ -399,6 +418,14 @@ auto parse_kind(ref<str> value) -> Option<DeclarationKind> {
   return None();
 }
 
+auto parse_placement(ref<str> value) -> Option<SymbolPlacement> {
+  if (value == "standalone"_str)
+    return Some(SymbolPlacement::Standalone);
+  if (value == "record-member"_str)
+    return Some(SymbolPlacement::RecordMember);
+  return None();
+}
+
 auto parse_json_text(ref<str> contents, ref<str> context)
     -> Result<Json, String> {
   auto parsed = rstd::json::from_str(contents);
@@ -498,7 +525,7 @@ auto decode_package(const Json &document, Option<ref<rstd::path::Path>> root,
                     Option<ref<JsonArray>> manifest_sources)
     -> Result<Package, String> {
   auto header =
-      expect_header(document, "lito-doc"_str, usize(2), "doc package"_str);
+      expect_header(document, "lito-doc"_str, usize(3), "doc package"_str);
   if (header.is_err())
     return Err(rstd::move(header).unwrap_err());
   auto generator =
@@ -591,8 +618,19 @@ auto decode_package(const Json &document, Option<ref<rstd::path::Path>> root,
     auto namespace_name =
         defaulted_string(value, "namespace"_str, "doc symbol"_str);
     auto signature = required_string(value, "signature"_str, "doc symbol"_str);
+    auto scope_signature =
+        required_string(value, "scope-signature"_str, "doc symbol"_str);
+    auto record_keyword =
+        optional_string(value, "record-keyword"_str, "doc symbol"_str);
+    auto record_header =
+        optional_string(value, "record-header"_str, "doc symbol"_str);
     auto is_definition =
         required_bool(value, "is-definition"_str, "doc symbol"_str);
+    auto placement_text =
+        required_string(value, "placement"_str, "doc symbol"_str);
+    auto anchor = optional_string(value, "anchor"_str, "doc symbol"_str);
+    auto declaration_order =
+        required_usize(value, "declaration-order"_str, "doc symbol"_str);
     auto parent = optional_string(value, "parent"_str, "doc symbol"_str);
     auto group = optional_string(value, "group"_str, "doc symbol"_str);
     auto comment = optional_string(value, "comment"_str, "doc symbol"_str);
@@ -615,8 +653,20 @@ auto decode_package(const Json &document, Option<ref<rstd::path::Path>> root,
       return Err(rstd::move(namespace_name).unwrap_err());
     if (signature.is_err())
       return Err(rstd::move(signature).unwrap_err());
+    if (scope_signature.is_err())
+      return Err(rstd::move(scope_signature).unwrap_err());
+    if (record_keyword.is_err())
+      return Err(rstd::move(record_keyword).unwrap_err());
+    if (record_header.is_err())
+      return Err(rstd::move(record_header).unwrap_err());
     if (is_definition.is_err())
       return Err(rstd::move(is_definition).unwrap_err());
+    if (placement_text.is_err())
+      return Err(rstd::move(placement_text).unwrap_err());
+    if (anchor.is_err())
+      return Err(rstd::move(anchor).unwrap_err());
+    if (declaration_order.is_err())
+      return Err(rstd::move(declaration_order).unwrap_err());
     if (parent.is_err())
       return Err(rstd::move(parent).unwrap_err());
     if (group.is_err())
@@ -629,6 +679,16 @@ auto decode_package(const Json &document, Option<ref<rstd::path::Path>> root,
     if (kind.is_none())
       return Err(rstd::format("unknown doc declaration kind '{}'",
                               kind_text->as_str()));
+    auto placement = parse_placement(placement_text->as_str());
+    if (placement.is_none())
+      return Err(rstd::format("unknown doc symbol placement '{}'",
+                              placement_text->as_str()));
+    if (*placement == SymbolPlacement::RecordMember && anchor->is_none())
+      return Err(
+          String::make("record member doc symbol must provide an anchor"_str));
+    if (*placement == SymbolPlacement::Standalone && anchor->is_some())
+      return Err(
+          String::make("standalone doc symbol must not provide an anchor"_str));
     auto source_path =
         required_string(**source, "path"_str, "doc symbol source"_str);
     auto source_page =
@@ -663,7 +723,13 @@ auto decode_package(const Json &document, Option<ref<rstd::path::Path>> root,
         .qualified_name = rstd::move(qualified_name).unwrap(),
         .namespace_name = rstd::move(namespace_name).unwrap(),
         .signature = rstd::move(signature).unwrap(),
+        .scope_signature = rstd::move(scope_signature).unwrap(),
+        .record_keyword = rstd::move(record_keyword).unwrap(),
+        .record_header = rstd::move(record_header).unwrap(),
         .is_definition = *is_definition,
+        .placement = *placement,
+        .anchor = rstd::move(anchor).unwrap(),
+        .declaration_order = *declaration_order,
         .parent_key = rstd::move(parent).unwrap(),
         .group = rstd::move(group).unwrap(),
         .comment = rstd::move(comment).unwrap(),
@@ -837,9 +903,9 @@ auto dataset_manifest_json(const Dataset &dataset) -> String {
   manifest.insert(String::make("format"_str),
                   json_string("lito-doc-dataset"_str));
   manifest.insert(String::make("version"_str), json_usize(usize(1)));
-  manifest.insert(String::make("data-api"_str), json_usize(usize(2)));
+  manifest.insert(String::make("data-api"_str), json_usize(usize(3)));
   manifest.insert(String::make("generator"_str),
-                  json_string("lito-doc-data-v2"_str));
+                  json_string("lito-doc-data-v3"_str));
   manifest.insert(String::make("site"_str), Json::Object(rstd::move(site)));
   manifest.insert(String::make("packages"_str),
                   Json::Array(rstd::move(manifest_packages)));
@@ -882,7 +948,7 @@ auto load_dataset(ref<rstd::path::Path> root) -> Result<Dataset, String> {
       required_usize(*manifest, "data-api"_str, "doc dataset manifest"_str);
   if (data_api.is_err())
     return Err(rstd::move(data_api).unwrap_err());
-  if (*data_api != usize(2))
+  if (*data_api != usize(3))
     return Err(rstd::format("unsupported doc data API {}", *data_api));
   auto generator =
       required_string(*manifest, "generator"_str, "doc dataset manifest"_str);
@@ -892,7 +958,7 @@ auto load_dataset(ref<rstd::path::Path> root) -> Result<Dataset, String> {
     return Err(rstd::move(generator).unwrap_err());
   if (site.is_err())
     return Err(rstd::move(site).unwrap_err());
-  if (generator->as_str() != "lito-doc-data-v2"_str)
+  if (generator->as_str() != "lito-doc-data-v3"_str)
     return Err(rstd::format("unsupported doc data generator '{}'",
                             generator->as_str()));
   auto title = required_string(**site, "title"_str, "doc dataset site"_str);
@@ -1017,6 +1083,7 @@ auto publish_dataset(ref<rstd::path::Path> output, const Dataset &dataset)
 auto append_search_entries(JsonArray &entries, const Package &package,
                            bool package_root) -> void {
   for (const auto &symbol : package.symbols) {
+    auto href = symbol_href(symbol);
     auto object = JsonMap::make();
     object.insert(String::make("package"_str),
                   json_string(package.name.as_str()));
@@ -1030,9 +1097,9 @@ auto append_search_entries(JsonArray &entries, const Package &package,
     object.insert(
         String::make("url"_str),
         json_string((package_root
-                         ? symbol.page.clone()
+                         ? href.clone()
                          : rstd::format("package/{}/{}", package.name.as_str(),
-                                        symbol.page.as_str()))
+                                        href.as_str()))
                         .as_str()));
     entries.push(Json::Object(rstd::move(object)));
   }

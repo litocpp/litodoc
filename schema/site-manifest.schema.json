@@ -31,7 +31,7 @@
       "enum": ["site", "package-set"],
       "default": "site"
     },
-    "data_api": { "const": 2 },
+    "data_api": { "const": 3 },
     "template_api": { "const": 1 },
     "packages": {
       "type": "array",

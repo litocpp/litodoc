@@ -6,7 +6,7 @@
   "data_output": "build/site-data",
   "frontend": null,
   "data_only": false,
-  "data_api": 2,
+  "data_api": 3,
   "template_api": 1,
   "packages": [
     {

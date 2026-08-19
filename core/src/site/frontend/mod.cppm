@@ -176,7 +176,7 @@ auto parse_frontend_manifest(ref<str> contents)
         frontend_usize(*parsed, "data-api"_str, "frontend manifest"_str);
     if (data_api.is_err())
       return Err(rstd::move(data_api).unwrap_err());
-    if (*data_api != usize(2))
+    if (*data_api != usize(3))
       return Err(rstd::format("frontend requires unsupported doc data API {}",
                               *data_api));
     return Ok(rstd::move(parsed).unwrap());
@@ -211,7 +211,7 @@ auto parse_frontend_manifest(ref<str> contents)
         frontend_usize(*parsed, "data-api"_str, "frontend manifest"_str);
     if (data_api.is_err())
       return Err(rstd::move(data_api).unwrap_err());
-    if (*data_api != usize(2))
+    if (*data_api != usize(3))
       return Err(rstd::format("frontend requires unsupported doc data API {}",
                               *data_api));
   }

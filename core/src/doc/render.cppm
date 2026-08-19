@@ -145,40 +145,38 @@ enum class RenderLayout {
 };
 
 struct PackageRenderIndex {
-  rstd::collections::BTreeSet<String> record_keys;
   rstd::collections::BTreeMap<String, usize> symbols;
-  rstd::collections::BTreeMap<String, Vec<usize>> children;
+  rstd::collections::BTreeMap<String, rstd::collections::BTreeMap<usize, usize>>
+      children;
 };
 
 auto package_render_index(const Package &package) -> PackageRenderIndex {
   auto index = PackageRenderIndex{
-      .record_keys = rstd::collections::BTreeSet<String>::make(),
       .symbols = rstd::collections::BTreeMap<String, usize>::make(),
-      .children = rstd::collections::BTreeMap<String, Vec<usize>>::make(),
+      .children = rstd::collections::BTreeMap<
+          String, rstd::collections::BTreeMap<usize, usize>>::make(),
   };
   for (auto position = usize{}; position < package.symbols.len(); ++position) {
     const auto &symbol = package.symbols[position];
-    if (symbol.kind == DeclarationKind::Record)
-      index.record_keys.insert(symbol.key.clone());
     index.symbols.insert(symbol.key.clone(), position);
     if (symbol.parent_key.is_none())
       continue;
     auto children = index.children.get_mut(symbol.parent_key->as_str());
     if (children.is_none()) {
-      auto positions = Vec<usize>::make();
-      positions.push(usize(position.to_primitive()));
+      auto positions = rstd::collections::BTreeMap<usize, usize>::make();
+      positions.insert(symbol.declaration_order,
+                       usize(position.to_primitive()));
       index.children.insert(symbol.parent_key->clone(), rstd::move(positions));
     } else {
-      (**children).push(usize(position.to_primitive()));
+      (**children)
+          .insert(symbol.declaration_order, usize(position.to_primitive()));
     }
   }
   return index;
 }
 
-auto is_record_member(const PackageRenderIndex &index, const Symbol &symbol)
-    -> bool {
-  return symbol.parent_key.is_some() &&
-         index.record_keys.contains(symbol.parent_key->as_str());
+auto is_record_member(const Symbol &symbol) -> bool {
+  return symbol.placement == SymbolPlacement::RecordMember;
 }
 
 auto declaration_link_value(const Symbol &symbol, ref<str> href_prefix)
@@ -190,8 +188,29 @@ auto declaration_link_value(const Symbol &symbol, ref<str> href_prefix)
   item.insert("has_namespace"_str,
               TemplateValue::boolean_value(!symbol.namespace_name.is_empty()));
   item.insert("namespace"_str, template_text(symbol.namespace_name.as_str()));
+  auto href = symbol_href(symbol);
   item.insert("href"_str, TemplateValue::text_value(
-                              rstd::format("{}{}", href_prefix, symbol.page)));
+                              rstd::format("{}{}", href_prefix, href)));
+  return item;
+}
+
+auto record_member_value(const Symbol &symbol) -> TemplateValue {
+  auto item = TemplateValue::object_value();
+  item.insert("id"_str, template_text(symbol.anchor->as_str()));
+  item.insert("name"_str, template_text(symbol.name.as_str()));
+  item.insert("signature"_str, template_text(symbol.scope_signature.as_str()));
+  item.insert("has_documentation"_str,
+              TemplateValue::boolean_value(symbol.comment.is_some()));
+  item.insert("documentation"_str,
+              TemplateValue::trusted_html(
+                  symbol.comment.is_some()
+                      ? render_markdown(symbol.comment->as_str())
+                      : String::make()));
+  item.insert("source_path"_str, template_text(symbol.source_path.as_str()));
+  item.insert("source_line"_str, template_number(symbol.source_line));
+  item.insert("source_href"_str,
+              TemplateValue::text_value(rstd::format(
+                  "../{}#L{}", symbol.source_page, symbol.source_line)));
   return item;
 }
 
@@ -350,7 +369,8 @@ auto package_context(const Dataset &dataset, const Package &package,
     item.insert("kind"_str, template_text(declaration_kind_name(symbol.kind)));
     item.insert("qualified_name"_str,
                 template_text(symbol.qualified_name.as_str()));
-    item.insert("href"_str, template_text(symbol.page.as_str()));
+    auto href = symbol_href(symbol);
+    item.insert("href"_str, template_text(href.as_str()));
     symbols.array.push(rstd::move(item));
   }
   context.insert("symbols"_str, rstd::move(symbols));
@@ -362,7 +382,7 @@ auto package_context(const Dataset &dataset, const Package &package,
 }
 
 auto module_context(const Dataset &dataset, const Package &package,
-                    const PackageRenderIndex &index, const Module &module,
+                    const Module &module,
                     RenderLayout layout = RenderLayout::Workspace)
     -> TemplateValue {
   auto asset_prefix =
@@ -428,11 +448,12 @@ auto module_context(const Dataset &dataset, const Package &package,
     item.insert("kind"_str, template_text(declaration_kind_name(symbol.kind)));
     item.insert("qualified_name"_str,
                 template_text(symbol.qualified_name.as_str()));
+    auto href = symbol_href(symbol);
     item.insert("href"_str,
-                TemplateValue::text_value(rstd::format("../{}", symbol.page)));
+                TemplateValue::text_value(rstd::format("../{}", href)));
     symbols.array.push(rstd::move(item));
     ++symbol_count;
-    if (is_record_member(index, symbol))
+    if (is_record_member(symbol))
       continue;
     switch (symbol.kind) {
     case DeclarationKind::Namespace:
@@ -574,11 +595,11 @@ auto symbol_context(const Dataset &dataset, const Package &package,
   symbol_value.insert(
       "parent_name"_str,
       template_text(parent != nullptr ? parent->name.as_str() : ""_str));
-  symbol_value.insert(
-      "parent_href"_str,
-      TemplateValue::text_value(parent != nullptr
-                                    ? rstd::format("../{}", parent->page)
-                                    : String::make()));
+  symbol_value.insert("parent_href"_str,
+                      TemplateValue::text_value(
+                          parent != nullptr
+                              ? rstd::format("../{}", symbol_href(*parent))
+                              : String::make()));
 
   auto methods = TemplateValue::array_value();
   auto member_types = TemplateValue::array_value();
@@ -588,14 +609,17 @@ auto symbol_context(const Dataset &dataset, const Package &package,
   auto member_type_count = usize{};
   auto field_count = usize{};
   auto member_value_count = usize{};
+  auto field_declarations = String::make();
   if (symbol.kind == DeclarationKind::Record) {
     auto children = index.children.get(symbol.key.as_str());
     if (children.is_some()) {
-      for (auto position : **children) {
-        const auto &candidate = package.symbols[position];
+      auto positions = (**children).values();
+      for (auto position = positions.next(); position.is_some();
+           position = positions.next()) {
+        const auto &candidate = package.symbols[**position];
         switch (candidate.kind) {
         case DeclarationKind::Function:
-          methods.array.push(declaration_link_value(candidate, "../"_str));
+          methods.array.push(record_member_value(candidate));
           ++method_count;
           break;
         case DeclarationKind::Record:
@@ -606,7 +630,14 @@ auto symbol_context(const Dataset &dataset, const Package &package,
           ++member_type_count;
           break;
         case DeclarationKind::Field:
-          fields.array.push(declaration_link_value(candidate, "../"_str));
+          fields.array.push(record_member_value(candidate));
+          field_declarations.push_str(symbol.record_keyword.is_some() &&
+                                              symbol.record_keyword->as_str() ==
+                                                  "class"_str
+                                          ? "    "_str
+                                          : "  "_str);
+          field_declarations.push_str(candidate.scope_signature.as_str());
+          field_declarations.push_ascii('\n');
           ++field_count;
           break;
         case DeclarationKind::Variable:
@@ -631,6 +662,17 @@ auto symbol_context(const Dataset &dataset, const Package &package,
   symbol_value.insert("has_fields"_str,
                       TemplateValue::boolean_value(field_count != usize{}));
   symbol_value.insert("field_count"_str, template_number(field_count));
+  auto synopsis = String::make();
+  if (field_count != usize{} && symbol.record_header.is_some()) {
+    synopsis.push_str(symbol.record_header->as_str());
+    synopsis.push_str(" {\n"_str);
+    if (symbol.record_keyword.is_some() &&
+        symbol.record_keyword->as_str() == "class"_str)
+      synopsis.push_str("public:\n"_str);
+    synopsis.push_str(field_declarations.as_str());
+    synopsis.push_str("};"_str);
+  }
+  symbol_value.insert("field_synopsis"_str, template_text(synopsis.as_str()));
   symbol_value.insert(
       "has_member_values"_str,
       TemplateValue::boolean_value(member_value_count != usize{}));
@@ -646,12 +688,12 @@ auto symbol_context(const Dataset &dataset, const Package &package,
     append_outline(*page, "#documentation"_str, "Documentation"_str);
   }
   page = context.object.get_mut("page"_str).unwrap();
-  if (method_count != usize{})
-    append_outline(*page, "#methods"_str, "Methods"_str);
   if (member_type_count != usize{})
     append_outline(*page, "#member-types"_str, "Member Types"_str);
   if (field_count != usize{})
     append_outline(*page, "#fields"_str, "Fields"_str);
+  if (method_count != usize{})
+    append_outline(*page, "#methods"_str, "Methods"_str);
   if (member_value_count != usize{})
     append_outline(*page, "#member-values"_str, "Member Values"_str);
   return context;
@@ -720,7 +762,7 @@ auto site_manifest_json(const FrontendBundle &frontend, ref<str> data_digest)
   object.insert(String::make("version"_str),
                 RenderJson::Number(rstd::json::Number::from_u64(u64(1))));
   object.insert(String::make("data-api"_str),
-                RenderJson::Number(rstd::json::Number::from_u64(u64(2))));
+                RenderJson::Number(rstd::json::Number::from_u64(u64(3))));
   object.insert(String::make("frontend"_str),
                 RenderJson::String(frontend.identity.clone()));
   object.insert(String::make("frontend-digest"_str),
@@ -764,14 +806,16 @@ auto render_package_site(ref<rstd::path::Path> root, const Dataset &dataset,
   if (written.is_err())
     return written;
   for (const auto &module : package.modules) {
-    auto context = module_context(dataset, package, render_index, module,
-                                  RenderLayout::Package);
+    auto context =
+        module_context(dataset, package, module, RenderLayout::Package);
     written = render_page(root, module.page.as_str(), frontend,
                           frontend.module_template.as_str(), context, &files);
     if (written.is_err())
       return written;
   }
   for (const auto &symbol : package.symbols) {
+    if (symbol.placement != SymbolPlacement::Standalone)
+      continue;
     auto context = symbol_context(dataset, package, render_index, symbol,
                                   RenderLayout::Package);
     written = render_page(root, symbol.page.as_str(), frontend,
@@ -829,7 +873,7 @@ auto render_site(ref<rstd::path::Path> root, const Dataset &dataset,
     if (written.is_err())
       return written;
     for (const auto &module : package.modules) {
-      auto context = module_context(dataset, package, render_index, module);
+      auto context = module_context(dataset, package, module);
       written = render_page(
           root,
           rstd::format("{}{}", prefix.as_str(), module.page.as_str()).as_str(),
@@ -838,6 +882,8 @@ auto render_site(ref<rstd::path::Path> root, const Dataset &dataset,
         return written;
     }
     for (const auto &symbol : package.symbols) {
+      if (symbol.placement != SymbolPlacement::Standalone)
+        continue;
       auto context = symbol_context(dataset, package, render_index, symbol);
       written = render_page(
           root,

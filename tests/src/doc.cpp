@@ -25,6 +25,25 @@ auto source_span(const PathBuf &source) -> lito::doc::DocumentationSpan {
   };
 }
 
+auto source_span(const PathBuf &source, usize line)
+    -> lito::doc::DocumentationSpan {
+  return {
+      .path = source.clone(),
+      .begin_line = line,
+      .begin_column = usize(1),
+      .end_line = line,
+      .end_column = usize(24),
+  };
+}
+
+auto comment(const PathBuf &source, usize line, ref<str> text)
+    -> Option<lito::doc::DocumentationComment> {
+  return Some(lito::doc::DocumentationComment{
+      .text = String::make(text),
+      .span = source_span(source, line),
+  });
+}
+
 auto publication_package(ref<rstd::path::Path> root, ref<str> name,
                          ref<str> module) -> lito::doc::PackageInput {
   auto source = child(root, rstd::format("src/{}.cppm", name).as_str());
@@ -44,7 +63,8 @@ auto publication_package(ref<rstd::path::Path> root, ref<str> name,
       .kind = lito::doc::DeclarationKind::Function,
       .name = String::make("value"_str),
       .qualified_name = rstd::format("{}::value", module),
-      .signature = String::make("auto value() -> int"_str),
+      .signature = String::make("auto value() -> int;"_str),
+      .scope_signature = String::make("auto value() -> int;"_str),
       .is_definition = false,
       .exported = true,
       .spelling_span = source_span(source),
@@ -64,6 +84,197 @@ auto publication_package(ref<rstd::path::Path> root, ref<str> name,
   };
   package.units.push(rstd::move(unit));
   return package;
+}
+
+auto record_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
+  auto source = child(root, "src/box.cppm"_str);
+  auto unit = lito::doc::DocumentationUnit{
+      .source = source.clone(),
+      .source_contents =
+          String::make("export module records;\n\n"
+                       "export template <typename T> class Box;\n"_str),
+      .logical_module = String::make("records"_str),
+      .is_interface = true,
+  };
+  unit.declarations.push(lito::doc::DeclarationOutline{
+      .semantic_identity = String::make("records::Box"_str),
+      .kind = lito::doc::DeclarationKind::Record,
+      .name = String::make("Box"_str),
+      .qualified_name = String::make("Box"_str),
+      .signature = String::make("template <typename T> class Box {};"_str),
+      .scope_signature =
+          String::make("template <typename T> class Box {};"_str),
+      .record_keyword = Some(String::make("class"_str)),
+      .record_header =
+          Some(String::make("template <typename T> class Box"_str)),
+      .is_definition = true,
+      .exported = true,
+      .comment = comment(source, usize(3), "Stores a value."_str),
+      .spelling_span = source_span(source, usize(3)),
+      .expansion_span = source_span(source, usize(3)),
+  });
+  unit.declarations.push(lito::doc::DeclarationOutline{
+      .semantic_identity = String::make("records::Box::value"_str),
+      .kind = lito::doc::DeclarationKind::Field,
+      .name = String::make("value"_str),
+      .qualified_name = String::make("Box::value"_str),
+      .signature = String::make("T Box::value{};"_str),
+      .scope_signature = String::make("T value{};"_str),
+      .is_definition = true,
+      .is_scope_declaration = true,
+      .exported = true,
+      .parent = Some(usize(0)),
+      .comment = comment(source, usize(5), "Stored value."_str),
+      .spelling_span = source_span(source, usize(5)),
+      .expansion_span = source_span(source, usize(5)),
+  });
+  unit.declarations.push(lito::doc::DeclarationOutline{
+      .semantic_identity = String::make("records::Box::flags"_str),
+      .kind = lito::doc::DeclarationKind::Field,
+      .name = String::make("flags"_str),
+      .qualified_name = String::make("Box::flags"_str),
+      .signature = String::make("unsigned int Box::flags : 3 = 1;"_str),
+      .scope_signature = String::make("unsigned int flags : 3 = 1;"_str),
+      .is_definition = true,
+      .is_scope_declaration = true,
+      .exported = true,
+      .parent = Some(usize(0)),
+      .spelling_span = source_span(source, usize(7)),
+      .expansion_span = source_span(source, usize(7)),
+  });
+  unit.declarations.push(lito::doc::DeclarationOutline{
+      .semantic_identity = String::make("records::Box::get#const"_str),
+      .kind = lito::doc::DeclarationKind::Function,
+      .name = String::make("get"_str),
+      .qualified_name = String::make("Box::get"_str),
+      .signature = String::make(
+          "[[nodiscard]] constexpr auto Box::get(int offset = 0) const & "
+          "noexcept -> T;"_str),
+      .scope_signature = String::make(
+          "[[nodiscard]] constexpr auto get(int offset = 0) const & noexcept "
+          "-> T;"_str),
+      .is_scope_declaration = true,
+      .exported = true,
+      .parent = Some(usize(0)),
+      .comment = comment(source, usize(9), "Returns the value."_str),
+      .spelling_span = source_span(source, usize(9)),
+      .expansion_span = source_span(source, usize(9)),
+  });
+  unit.declarations.push(lito::doc::DeclarationOutline{
+      .semantic_identity = String::make("records::Box::get#rvalue"_str),
+      .kind = lito::doc::DeclarationKind::Function,
+      .name = String::make("get"_str),
+      .qualified_name = String::make("Box::get"_str),
+      .signature = String::make("auto Box::get() && -> T;"_str),
+      .scope_signature = String::make("auto get() && -> T;"_str),
+      .is_scope_declaration = true,
+      .exported = true,
+      .parent = Some(usize(0)),
+      .spelling_span = source_span(source, usize(11)),
+      .expansion_span = source_span(source, usize(11)),
+  });
+  unit.declarations.push(lito::doc::DeclarationOutline{
+      .semantic_identity = String::make("records::Box::Nested"_str),
+      .kind = lito::doc::DeclarationKind::Record,
+      .name = String::make("Nested"_str),
+      .qualified_name = String::make("Box::Nested"_str),
+      .signature = String::make("struct Box::Nested {};"_str),
+      .scope_signature = String::make("struct Nested {};"_str),
+      .record_keyword = Some(String::make("struct"_str)),
+      .record_header = Some(String::make("struct Nested"_str)),
+      .is_definition = true,
+      .is_scope_declaration = true,
+      .exported = true,
+      .parent = Some(usize(0)),
+      .spelling_span = source_span(source, usize(13)),
+      .expansion_span = source_span(source, usize(13)),
+  });
+  unit.declarations.push(lito::doc::DeclarationOutline{
+      .semantic_identity = String::make("records::make_box"_str),
+      .kind = lito::doc::DeclarationKind::Function,
+      .name = String::make("make_box"_str),
+      .qualified_name = String::make("make_box"_str),
+      .signature = String::make("auto make_box() -> Box<int>;"_str),
+      .scope_signature = String::make("auto make_box() -> Box<int>;"_str),
+      .exported = true,
+      .spelling_span = source_span(source, usize(15)),
+      .expansion_span = source_span(source, usize(15)),
+  });
+  unit.declarations.push(lito::doc::DeclarationOutline{
+      .semantic_identity = String::make("records::Hidden"_str),
+      .kind = lito::doc::DeclarationKind::Record,
+      .name = String::make("Hidden"_str),
+      .qualified_name = String::make("Hidden"_str),
+      .signature = String::make("struct Hidden {};"_str),
+      .scope_signature = String::make("struct Hidden {};"_str),
+      .record_keyword = Some(String::make("struct"_str)),
+      .record_header = Some(String::make("struct Hidden"_str)),
+      .is_definition = true,
+      .exported = true,
+      .access = lito::doc::DeclarationAccess::Private,
+      .spelling_span = source_span(source, usize(17)),
+      .expansion_span = source_span(source, usize(17)),
+  });
+  unit.declarations.push(lito::doc::DeclarationOutline{
+      .semantic_identity = String::make("records::Hidden::legacy"_str),
+      .kind = lito::doc::DeclarationKind::Field,
+      .name = String::make("legacy"_str),
+      .qualified_name = String::make("Hidden::legacy"_str),
+      .signature = String::make("int legacy;"_str),
+      .scope_signature = String::make("int legacy;"_str),
+      .is_definition = true,
+      .is_scope_declaration = true,
+      .exported = true,
+      .parent = Some(usize(7)),
+      .spelling_span = source_span(source, usize(18)),
+      .expansion_span = source_span(source, usize(18)),
+  });
+  auto definition = lito::doc::DocumentationUnit{
+      .source = child(root, "src/box.cpp"_str),
+      .source_contents =
+          String::make("auto Box<int>::get() && -> int {}\n"_str),
+      .logical_module = String::make("records"_str),
+  };
+  definition.declarations.push(lito::doc::DeclarationOutline{
+      .semantic_identity = String::make("records::Box::get#rvalue"_str),
+      .kind = lito::doc::DeclarationKind::Function,
+      .name = String::make("get"_str),
+      .qualified_name = String::make("Box::get"_str),
+      .signature = String::make("auto Box<int>::get() && -> int;"_str),
+      .scope_signature = String::make("auto get() && -> int;"_str),
+      .is_definition = true,
+      .exported = true,
+      .comment = comment(definition.source, usize(1), "Definition docs."_str),
+      .spelling_span = source_span(definition.source, usize(1)),
+      .expansion_span = source_span(definition.source, usize(1)),
+  });
+  auto package = lito::doc::PackageInput{
+      .name = String::make("records"_str),
+      .version = String::make("1.0.0"_str),
+      .source_identity = String::make("path+records"_str),
+      .root_module = String::make("records"_str),
+      .profile = String::make("release"_str),
+      .root = PathBuf::from(root),
+      .toolchain_version = String::make("clang 22"_str),
+      .toolchain_target = String::make("x86_64-unknown-linux-gnu"_str),
+      .language_standard = String::make("c++20"_str),
+  };
+  package.units.push(rstd::move(unit));
+  package.units.push(rstd::move(definition));
+  return package;
+}
+
+auto occurrences(ref<str> contents, ref<str> needle) -> usize {
+  auto count = usize{};
+  auto remaining = contents;
+  while (true) {
+    auto position = remaining.find(needle);
+    if (position.is_none())
+      return count;
+    ++count;
+    remaining =
+        remaining.get(*position + needle.len(), remaining.len()).unwrap();
+  }
 }
 
 } // namespace
@@ -157,4 +368,59 @@ TEST(DocPublication, PackageManifestDoesNotDependOnSiblingPackages) {
   ASSERT_TRUE(single_manifest.is_ok());
   ASSERT_TRUE(workspace_manifest.is_ok());
   EXPECT_EQ(single_manifest->as_str(), workspace_manifest->as_str());
+}
+
+TEST(DocPublication, InlinesRecordFunctionsAndFieldsOnTheRecordPage) {
+  auto temporary = rstd::test::TempDir::make();
+  ASSERT_TRUE(temporary.is_ok());
+  auto root = temporary->path();
+  auto frontend = lito::doc::web::load_default_frontend();
+  ASSERT_TRUE(frontend.is_ok());
+  auto input = lito::doc::SiteInput{
+      .title = String::make("Record fixture"_str),
+      .output = child(root, "publication"_str),
+      .data_output = child(root, "data"_str),
+      .publication = lito::doc::PublicationKind::PackageSet,
+  };
+  input.packages.push(record_package(root));
+
+  auto generated = lito::doc::generate(rstd::move(input),
+                                       Some(rstd::move(frontend).unwrap()));
+  ASSERT_TRUE(generated.is_ok());
+  ASSERT_TRUE(generated->publication_set.is_some());
+  const auto &publication = generated->publication_set->packages[usize(0)];
+  auto symbol_pages = usize{};
+  auto record_html = String::make();
+  for (const auto &file : publication.files) {
+    if (!file.path.as_str().starts_with("symbol/"_str) ||
+        !file.path.as_str().ends_with(".html"_str))
+      continue;
+    ++symbol_pages;
+    auto contents = rstd::fs::read_to_string(
+        child(root, rstd::format("publication/records/{}", file.path).as_str())
+            .as_path());
+    ASSERT_TRUE(contents.is_ok());
+    if (contents->as_str().contains("<h1 class=\"page-title\">Box</h1>"_str))
+      record_html = rstd::move(contents).unwrap();
+  }
+  EXPECT_EQ(symbol_pages, usize(4));
+  ASSERT_TRUE(!record_html.is_empty());
+  EXPECT_TRUE(record_html.as_str().contains("Stored value."_str));
+  EXPECT_TRUE(record_html.as_str().contains("Returns the value."_str));
+  EXPECT_TRUE(record_html.as_str().contains("Definition docs."_str));
+  EXPECT_TRUE(record_html.as_str().contains("public:"_str));
+  EXPECT_TRUE(record_html.as_str().contains("T value{};"_str));
+  EXPECT_TRUE(record_html.as_str().contains("unsigned int flags : 3 = 1;"_str));
+  EXPECT_TRUE(
+      record_html.as_str().contains("auto get() &amp;&amp; -&gt; T;"_str));
+  EXPECT_EQ(occurrences(record_html.as_str(), "id=\"method-"_str), usize(2));
+  EXPECT_EQ(occurrences(record_html.as_str(), "id=\"field-"_str), usize(2));
+  EXPECT_FALSE(record_html.as_str().contains("Box&lt;int&gt;::get"_str));
+  EXPECT_FALSE(record_html.as_str().contains("box.cpp:1"_str));
+
+  auto search = rstd::fs::read_to_string(
+      child(root, "publication/records/search-index.json"_str).as_path());
+  ASSERT_TRUE(search.is_ok());
+  EXPECT_EQ(occurrences(search->as_str(), "#method-"_str), usize(2));
+  EXPECT_EQ(occurrences(search->as_str(), "#field-"_str), usize(2));
 }

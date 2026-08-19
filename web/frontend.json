@@ -2,7 +2,7 @@
   "format": "lito-doc-frontend",
   "version": 2,
   "capabilities": ["api", "book"],
-  "data-api": 2,
+  "data-api": 3,
   "book-data-api": 1,
   "template-api": 1,
   "templates": {

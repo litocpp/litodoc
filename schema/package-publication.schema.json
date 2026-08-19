@@ -43,7 +43,7 @@
         "frontend": { "$ref": "#/$defs/nonEmptyString" },
         "frontend_digest": { "$ref": "#/$defs/digest" },
         "data_digest": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
-        "data_api": { "const": 2 },
+        "data_api": { "const": 3 },
         "template_api": { "const": 1 },
         "toolchain_version": { "$ref": "#/$defs/nonEmptyString" },
         "toolchain_target": { "$ref": "#/$defs/nonEmptyString" },

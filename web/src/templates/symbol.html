@@ -9,12 +9,6 @@
   <pre class="signature"><code>{{symbol.signature}}</code></pre>
 </section>
 {{#if symbol.has_documentation}}<lito-doc-prose><section class="documentation prose" id="documentation">{{{symbol.documentation}}}</section></lito-doc-prose>{{/if}}
-{{#if symbol.has_methods}}
-<section class="api-section" id="methods">
-  <div class="section-heading"><span>Methods</span><span>{{symbol.method_count}}</span></div>
-  <ul class="api-list declaration-list">{{#each methods}}<li><a href="{{href}}"><code>{{name}}</code></a></li>{{/each}}</ul>
-</section>
-{{/if}}
 {{#if symbol.has_member_types}}
 <section class="api-section" id="member-types">
   <div class="section-heading"><span>Member Types</span><span>{{symbol.member_type_count}}</span></div>
@@ -24,7 +18,24 @@
 {{#if symbol.has_fields}}
 <section class="api-section" id="fields">
   <div class="section-heading"><span>Fields</span><span>{{symbol.field_count}}</span></div>
-  <ul class="api-list declaration-list">{{#each fields}}<li><a href="{{href}}"><code>{{name}}</code></a></li>{{/each}}</ul>
+  <pre class="signature record-synopsis"><code>{{symbol.field_synopsis}}</code></pre>
+  <div class="record-members field-details">{{#each fields}}<article class="record-member" id="{{id}}">
+    <h2><a href="#{{id}}"><code>{{name}}</code></a></h2>
+    <pre class="signature member-signature"><code>{{signature}}</code></pre>
+    {{#if has_documentation}}<lito-doc-prose><div class="member-documentation prose">{{{documentation}}}</div></lito-doc-prose>{{/if}}
+    <footer class="member-source"><span>Declared in</span><a href="{{source_href}}"><code>{{source_path}}:{{source_line}}</code></a></footer>
+  </article>{{/each}}</div>
+</section>
+{{/if}}
+{{#if symbol.has_methods}}
+<section class="api-section" id="methods">
+  <div class="section-heading"><span>Methods</span><span>{{symbol.method_count}}</span></div>
+  <div class="record-members">{{#each methods}}<article class="record-member" id="{{id}}">
+    <h2><a href="#{{id}}"><code>{{name}}</code></a></h2>
+    <pre class="signature member-signature"><code>{{signature}}</code></pre>
+    {{#if has_documentation}}<lito-doc-prose><div class="member-documentation prose">{{{documentation}}}</div></lito-doc-prose>{{/if}}
+    <footer class="member-source"><span>Declared in</span><a href="{{source_href}}"><code>{{source_path}}:{{source_line}}</code></a></footer>
+  </article>{{/each}}</div>
 </section>
 {{/if}}
 {{#if symbol.has_member_values}}

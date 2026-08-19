@@ -382,50 +382,71 @@ auto semantic_identity(const clang::NamedDecl &declaration,
                       location.isValid() ? location.getColumn() : 0);
 }
 
-auto declaration_signature(const clang::NamedDecl &declaration,
-                           const clang::ASTContext &context) -> String {
-  auto policy = context.getPrintingPolicy();
-  policy.SuppressScope = false;
-  auto qualified = declaration.getQualifiedNameAsString();
+auto printable_declaration(const clang::NamedDecl &declaration)
+    -> const clang::Decl & {
   if (const auto *function =
           llvm::dyn_cast<clang::FunctionDecl>(&declaration)) {
-    auto result = function->getReturnType().getAsString(policy);
-    result.push_back(' ');
-    result.append(qualified);
-    result.push_back('(');
-    for (unsigned index = 0; index < function->getNumParams(); ++index) {
-      if (index != 0)
-        result.append(", ");
-      const auto *parameter = function->getParamDecl(index);
-      result.append(parameter->getType().getAsString(policy));
-      if (!parameter->getName().empty()) {
-        result.push_back(' ');
-        result.append(parameter->getNameAsString());
-      }
-    }
-    result.push_back(')');
-    if (const auto *method = llvm::dyn_cast<clang::CXXMethodDecl>(function)) {
-      if (method->isConst())
-        result.append(" const");
-      if (method->isVolatile())
-        result.append(" volatile");
-    }
-    return as_rstd(result);
+    if (const auto *owner = function->getDescribedFunctionTemplate())
+      return *owner;
   }
-  if (const auto *value = llvm::dyn_cast<clang::ValueDecl>(&declaration)) {
-    return as_rstd(value->getType().getAsString(policy) + " " + qualified);
+  if (const auto *record = llvm::dyn_cast<clang::CXXRecordDecl>(&declaration)) {
+    if (const auto *owner = record->getDescribedClassTemplate())
+      return *owner;
   }
-  if (const auto *record = llvm::dyn_cast<clang::RecordDecl>(&declaration)) {
-    return as_rstd(std::string(record->getKindName()) + " " + qualified);
+  if (const auto *variable = llvm::dyn_cast<clang::VarDecl>(&declaration)) {
+    if (const auto *owner = variable->getDescribedVarTemplate())
+      return *owner;
   }
-  if (llvm::isa<clang::EnumDecl>(declaration))
-    return as_rstd("enum " + qualified);
-  if (llvm::isa<clang::NamespaceDecl>(declaration))
-    return as_rstd("namespace " + qualified);
+  if (const auto *alias = llvm::dyn_cast<clang::TypeAliasDecl>(&declaration)) {
+    if (const auto *owner = alias->getDescribedAliasTemplate())
+      return *owner;
+  }
+  return declaration;
+}
+
+auto declaration_signature(const clang::NamedDecl &declaration,
+                           const clang::ASTContext &context,
+                           bool suppress_scope) -> String {
+  auto policy = context.getPrintingPolicy();
+  policy.SuppressScope = suppress_scope;
+  policy.TerseOutput = true;
+  policy.PolishForDeclaration = false;
+  policy.Indentation = 0;
   llvm::SmallString<256> printed;
   llvm::raw_svector_ostream stream(printed);
-  declaration.print(stream, policy);
-  return as_rstd(printed);
+  printable_declaration(declaration)
+      .print(stream, policy, /*Indentation=*/0, /*PrintInstantiation=*/false);
+  auto result = as_rstd(printed);
+  if (!llvm::isa<clang::NamespaceDecl>(declaration) &&
+      !result.as_str().trim_ascii().ends_with(";"_str)) {
+    result.push_ascii(';');
+  }
+  return result;
+}
+
+auto record_keyword(const clang::NamedDecl &declaration) -> Option<String> {
+  const auto *record = llvm::dyn_cast<clang::RecordDecl>(&declaration);
+  return record == nullptr ? Option<String>{}
+                           : Some(as_rstd(record->getKindName()));
+}
+
+auto record_header(const clang::NamedDecl &declaration,
+                   const clang::ASTContext &context) -> Option<String> {
+  if (!llvm::isa<clang::RecordDecl>(declaration))
+    return Option<String>{};
+  auto signature = declaration_signature(declaration, context, true);
+  auto text = signature.as_str().trim_ascii();
+  if (text.ends_with("{};"_str))
+    text = text.get(usize{}, text.len() - usize(3)).unwrap().trim_ascii();
+  else if (text.ends_with(";"_str))
+    text = text.get(usize{}, text.len() - usize(1)).unwrap().trim_ascii();
+  return Some(String::make(text));
+}
+
+auto is_scope_declaration(const clang::NamedDecl &declaration) -> bool {
+  const auto *semantic =
+      llvm::dyn_cast<clang::RecordDecl>(declaration.getDeclContext());
+  return semantic != nullptr && declaration.getLexicalDeclContext() == semantic;
 }
 
 auto namespace_name(const clang::NamedDecl &declaration) -> String {
@@ -536,8 +557,12 @@ private:
         .qualified_name =
             qualified_name.empty() ? rstd::move(name) : as_rstd(qualified_name),
         .namespace_name = namespace_name(declaration),
-        .signature = declaration_signature(declaration, *context_),
+        .signature = declaration_signature(declaration, *context_, false),
+        .scope_signature = declaration_signature(declaration, *context_, true),
+        .record_keyword = record_keyword(declaration),
+        .record_header = record_header(declaration, *context_),
         .is_definition = declaration_definition(declaration),
+        .is_scope_declaration = is_scope_declaration(declaration),
         .exported = declaration_exported(declaration, unit_->is_interface),
         .access = declaration_access(declaration),
         .parent = rstd::move(parent),
@@ -729,7 +754,9 @@ auto encode_response(const ExtractionRequest &request,
         {"qualified_name", as_std(declaration.qualified_name.as_str())},
         {"namespace", as_std(declaration.namespace_name.as_str())},
         {"signature", as_std(declaration.signature.as_str())},
+        {"scope_signature", as_std(declaration.scope_signature.as_str())},
         {"is_definition", declaration.is_definition},
+        {"is_scope_declaration", declaration.is_scope_declaration},
         {"exported", declaration.exported},
         {"access", access_name(declaration.access)},
         {"spelling_span", encode_span(declaration.spelling_span)},
@@ -740,6 +767,14 @@ auto encode_response(const ExtractionRequest &request,
           static_cast<int64_t>(declaration.parent->to_primitive());
     else
       object["parent"] = nullptr;
+    if (declaration.record_keyword.is_some())
+      object["record_keyword"] = as_std(declaration.record_keyword->as_str());
+    else
+      object["record_keyword"] = nullptr;
+    if (declaration.record_header.is_some())
+      object["record_header"] = as_std(declaration.record_header->as_str());
+    else
+      object["record_header"] = nullptr;
     if (declaration.comment.is_some()) {
       object["comment"] = llvm::json::Object{
           {"kind", declaration.comment->kind == DocumentationCommentKind::Inner
@@ -954,8 +989,17 @@ auto decode_unit(ref<rstd::path::Path> response_path, ref<str> expected_digest)
                 .unwrap_or(String::make()),
         .signature = rstd_try(required_string(
             *object, "signature", "extract response declaration"_str)),
+        .scope_signature = rstd_try(required_string(
+            *object, "scope_signature", "extract response declaration"_str)),
+        .record_keyword = rstd_try(optional_string(
+            *object, "record_keyword", "extract response declaration"_str)),
+        .record_header = rstd_try(optional_string(
+            *object, "record_header", "extract response declaration"_str)),
         .is_definition = rstd_try(required_bool(
             *object, "is_definition", "extract response declaration"_str)),
+        .is_scope_declaration =
+            rstd_try(required_bool(*object, "is_scope_declaration",
+                                   "extract response declaration"_str)),
         .exported = rstd_try(required_bool(*object, "exported",
                                            "extract response declaration"_str)),
         .access = *access,
@@ -1007,7 +1051,7 @@ auto execute_generate(ref<rstd::path::Path> manifest_path)
   auto root = rstd_try(json_object(value, "site manifest"_str));
   rstd_try(validate_header(*root, "litodoc-site", 1, "site manifest"_str));
   if (rstd_try(required_integer(*root, "data_api", "site manifest"_str)) !=
-      usize(2))
+      usize(3))
     return failure<Summary>("site manifest requires unsupported data API"_str);
   if (rstd_try(required_integer(*root, "template_api", "site manifest"_str)) !=
       usize(1))
@@ -1093,7 +1137,7 @@ auto capabilities() -> String {
   auto site_versions = llvm::json::Array{};
   site_versions.push_back(1);
   auto data_versions = llvm::json::Array{};
-  data_versions.push_back(2);
+  data_versions.push_back(3);
   auto features = llvm::json::Array{};
   features.push_back("embedded-default-frontend");
   features.push_back("package-publications-v1");

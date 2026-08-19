@@ -247,7 +247,7 @@ TEST(Book, PreservesVersionOneApiFrontendCompatibility) {
                          "  \"format\": \"lito-doc-frontend\",\n"
                          "  \"version\": 1,\n"
                          "  \"template-api\": 1,\n"
-                         "  \"data-api\": 2,\n"
+                         "  \"data-api\": 3,\n"
                          "  \"templates\": {\n"
                          "    \"root\": \"root.html\",\n"
                          "    \"package\": \"package.html\",\n"
@@ -273,6 +273,24 @@ TEST(Book, PreservesVersionOneApiFrontendCompatibility) {
   ASSERT_TRUE(frontend.is_ok());
   EXPECT_TRUE(frontend->supports_api);
   EXPECT_FALSE(frontend->supports_book);
+}
+
+TEST(Frontend, RejectsVersionTwoApiFrontends) {
+  auto temporary = rstd::test::TempDir::make();
+  ASSERT_TRUE(temporary.is_ok());
+  auto root = temporary->path();
+  ASSERT_TRUE(write_text(root, "frontend.json"_str,
+                         "{\n"
+                         "  \"format\": \"lito-doc-frontend\",\n"
+                         "  \"version\": 1,\n"
+                         "  \"template-api\": 1,\n"
+                         "  \"data-api\": 2\n"
+                         "}\n"_str)
+                  .is_ok());
+  auto frontend = lito::site::load_frontend_directory(root);
+  ASSERT_TRUE(frontend.is_err());
+  EXPECT_TRUE(rstd::move(frontend).unwrap_err().as_str().contains(
+      "unsupported doc data API 2"_str));
 }
 
 TEST(Frontend, DirectoryAndEmbeddedResourcesShareValidation) {
