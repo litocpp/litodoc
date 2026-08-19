@@ -447,6 +447,16 @@ auto namespace_name(const clang::NamedDecl &declaration) -> String {
   return as_rstd(result);
 }
 
+auto declared_in_function(const clang::NamedDecl &declaration) -> bool {
+  auto context = declaration.getDeclContext();
+  while (context != nullptr && !context->isTranslationUnit()) {
+    if (context->isFunctionOrMethod())
+      return true;
+    context = context->getParent();
+  }
+  return false;
+}
+
 class DocumentationVisitor {
 public:
   DocumentationVisitor(clang::ASTContext &context, DocumentationUnit &unit)
@@ -486,12 +496,12 @@ private:
     if (location.isInvalid() || !manager_->isWrittenInMainFile(location))
       return;
     auto kind = declaration_kind(declaration);
-    if (kind.is_none() || declaration.getDeclContext()->isFunctionOrMethod())
+    if (kind.is_none() || declared_in_function(declaration))
       return;
-    auto name =
-        declaration.getName().empty()
-            ? rstd::format("<anonymous {}>", declaration.getDeclKindName())
-            : as_rstd(declaration.getNameAsString());
+    auto display_name = declaration.getNameAsString();
+    if (display_name.empty())
+      return;
+    auto name = as_rstd(display_name);
     auto qualified_name = declaration.getQualifiedNameAsString();
 
     auto parent = Option<usize>{};
