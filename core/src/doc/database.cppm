@@ -97,6 +97,7 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
     auto package = Package{
         .name = rstd::move(source_package.name),
         .version = rstd::move(source_package.version),
+        .source_identity = rstd::move(source_package.source_identity),
         .root_module = rstd::move(source_package.root_module),
         .profile = rstd::move(source_package.profile),
         .toolchain_version = rstd::move(source_package.toolchain_version),

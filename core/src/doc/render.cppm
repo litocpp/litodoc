@@ -21,8 +21,24 @@ auto doc_path(ref<rstd::path::Path> root, ref<str> relative)
       rstd::path::PathBuf::from(relative).as_path());
 }
 
+auto publication_media_type(ref<str> path) -> ref<str> {
+  if (path.ends_with(".html"_str))
+    return "text/html; charset=utf-8"_str;
+  if (path.ends_with(".json"_str))
+    return "application/json; charset=utf-8"_str;
+  if (path.ends_with(".js"_str))
+    return "text/javascript; charset=utf-8"_str;
+  if (path.ends_with(".css"_str))
+    return "text/css; charset=utf-8"_str;
+  if (path.ends_with(".svg"_str))
+    return "image/svg+xml"_str;
+  return "application/octet-stream"_str;
+}
+
 auto write_doc_file(ref<rstd::path::Path> root, ref<str> relative,
-                    ref<str> contents) -> Result<empty, String> {
+                    ref<str> contents,
+                    Vec<PublicationFile> *publication = nullptr)
+    -> Result<empty, String> {
   if (!safe_frontend_path(relative))
     return Err(rstd::format("invalid doc output path '{}'", relative));
   auto path = doc_path(root, relative);
@@ -37,6 +53,15 @@ auto write_doc_file(ref<rstd::path::Path> root, ref<str> relative,
   if (written.is_err())
     return Err(rstd::format("cannot write doc output '{}': {}", path.as_path(),
                             rstd::move(written).unwrap_err()));
+  if (publication != nullptr) {
+    publication->push(PublicationFile{
+        .path = String::make(relative),
+        .size = contents.len(),
+        .sha256 = rstd::crypto::sha256_hex(contents),
+        .media_type = String::make(publication_media_type(relative)),
+        .cache = String::make("immutable"_str),
+    });
+  }
   return Ok(empty{});
 }
 
@@ -82,6 +107,13 @@ auto site_value(const Dataset &dataset) -> TemplateValue {
   return site;
 }
 
+auto package_site_value(const Package &package) -> TemplateValue {
+  auto site = TemplateValue::object_value();
+  site.insert("title"_str, template_text(package.name.as_str()));
+  site.insert("package_count"_str, template_number(usize(1)));
+  return site;
+}
+
 auto package_route(ref<str> package) -> String {
   return rstd::format("package/{}/index.html", package);
 }
@@ -105,6 +137,11 @@ auto direct_module_child(ref<str> parent, ref<str> candidate) -> bool {
 struct ModuleLinks {
   TemplateValue items;
   usize count{};
+};
+
+enum class RenderLayout {
+  Workspace,
+  Package,
 };
 
 struct PackageRenderIndex {
@@ -179,8 +216,8 @@ auto direct_module_links(const Package &package, ref<str> parent,
 }
 
 auto navigation_value(const Dataset &dataset, const Package *current,
-                      ref<str> asset_prefix, bool show_module_supplement)
-    -> TemplateValue {
+                      ref<str> asset_prefix, bool show_module_supplement,
+                      RenderLayout layout) -> TemplateValue {
   auto navigation = TemplateValue::object_value();
   auto packages = TemplateValue::array_value();
   if (current == nullptr) {
@@ -200,8 +237,10 @@ auto navigation_value(const Dataset &dataset, const Package *current,
   navigation.insert("packages"_str, rstd::move(packages));
   auto modules = ModuleLinks{.items = TemplateValue::array_value()};
   if (current != nullptr) {
-    auto href_prefix =
-        rstd::format("{}package/{}/", asset_prefix, current->name.as_str());
+    auto href_prefix = layout == RenderLayout::Package
+                           ? String::make(asset_prefix)
+                           : rstd::format("{}package/{}/", asset_prefix,
+                                          current->name.as_str());
     modules = direct_module_links(*current, current->root_module.as_str(),
                                   href_prefix.as_str());
   }
@@ -216,16 +255,21 @@ auto navigation_value(const Dataset &dataset, const Package *current,
 
 auto base_context(const Dataset &dataset, const Package *current,
                   ref<str> title, ref<str> kind, ref<str> asset_prefix,
-                  bool show_module_supplement) -> TemplateValue {
+                  bool show_module_supplement,
+                  RenderLayout layout = RenderLayout::Workspace)
+    -> TemplateValue {
   auto context = TemplateValue::object_value();
-  context.insert("site"_str, site_value(dataset));
+  context.insert("site"_str,
+                 layout == RenderLayout::Package && current != nullptr
+                     ? package_site_value(*current)
+                     : site_value(dataset));
   auto page = page_value(title, kind, asset_prefix);
   if (current != nullptr)
     page.insert("search_package"_str, template_text(current->name.as_str()));
   context.insert("page"_str, rstd::move(page));
-  context.insert(
-      "navigation"_str,
-      navigation_value(dataset, current, asset_prefix, show_module_supplement));
+  context.insert("navigation"_str,
+                 navigation_value(dataset, current, asset_prefix,
+                                  show_module_supplement, layout));
   return context;
 }
 
@@ -265,11 +309,13 @@ auto root_context(const Dataset &dataset) -> TemplateValue {
   return context;
 }
 
-auto package_context(const Dataset &dataset, const Package &package)
+auto package_context(const Dataset &dataset, const Package &package,
+                     RenderLayout layout = RenderLayout::Workspace)
     -> TemplateValue {
+  auto asset_prefix = layout == RenderLayout::Package ? ""_str : "../../"_str;
   auto context =
       base_context(dataset, rstd::addressof(package), package.name.as_str(),
-                   "package"_str, "../../"_str, false);
+                   "package"_str, asset_prefix, false, layout);
   auto package_value = package_link_value(package, "index.html"_str);
   package_value.insert("documented"_str, template_number(package.documented));
   package_value.insert("undocumented"_str,
@@ -316,11 +362,15 @@ auto package_context(const Dataset &dataset, const Package &package)
 }
 
 auto module_context(const Dataset &dataset, const Package &package,
-                    const PackageRenderIndex &index, const Module &module)
+                    const PackageRenderIndex &index, const Module &module,
+                    RenderLayout layout = RenderLayout::Workspace)
     -> TemplateValue {
+  auto asset_prefix =
+      layout == RenderLayout::Package ? "../"_str : "../../../"_str;
   auto context = base_context(
       dataset, rstd::addressof(package), module.name.as_str(), "module"_str,
-      "../../../"_str, module.name.as_str() != package.root_module.as_str());
+      asset_prefix, module.name.as_str() != package.root_module.as_str(),
+      layout);
   context.insert("package"_str,
                  package_link_value(package, "../index.html"_str));
   auto parts = split_module(module.name.as_str());
@@ -471,11 +521,14 @@ auto module_context(const Dataset &dataset, const Package &package,
 }
 
 auto symbol_context(const Dataset &dataset, const Package &package,
-                    const PackageRenderIndex &index, const Symbol &symbol)
+                    const PackageRenderIndex &index, const Symbol &symbol,
+                    RenderLayout layout = RenderLayout::Workspace)
     -> TemplateValue {
+  auto asset_prefix =
+      layout == RenderLayout::Package ? "../"_str : "../../../"_str;
   auto context = base_context(dataset, rstd::addressof(package),
                               symbol.qualified_name.as_str(), "symbol"_str,
-                              "../../../"_str, true);
+                              asset_prefix, true, layout);
   context.insert("package"_str,
                  package_link_value(package, "../index.html"_str));
   auto parts = split_module(symbol.module.as_str());
@@ -631,10 +684,14 @@ auto source_lines(ref<str> contents) -> TemplateValue {
 }
 
 auto source_context(const Dataset &dataset, const Package &package,
-                    const Source &source) -> TemplateValue {
+                    const Source &source,
+                    RenderLayout layout = RenderLayout::Workspace)
+    -> TemplateValue {
+  auto asset_prefix =
+      layout == RenderLayout::Package ? "../"_str : "../../../"_str;
   auto context =
       base_context(dataset, rstd::addressof(package), source.path.as_str(),
-                   "source"_str, "../../../"_str, true);
+                   "source"_str, asset_prefix, true, layout);
   context.insert("package"_str,
                  package_link_value(package, "../index.html"_str));
   auto source_value = TemplateValue::object_value();
@@ -646,11 +703,93 @@ auto source_context(const Dataset &dataset, const Package &package,
 
 auto render_page(ref<rstd::path::Path> root, ref<str> relative,
                  const FrontendBundle &frontend, ref<str> template_path,
-                 const TemplateValue &context) -> Result<empty, String> {
+                 const TemplateValue &context,
+                 Vec<PublicationFile> *publication = nullptr)
+    -> Result<empty, String> {
   auto rendered = render_template(frontend.templates, template_path, context);
   if (rendered.is_err())
     return Err(rstd::move(rendered).unwrap_err());
-  return write_doc_file(root, relative, rendered->as_str());
+  return write_doc_file(root, relative, rendered->as_str(), publication);
+}
+
+auto site_manifest_json(const FrontendBundle &frontend, ref<str> data_digest)
+    -> String {
+  auto object = RenderJsonMap::make();
+  object.insert(String::make("format"_str),
+                RenderJson::String(String::make("lito-doc-site"_str)));
+  object.insert(String::make("version"_str),
+                RenderJson::Number(rstd::json::Number::from_u64(u64(1))));
+  object.insert(String::make("data-api"_str),
+                RenderJson::Number(rstd::json::Number::from_u64(u64(2))));
+  object.insert(String::make("frontend"_str),
+                RenderJson::String(frontend.identity.clone()));
+  object.insert(String::make("frontend-digest"_str),
+                RenderJson::String(frontend.digest.clone()));
+  object.insert(String::make("data-digest"_str),
+                RenderJson::String(String::make(data_digest)));
+  auto manifest = rstd::json::to_string(
+      RenderJson::Object(rstd::move(object)),
+      rstd::json::FormatOptions{.pretty = true, .indent = usize(2)});
+  manifest.push_ascii('\n');
+  return manifest;
+}
+
+auto render_package_site(ref<rstd::path::Path> root, const Dataset &dataset,
+                         const Package &package, const FrontendBundle &frontend,
+                         ref<str> data_digest, Vec<PublicationFile> &files)
+    -> Result<empty, String> {
+  for (const auto &asset : frontend.assets) {
+    auto written = write_doc_file(root, asset.path.as_str(),
+                                  asset.contents.as_str(), &files);
+    if (written.is_err())
+      return written;
+  }
+  auto written =
+      write_doc_file(root, "static/search-index.js"_str,
+                     package_search_script(package).as_str(), &files);
+  if (written.is_err())
+    return written;
+  written = write_doc_file(root, "search-index.json"_str,
+                           package_search_json(package).as_str(), &files);
+  if (written.is_err())
+    return written;
+  auto render_index = package_render_index(package);
+  written = render_page(
+      root, "index.html"_str, frontend, frontend.package_template.as_str(),
+      package_context(dataset, package, RenderLayout::Package), &files);
+  if (written.is_err())
+    return written;
+  written = write_doc_file(root, "doc.json"_str, package_json(package).as_str(),
+                           &files);
+  if (written.is_err())
+    return written;
+  for (const auto &module : package.modules) {
+    auto context = module_context(dataset, package, render_index, module,
+                                  RenderLayout::Package);
+    written = render_page(root, module.page.as_str(), frontend,
+                          frontend.module_template.as_str(), context, &files);
+    if (written.is_err())
+      return written;
+  }
+  for (const auto &symbol : package.symbols) {
+    auto context = symbol_context(dataset, package, render_index, symbol,
+                                  RenderLayout::Package);
+    written = render_page(root, symbol.page.as_str(), frontend,
+                          frontend.symbol_template.as_str(), context, &files);
+    if (written.is_err())
+      return written;
+  }
+  for (const auto &source : package.sources) {
+    auto context =
+        source_context(dataset, package, source, RenderLayout::Package);
+    written = render_page(root, source.page.as_str(), frontend,
+                          frontend.source_template.as_str(), context, &files);
+    if (written.is_err())
+      return written;
+  }
+  auto manifest = site_manifest_json(frontend, data_digest);
+  return write_doc_file(root, "site-manifest.json"_str, manifest.as_str(),
+                        &files);
 }
 
 auto render_site(ref<rstd::path::Path> root, const Dataset &dataset,
@@ -717,27 +856,8 @@ auto render_site(ref<rstd::path::Path> root, const Dataset &dataset,
         return written;
     }
   }
-  auto site_manifest_object = RenderJsonMap::make();
-  site_manifest_object.insert(
-      String::make("format"_str),
-      RenderJson::String(String::make("lito-doc-site"_str)));
-  site_manifest_object.insert(
-      String::make("version"_str),
-      RenderJson::Number(rstd::json::Number::from_u64(u64(1))));
-  site_manifest_object.insert(
-      String::make("data-api"_str),
-      RenderJson::Number(rstd::json::Number::from_u64(u64(1))));
-  site_manifest_object.insert(String::make("frontend"_str),
-                              RenderJson::String(frontend.identity.clone()));
-  site_manifest_object.insert(String::make("frontend-digest"_str),
-                              RenderJson::String(frontend.digest.clone()));
-  site_manifest_object.insert(String::make("data-digest"_str),
-                              RenderJson::String(String::make(data_digest)));
-  auto site_manifest = rstd::json::to_string(
-      RenderJson::Object(rstd::move(site_manifest_object)),
-      rstd::json::FormatOptions{.pretty = true, .indent = usize(2)});
-  site_manifest.push_ascii('\n');
-  return write_doc_file(root, "site-manifest.json"_str, site_manifest.as_str());
+  auto manifest = site_manifest_json(frontend, data_digest);
+  return write_doc_file(root, "site-manifest.json"_str, manifest.as_str());
 }
 
 } // namespace lito::doc

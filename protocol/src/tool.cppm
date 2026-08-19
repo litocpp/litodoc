@@ -1020,6 +1020,16 @@ auto execute_generate(ref<rstd::path::Path> manifest_path)
           .map([](String value) { return PathBuf::from(rstd::move(value)); });
   auto data_only =
       rstd_try(required_bool(*root, "data_only", "site manifest"_str));
+  auto publication_name =
+      rstd_try(optional_string(*root, "publication", "site manifest"_str))
+          .unwrap_or(String::make("site"_str));
+  auto publication = PublicationKind::Site;
+  if (publication_name.as_str() == "package-set"_str) {
+    publication = PublicationKind::PackageSet;
+  } else if (publication_name.as_str() != "site"_str) {
+    return failure<Summary>(rstd::format(
+        "site manifest publication '{}' is unsupported", publication_name));
+  }
   auto default_frontend = Option<lito::site::FrontendBundle>{};
   if (frontend.is_none() && !data_only) {
     default_frontend = Some(rstd_try(lito::doc::web::load_default_frontend()));
@@ -1032,6 +1042,7 @@ auto execute_generate(ref<rstd::path::Path> manifest_path)
           rstd_try(required_string(*root, "data_output", "site manifest"_str))),
       .frontend = rstd::move(frontend),
       .data_only = data_only,
+      .publication = publication,
   };
   for (const auto &item : *packages) {
     auto package = rstd_try(json_object(item, "site manifest package"_str));
@@ -1043,6 +1054,10 @@ auto execute_generate(ref<rstd::path::Path> manifest_path)
         .version = rstd_try(optional_string(*package, "version",
                                             "site manifest package"_str))
                        .unwrap_or(String::make()),
+        .source_identity =
+            rstd_try(optional_string(*package, "source_identity",
+                                     "site manifest package"_str))
+                .unwrap_or(String::make()),
         .root_module = rstd_try(optional_string(*package, "root_module",
                                                 "site manifest package"_str))
                            .unwrap_or(String::make()),
@@ -1081,6 +1096,7 @@ auto capabilities() -> String {
   data_versions.push_back(2);
   auto features = llvm::json::Array{};
   features.push_back("embedded-default-frontend");
+  features.push_back("package-publications-v1");
   return json_text(llvm::json::Object{
       {"format", "litodoc-capabilities"},
       {"version", 1},
@@ -1151,7 +1167,12 @@ auto run() -> int {
       rstd::io::eprintln("litodoc: {}", rstd::move(result).unwrap_err());
       return 1;
     }
-    rstd::io::println("generated {}", result->output.as_path());
+    if (result->publication_set.is_some()) {
+      rstd::io::println("generated {}",
+                        result->publication_set->manifest.as_path());
+    } else {
+      rstd::io::println("generated {}", result->output.as_path());
+    }
     return 0;
   }
 

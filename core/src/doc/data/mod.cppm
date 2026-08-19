@@ -1014,28 +1014,34 @@ auto publish_dataset(ref<rstd::path::Path> output, const Dataset &dataset)
   return Ok(summarize_dataset(output, dataset));
 }
 
+auto append_search_entries(JsonArray &entries, const Package &package,
+                           bool package_root) -> void {
+  for (const auto &symbol : package.symbols) {
+    auto object = JsonMap::make();
+    object.insert(String::make("package"_str),
+                  json_string(package.name.as_str()));
+    object.insert(String::make("module"_str),
+                  json_string(symbol.module.as_str()));
+    object.insert(String::make("kind"_str),
+                  json_string(declaration_kind_name(symbol.kind)));
+    object.insert(String::make("name"_str), json_string(symbol.name.as_str()));
+    object.insert(String::make("qualified-name"_str),
+                  json_string(symbol.qualified_name.as_str()));
+    object.insert(
+        String::make("url"_str),
+        json_string((package_root
+                         ? symbol.page.clone()
+                         : rstd::format("package/{}/{}", package.name.as_str(),
+                                        symbol.page.as_str()))
+                        .as_str()));
+    entries.push(Json::Object(rstd::move(object)));
+  }
+}
+
 auto search_json(const Dataset &dataset) -> String {
   auto entries = JsonArray::make();
   for (const auto &package : dataset.packages) {
-    for (const auto &symbol : package.symbols) {
-      auto object = JsonMap::make();
-      object.insert(String::make("package"_str),
-                    json_string(package.name.as_str()));
-      object.insert(String::make("module"_str),
-                    json_string(symbol.module.as_str()));
-      object.insert(String::make("kind"_str),
-                    json_string(declaration_kind_name(symbol.kind)));
-      object.insert(String::make("name"_str),
-                    json_string(symbol.name.as_str()));
-      object.insert(String::make("qualified-name"_str),
-                    json_string(symbol.qualified_name.as_str()));
-      object.insert(
-          String::make("url"_str),
-          json_string(rstd::format("package/{}/{}", package.name.as_str(),
-                                   symbol.page.as_str())
-                          .as_str()));
-      entries.push(Json::Object(rstd::move(object)));
-    }
+    append_search_entries(entries, package, false);
   }
   return json_text(Json::Array(rstd::move(entries)));
 }
@@ -1045,6 +1051,20 @@ auto search_script(const Dataset &dataset) -> String {
   auto json = search_json(dataset);
   auto body = json.as_str().trim_ascii();
   result.push_str(body);
+  result.push_str(";\n"_str);
+  return result;
+}
+
+auto package_search_json(const Package &package) -> String {
+  auto entries = JsonArray::make();
+  append_search_entries(entries, package, true);
+  return json_text(Json::Array(rstd::move(entries)));
+}
+
+auto package_search_script(const Package &package) -> String {
+  auto result = String::make("window.__LITO_DOC_SEARCH__ = "_str);
+  auto json = package_search_json(package);
+  result.push_str(json.as_str().trim_ascii());
   result.push_str(";\n"_str);
   return result;
 }

@@ -45,8 +45,13 @@ auto generate(SiteInput input, Option<FrontendBundle> default_frontend = {})
   auto data_output = input.data_output.clone();
   auto frontend = rstd::move(input.frontend);
   auto data_only = input.data_only;
+  auto publication = input.publication;
   if (title.is_empty())
     return Err(String::make("doc site title must not be empty"_str));
+  if (data_only && publication == PublicationKind::PackageSet) {
+    return Err(String::make(
+        "package publication cannot be combined with data-only output"_str));
+  }
   auto database = make_database(rstd::move(input.packages));
   if (database.is_err())
     return Err(rstd::move(database).unwrap_err());
@@ -60,6 +65,10 @@ auto generate(SiteInput input, Option<FrontendBundle> default_frontend = {})
       selected_frontend(frontend, rstd::move(default_frontend));
   if (loaded_frontend.is_err())
     return Err(rstd::move(loaded_frontend).unwrap_err());
+  if (publication == PublicationKind::PackageSet) {
+    return publish_package_set(output.as_path(), dataset, *loaded_frontend,
+                               *data);
+  }
   return publish_site(output.as_path(), dataset, *loaded_frontend, *data);
 }
 

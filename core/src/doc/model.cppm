@@ -95,6 +95,7 @@ struct DocumentationUnit {
 struct PackageInput {
   String name;
   String version;
+  String source_identity;
   String root_module;
   String profile;
   rstd::path::PathBuf root;
@@ -104,12 +105,18 @@ struct PackageInput {
   Vec<DocumentationUnit> units;
 };
 
+enum class PublicationKind {
+  Site,
+  PackageSet,
+};
+
 struct SiteInput {
   String title;
   rstd::path::PathBuf output;
   rstd::path::PathBuf data_output;
   Option<rstd::path::PathBuf> frontend;
   bool data_only{false};
+  PublicationKind publication{PublicationKind::Site};
   Vec<PackageInput> packages;
 };
 
@@ -165,6 +172,7 @@ struct Diagnostic {
 struct Package {
   String name;
   String version;
+  String source_identity;
   String root_module;
   String profile;
   String toolchain_version;
@@ -214,12 +222,36 @@ struct PackageSummary {
   Vec<Diagnostic> diagnostic_details;
 };
 
+struct PublicationFile {
+  String path;
+  usize size{};
+  String sha256;
+  String media_type;
+  String cache;
+};
+
+struct PackagePublicationSummary {
+  String name;
+  String version;
+  rstd::path::PathBuf directory;
+  rstd::path::PathBuf manifest;
+  rstd::path::PathBuf index;
+  Vec<PublicationFile> files;
+};
+
+struct PublicationSetSummary {
+  rstd::path::PathBuf root;
+  rstd::path::PathBuf manifest;
+  Vec<PackagePublicationSummary> packages;
+};
+
 struct Summary {
   rstd::path::PathBuf output;
   rstd::path::PathBuf index;
   bool site_generated{false};
   DataSummary data;
   Vec<PackageSummary> packages;
+  Option<PublicationSetSummary> publication_set;
 };
 
 auto declaration_kind_name(DeclarationKind kind) -> ref<str>;
