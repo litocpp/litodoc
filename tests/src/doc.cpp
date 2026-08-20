@@ -101,12 +101,12 @@ auto record_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
       .kind = lito::doc::DeclarationKind::Record,
       .name = String::make("Box"_str),
       .qualified_name = String::make("Box"_str),
-      .signature = String::make("template <typename T> class Box {};"_str),
+      .signature = String::make("template <typename T>\nclass Box {};"_str),
       .scope_signature =
-          String::make("template <typename T> class Box {};"_str),
+          String::make("template <typename T>\nclass Box {};"_str),
       .record_keyword = Some(String::make("class"_str)),
       .record_header =
-          Some(String::make("template <typename T> class Box"_str)),
+          Some(String::make("template <typename T>\nclass Box"_str)),
       .is_definition = true,
       .exported = true,
       .comment = comment(source, usize(3), "Stores a value."_str),
@@ -148,10 +148,14 @@ auto record_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
       .name = String::make("get"_str),
       .qualified_name = String::make("Box::get"_str),
       .signature = String::make(
-          "[[nodiscard]] constexpr auto Box::get(int offset = 0) const & "
+          "template <typename U>\n"
+          "    requires Numeric<U>\n"
+          "[[nodiscard]] constexpr auto Box::get(U fallback = U{}) const & "
           "noexcept -> T;"_str),
       .scope_signature = String::make(
-          "[[nodiscard]] constexpr auto get(int offset = 0) const & noexcept "
+          "template <typename U>\n"
+          "    requires Numeric<U>\n"
+          "[[nodiscard]] constexpr auto get(U fallback = U{}) const & noexcept "
           "-> T;"_str),
       .is_scope_declaration = true,
       .exported = true,
@@ -409,10 +413,21 @@ TEST(DocPublication, InlinesRecordFunctionsAndFieldsOnTheRecordPage) {
   EXPECT_TRUE(record_html.as_str().contains("Returns the value."_str));
   EXPECT_TRUE(record_html.as_str().contains("Definition docs."_str));
   EXPECT_TRUE(record_html.as_str().contains("public:"_str));
+  EXPECT_TRUE(record_html.as_str().contains(
+      "template &lt;typename T&gt;\nclass Box {"_str));
   EXPECT_TRUE(record_html.as_str().contains("T value{};"_str));
   EXPECT_TRUE(record_html.as_str().contains("unsigned int flags : 3 = 1;"_str));
   EXPECT_TRUE(
       record_html.as_str().contains("auto get() &amp;&amp; -&gt; T;"_str));
+  EXPECT_TRUE(record_html.as_str().contains(
+      "template &lt;typename U&gt;\n    requires Numeric&lt;U&gt;\n"
+      "[[nodiscard]] constexpr auto get"_str));
+  EXPECT_EQ(occurrences(record_html.as_str(), "class=\"member-summary\""_str),
+            usize(2));
+  EXPECT_EQ(occurrences(record_html.as_str(),
+                        "class=\"record-member method-detail\""_str),
+            usize(2));
+  EXPECT_FALSE(record_html.as_str().contains("<h2><a href=\"#method-"_str));
   EXPECT_EQ(occurrences(record_html.as_str(), "id=\"method-"_str), usize(2));
   EXPECT_EQ(occurrences(record_html.as_str(), "id=\"field-"_str), usize(2));
   EXPECT_FALSE(record_html.as_str().contains("Box&lt;int&gt;::get"_str));

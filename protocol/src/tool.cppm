@@ -382,26 +382,93 @@ auto semantic_identity(const clang::NamedDecl &declaration,
                       location.isValid() ? location.getColumn() : 0);
 }
 
-auto printable_declaration(const clang::NamedDecl &declaration)
-    -> const clang::Decl & {
+auto described_template(const clang::NamedDecl &declaration)
+    -> const clang::TemplateDecl * {
   if (const auto *function =
           llvm::dyn_cast<clang::FunctionDecl>(&declaration)) {
     if (const auto *owner = function->getDescribedFunctionTemplate())
-      return *owner;
+      return owner;
   }
   if (const auto *record = llvm::dyn_cast<clang::CXXRecordDecl>(&declaration)) {
     if (const auto *owner = record->getDescribedClassTemplate())
-      return *owner;
+      return owner;
   }
   if (const auto *variable = llvm::dyn_cast<clang::VarDecl>(&declaration)) {
     if (const auto *owner = variable->getDescribedVarTemplate())
-      return *owner;
+      return owner;
   }
   if (const auto *alias = llvm::dyn_cast<clang::TypeAliasDecl>(&declaration)) {
     if (const auto *owner = alias->getDescribedAliasTemplate())
-      return *owner;
+      return owner;
   }
+  return nullptr;
+}
+
+auto printable_declaration(const clang::NamedDecl &declaration)
+    -> const clang::Decl & {
+  if (const auto *owner = described_template(declaration))
+    return *owner;
   return declaration;
+}
+
+auto template_parameter_lists(const clang::NamedDecl &declaration)
+    -> llvm::SmallVector<const clang::TemplateParameterList *, 4> {
+  auto result = llvm::SmallVector<const clang::TemplateParameterList *, 4>{};
+  if (const auto *partial =
+          llvm::dyn_cast<clang::ClassTemplatePartialSpecializationDecl>(
+              &declaration)) {
+    result.push_back(partial->getTemplateParameters());
+  } else if (const auto *partial =
+                 llvm::dyn_cast<clang::VarTemplatePartialSpecializationDecl>(
+                     &declaration)) {
+    result.push_back(partial->getTemplateParameters());
+  }
+  if (const auto *function =
+          llvm::dyn_cast<clang::FunctionDecl>(&declaration)) {
+    for (unsigned index = 0; index < function->getNumTemplateParameterLists();
+         ++index)
+      result.push_back(function->getTemplateParameterList(index));
+  }
+  if (const auto *owner = described_template(declaration))
+    result.push_back(owner->getTemplateParameters());
+  return result;
+}
+
+auto split_template_declaration(
+    llvm::StringRef declaration,
+    llvm::ArrayRef<const clang::TemplateParameterList *> parameter_lists,
+    const clang::ASTContext &context, const clang::PrintingPolicy &policy)
+    -> String {
+  auto formatted = llvm::SmallString<256>{};
+  auto remaining = declaration;
+  for (const auto *parameters : parameter_lists) {
+    auto storage = llvm::SmallString<128>{};
+    auto stream = llvm::raw_svector_ostream(storage);
+    parameters->print(stream, context, policy);
+    auto prefix = storage.str();
+    if (!prefix.ends_with(" ") || !remaining.starts_with(prefix))
+      return as_rstd(declaration);
+    auto template_prefix = prefix.drop_back();
+    auto requires_clause = llvm::SmallString<128>{};
+    if (const auto *clause = parameters->getRequiresClause()) {
+      requires_clause.append(" requires ");
+      auto requires_stream = llvm::raw_svector_ostream(requires_clause);
+      clause->printPretty(requires_stream, nullptr, policy, 0, "\n", &context);
+      if (!template_prefix.ends_with(requires_clause.str()))
+        return as_rstd(declaration);
+      template_prefix = template_prefix.drop_back(requires_clause.size());
+    }
+    formatted.append(template_prefix);
+    formatted.push_back('\n');
+    if (!requires_clause.empty()) {
+      formatted.append("    ");
+      formatted.append(requires_clause.str().drop_front());
+      formatted.push_back('\n');
+    }
+    remaining = remaining.drop_front(prefix.size());
+  }
+  formatted.append(remaining);
+  return as_rstd(formatted.str());
 }
 
 auto declaration_signature(const clang::NamedDecl &declaration,
@@ -416,7 +483,8 @@ auto declaration_signature(const clang::NamedDecl &declaration,
   llvm::raw_svector_ostream stream(printed);
   printable_declaration(declaration)
       .print(stream, policy, /*Indentation=*/0, /*PrintInstantiation=*/false);
-  auto result = as_rstd(printed);
+  auto result = split_template_declaration(
+      printed.str(), template_parameter_lists(declaration), context, policy);
   if (!llvm::isa<clang::NamespaceDecl>(declaration) &&
       !result.as_str().trim_ascii().ends_with(";"_str)) {
     result.push_ascii(';');

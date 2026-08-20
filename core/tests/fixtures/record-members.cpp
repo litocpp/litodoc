@@ -16,10 +16,15 @@ public:
     /// Returns the stored value.
     [[nodiscard]] constexpr auto get(int offset = 0) const & noexcept -> T;
 
-    template <Numeric U>
+    template <typename U>
+        requires Numeric<U>
     auto convert(U input = U{}) && noexcept(false) -> U;
 
     explicit operator bool() const noexcept;
 };
+
+template <typename T>
+    requires Numeric<T>
+class Box<T *> {};
 
 auto make_box() -> Box<int>;
