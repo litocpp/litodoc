@@ -201,6 +201,18 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
         });
       }
       for (const auto &declaration : unit.declarations) {
+        auto signature_context = rstd::format(
+            "declaration '{}' signature", declaration.qualified_name.as_str());
+        auto signature_valid =
+            declaration.signature.validate(signature_context.as_str());
+        if (signature_valid.is_err())
+          return Err(rstd::move(signature_valid).unwrap_err());
+        auto scope_context = rstd::format("declaration '{}' scope declaration",
+                                          declaration.qualified_name.as_str());
+        auto scope_valid =
+            declaration.scope_signature.validate(scope_context.as_str());
+        if (scope_valid.is_err())
+          return Err(rstd::move(scope_valid).unwrap_err());
         auto order = declaration_order;
         ++declaration_order;
         if (!declaration.exported ||
@@ -309,6 +321,7 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
             key.clone(),
             Symbol{
                 .key = rstd::move(key),
+                .semantic_identity = declaration.semantic_identity.clone(),
                 .page = rstd::move(page),
                 .module = String::make(module_name),
                 .module_page = module_record->page.clone(),

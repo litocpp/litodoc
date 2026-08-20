@@ -254,6 +254,24 @@
   white-space: pre;
 }
 
+.declaration-reference {
+  color: inherit;
+  text-decoration-color: color-mix(in srgb, currentColor 42%, transparent);
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.16em;
+}
+
+.declaration-reference:hover {
+  color: var(--accent);
+  text-decoration-color: currentColor;
+}
+
+.declaration-reference:focus-visible {
+  border-radius: 0.125rem;
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
 .member-summary:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;

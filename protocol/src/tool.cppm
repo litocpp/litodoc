@@ -5,6 +5,7 @@ module;
 #include <clang/AST/Decl.h>
 #include <clang/AST/DeclCXX.h>
 #include <clang/AST/DeclTemplate.h>
+#include <clang/AST/TypeLoc.h>
 #include <clang/Basic/Diagnostic.h>
 #include <clang/Basic/Module.h>
 #include <clang/Basic/SourceManager.h>
@@ -12,6 +13,7 @@ module;
 #include <clang/Frontend/CompilerInstance.h>
 #include <clang/Frontend/FrontendAction.h>
 #include <clang/Index/USRGeneration.h>
+#include <clang/Lex/Lexer.h>
 #include <clang/Tooling/ArgumentsAdjusters.h>
 #include <clang/Tooling/Tooling.h>
 #include <llvm/ADT/SmallString.h>
@@ -22,6 +24,7 @@ module;
 #include <llvm/Support/raw_ostream.h>
 #include <rstd/macro.hpp>
 
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -517,6 +520,218 @@ auto is_scope_declaration(const clang::NamedDecl &declaration) -> bool {
   return semantic != nullptr && declaration.getLexicalDeclContext() == semantic;
 }
 
+struct PendingDeclarationReference {
+  size_t begin{};
+  size_t end{};
+  std::string semantic_identity;
+};
+
+class DeclarationReferenceWalker {
+public:
+  DeclarationReferenceWalker(const clang::SourceManager &manager,
+                             const clang::LangOptions &language,
+                             clang::SourceLocation declaration_begin,
+                             size_t declaration_size)
+      : manager_(&manager), language_(&language),
+        begin_(manager.getDecomposedSpellingLoc(declaration_begin)),
+        declaration_size_(declaration_size) {}
+
+  auto traverse(const clang::FunctionDecl &function) -> void {
+    if (const auto *information = function.getTypeSourceInfo())
+      traverse(information->getTypeLoc());
+    if (const auto *information = function.getNameInfo().getNamedTypeInfo())
+      traverse(information->getTypeLoc());
+  }
+
+  auto finish() -> Vec<DeclarationReference> {
+    std::sort(references_.begin(), references_.end(),
+              [](const auto &left, const auto &right) {
+                if (left.begin != right.begin)
+                  return left.begin < right.begin;
+                if (left.end != right.end)
+                  return left.end < right.end;
+                return left.semantic_identity < right.semantic_identity;
+              });
+    auto result =
+        Vec<DeclarationReference>::with_capacity(usize(references_.size()));
+    const PendingDeclarationReference *previous = nullptr;
+    for (const auto &reference : references_) {
+      if (previous != nullptr && previous->begin == reference.begin &&
+          previous->end == reference.end &&
+          previous->semantic_identity == reference.semantic_identity) {
+        continue;
+      }
+      if (previous != nullptr && reference.begin < previous->end)
+        continue;
+      result.push(DeclarationReference{
+          .begin = usize(reference.begin),
+          .end = usize(reference.end),
+          .semantic_identity = as_rstd(reference.semantic_identity),
+      });
+      previous = &reference;
+    }
+    return result;
+  }
+
+private:
+  auto traverse(clang::TypeLoc location) -> void {
+    if (location.isNull())
+      return;
+    if (auto value = location.getAs<clang::TagTypeLoc>())
+      record(*value.getDecl(), value.getNameLoc());
+    if (auto value = location.getAs<clang::TypedefTypeLoc>())
+      record(*value.getDecl(), value.getNameLoc());
+    if (auto value = location.getAs<clang::UsingTypeLoc>())
+      record(*value.getDecl(), value.getNameLoc());
+    if (auto value = location.getAs<clang::TemplateSpecializationTypeLoc>()) {
+      const auto *declaration =
+          value.getTypePtr()->getTemplateName().getAsTemplateDecl(
+              /*IgnoreDeduced=*/true);
+      if (declaration != nullptr &&
+          !llvm::isa<clang::TemplateTemplateParmDecl>(declaration)) {
+        record(*declaration, value.getTemplateNameLoc());
+      }
+      for (unsigned index = 0; index < value.getNumArgs(); ++index) {
+        auto argument = value.getArgLoc(index);
+        if (const auto *information = argument.getTypeSourceInfo())
+          traverse(information->getTypeLoc());
+      }
+    }
+    if (auto value =
+            location.getAs<clang::DeducedTemplateSpecializationTypeLoc>()) {
+      const auto *declaration =
+          value.getTypePtr()->getTemplateName().getAsTemplateDecl(
+              /*IgnoreDeduced=*/true);
+      if (declaration != nullptr &&
+          !llvm::isa<clang::TemplateTemplateParmDecl>(declaration)) {
+        record(*declaration, value.getTemplateNameLoc());
+      }
+    }
+    if (auto function = location.getAs<clang::FunctionTypeLoc>()) {
+      traverse(function.getReturnLoc());
+      for (auto *parameter : function.getParams()) {
+        if (parameter != nullptr && parameter->getTypeSourceInfo() != nullptr)
+          traverse(parameter->getTypeSourceInfo()->getTypeLoc());
+      }
+      return;
+    }
+    auto next = location.getNextTypeLoc();
+    if (!next.isNull())
+      traverse(next);
+  }
+
+  auto record(const clang::NamedDecl &declaration,
+              clang::SourceLocation location) -> void {
+    if (location.isInvalid() || location.isMacroID())
+      return;
+    auto spelling = manager_->getSpellingLoc(location);
+    if (spelling.isInvalid())
+      return;
+    auto decomposed = manager_->getDecomposedSpellingLoc(spelling);
+    if (decomposed.first != begin_.first || decomposed.second < begin_.second)
+      return;
+    clang::Token token;
+    if (clang::Lexer::getRawToken(spelling, token, *manager_, *language_,
+                                  /*IgnoreWhiteSpace=*/true) ||
+        (!token.is(clang::tok::identifier) &&
+         !token.is(clang::tok::raw_identifier))) {
+      return;
+    }
+    auto begin = static_cast<size_t>(decomposed.second - begin_.second);
+    auto end = begin + token.getLength();
+    if (begin >= end || end > declaration_size_)
+      return;
+    llvm::SmallVector<char, 128> usr;
+    if (clang::index::generateUSRForDecl(&declaration, usr))
+      return;
+    references_.push_back(PendingDeclarationReference{
+        .begin = begin,
+        .end = end,
+        .semantic_identity = std::string(usr.data(), usr.size()),
+    });
+  }
+
+  const clang::SourceManager *manager_{};
+  const clang::LangOptions *language_{};
+  std::pair<clang::FileID, unsigned> begin_;
+  size_t declaration_size_{};
+  std::vector<PendingDeclarationReference> references_;
+};
+
+auto scope_declaration_text(const clang::NamedDecl &declaration,
+                            const clang::ASTContext &context)
+    -> Option<DeclarationText> {
+  const auto *function = llvm::dyn_cast<clang::FunctionDecl>(&declaration);
+  if (function == nullptr || !is_scope_declaration(declaration))
+    return None();
+  const auto &manager = context.getSourceManager();
+  auto begin = printable_declaration(declaration).getBeginLoc();
+  auto end = printable_declaration(declaration).getEndLoc();
+  if (begin.isInvalid() || end.isInvalid() || begin.isMacroID() ||
+      end.isMacroID()) {
+    return None();
+  }
+  auto body_begin = clang::SourceLocation{};
+  if (function->doesThisDeclarationHaveABody()) {
+    if (!llvm::isa<clang::CXXConstructorDecl>(function)) {
+      const auto *body = function->getBody();
+      if (body == nullptr || body->getBeginLoc().isInvalid() ||
+          body->getBeginLoc().isMacroID()) {
+        return None();
+      }
+      body_begin = body->getBeginLoc();
+    }
+    auto function_type = function->getFunctionTypeLoc();
+    if (function_type.isNull() ||
+        function_type.getLocalRangeEnd().isInvalid() ||
+        function_type.getLocalRangeEnd().isMacroID()) {
+      return None();
+    }
+    end = function_type.getLocalRangeEnd();
+    if (const auto &constraint = function->getTrailingRequiresClause();
+        constraint && constraint.ConstraintExpr != nullptr) {
+      auto constraint_end = constraint.ConstraintExpr->getEndLoc();
+      if (constraint_end.isValid() && !constraint_end.isMacroID() &&
+          manager.isBeforeInTranslationUnit(end, constraint_end)) {
+        end = constraint_end;
+      }
+    }
+  }
+  begin = manager.getSpellingLoc(begin);
+  end = manager.getSpellingLoc(end);
+  auto begin_location = manager.getDecomposedSpellingLoc(begin);
+  auto end_location = manager.getDecomposedSpellingLoc(end);
+  if (begin_location.first != end_location.first ||
+      end_location.second < begin_location.second) {
+    return None();
+  }
+  auto after_end = body_begin.isValid()
+                       ? manager.getSpellingLoc(body_begin)
+                       : clang::Lexer::getLocForEndOfToken(
+                             end, 0, manager, context.getLangOpts());
+  if (after_end.isInvalid())
+    return None();
+  auto source = clang::Lexer::getSourceText(
+      clang::CharSourceRange::getCharRange(begin, after_end), manager,
+      context.getLangOpts());
+  if (source.empty())
+    return None();
+  while (!source.empty() && (source.back() == ' ' || source.back() == '\t' ||
+                             source.back() == '\n' || source.back() == '\r')) {
+    source = source.drop_back();
+  }
+  auto text = as_rstd(source);
+  if (!text.as_str().ends_with(";"_str)) {
+    text.push_ascii(';');
+  }
+  auto walker = DeclarationReferenceWalker(manager, context.getLangOpts(),
+                                           begin, source.size());
+  walker.traverse(*function);
+  auto result = DeclarationText{rstd::move(text)};
+  result.references = walker.finish();
+  return Some(rstd::move(result));
+}
+
 auto namespace_name(const clang::NamedDecl &declaration) -> String {
   std::vector<std::string> names;
   auto context = declaration.getDeclContext();
@@ -618,6 +833,13 @@ private:
     }
 
     auto index = unit_->declarations.len();
+    auto signature =
+        DeclarationText{declaration_signature(declaration, *context_, false)};
+    auto scope_signature =
+        DeclarationText{declaration_signature(declaration, *context_, true)};
+    auto source_scope = scope_declaration_text(declaration, *context_);
+    if (source_scope.is_some())
+      scope_signature = rstd::move(*source_scope);
     unit_->declarations.push(DeclarationOutline{
         .semantic_identity = semantic_identity(declaration, *manager_),
         .kind = *kind,
@@ -625,8 +847,8 @@ private:
         .qualified_name =
             qualified_name.empty() ? rstd::move(name) : as_rstd(qualified_name),
         .namespace_name = namespace_name(declaration),
-        .signature = declaration_signature(declaration, *context_, false),
-        .scope_signature = declaration_signature(declaration, *context_, true),
+        .signature = rstd::move(signature),
+        .scope_signature = rstd::move(scope_signature),
         .record_keyword = record_keyword(declaration),
         .record_header = record_header(declaration, *context_),
         .is_definition = declaration_definition(declaration),
@@ -799,6 +1021,20 @@ auto encode_span(const DocumentationSpan &span) -> llvm::json::Object {
   };
 }
 
+auto encode_declaration_references(const DeclarationText &declaration)
+    -> llvm::json::Array {
+  auto result = llvm::json::Array{};
+  for (const auto &reference : declaration.references) {
+    result.push_back(llvm::json::Object{
+        {"begin", static_cast<int64_t>(reference.begin.to_primitive())},
+        {"end", static_cast<int64_t>(reference.end.to_primitive())},
+        {"semantic_identity", as_std(reference.semantic_identity.as_str())},
+        {"kind", "type"},
+    });
+  }
+  return result;
+}
+
 auto access_name(DeclarationAccess access) -> llvm::StringRef {
   switch (access) {
   case DeclarationAccess::Public:
@@ -823,6 +1059,10 @@ auto encode_response(const ExtractionRequest &request,
         {"namespace", as_std(declaration.namespace_name.as_str())},
         {"signature", as_std(declaration.signature.as_str())},
         {"scope_signature", as_std(declaration.scope_signature.as_str())},
+        {"signature_references",
+         encode_declaration_references(declaration.signature)},
+        {"scope_signature_references",
+         encode_declaration_references(declaration.scope_signature)},
         {"is_definition", declaration.is_definition},
         {"is_scope_declaration", declaration.is_scope_declaration},
         {"exported", declaration.exported},
@@ -974,6 +1214,37 @@ auto decode_access(llvm::StringRef value) -> Option<DeclarationAccess> {
   return None();
 }
 
+auto decode_declaration_text(const llvm::json::Object &object,
+                             llvm::StringRef text_name,
+                             llvm::StringRef references_name, ref<str> context)
+    -> Result<DeclarationText, String> {
+  auto result =
+      DeclarationText{rstd_try(required_string(object, text_name, context))};
+  const auto *references = object.getArray(references_name);
+  if (references == nullptr)
+    return Ok(rstd::move(result));
+  for (const auto &item : *references) {
+    auto reference = rstd_try(json_object(item, context));
+    auto begin = rstd_try(required_integer(*reference, "begin", context));
+    auto end = rstd_try(required_integer(*reference, "end", context));
+    auto identity =
+        rstd_try(required_string(*reference, "semantic_identity", context));
+    auto kind = rstd_try(required_string(*reference, "kind", context));
+    if (kind.as_str() != "type"_str)
+      return failure<DeclarationText>(rstd::format(
+          "{} has unsupported reference kind '{}'", context, kind.as_str()));
+    result.references.push(DeclarationReference{
+        .begin = begin,
+        .end = end,
+        .semantic_identity = rstd::move(identity),
+    });
+  }
+  auto valid = result.validate(context);
+  if (valid.is_err())
+    return failure<DeclarationText>(rstd::move(valid).unwrap_err());
+  return Ok(rstd::move(result));
+}
+
 auto decode_unit(ref<rstd::path::Path> response_path, ref<str> expected_digest)
     -> Result<DocumentationUnit, String> {
   auto value = rstd_try(
@@ -1055,10 +1326,12 @@ auto decode_unit(ref<rstd::path::Path> response_path, ref<str> expected_digest)
             rstd_try(optional_string(*object, "namespace",
                                      "extract response declaration"_str))
                 .unwrap_or(String::make()),
-        .signature = rstd_try(required_string(
-            *object, "signature", "extract response declaration"_str)),
-        .scope_signature = rstd_try(required_string(
-            *object, "scope_signature", "extract response declaration"_str)),
+        .signature = rstd_try(decode_declaration_text(
+            *object, "signature", "signature_references",
+            "extract response declaration signature"_str)),
+        .scope_signature = rstd_try(decode_declaration_text(
+            *object, "scope_signature", "scope_signature_references",
+            "extract response declaration scope signature"_str)),
         .record_keyword = rstd_try(optional_string(
             *object, "record_keyword", "extract response declaration"_str)),
         .record_header = rstd_try(optional_string(
@@ -1119,7 +1392,7 @@ auto execute_generate(ref<rstd::path::Path> manifest_path)
   auto root = rstd_try(json_object(value, "site manifest"_str));
   rstd_try(validate_header(*root, "litodoc-site", 1, "site manifest"_str));
   if (rstd_try(required_integer(*root, "data_api", "site manifest"_str)) !=
-      usize(3))
+      usize(4))
     return failure<Summary>("site manifest requires unsupported data API"_str);
   if (rstd_try(required_integer(*root, "template_api", "site manifest"_str)) !=
       usize(1))
@@ -1205,7 +1478,7 @@ auto capabilities() -> String {
   auto site_versions = llvm::json::Array{};
   site_versions.push_back(1);
   auto data_versions = llvm::json::Array{};
-  data_versions.push_back(3);
+  data_versions.push_back(4);
   auto features = llvm::json::Array{};
   features.push_back("embedded-default-frontend");
   features.push_back("package-publications-v1");

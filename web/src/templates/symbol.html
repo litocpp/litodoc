@@ -31,7 +31,7 @@
 <section class="api-section" id="methods">
   <div class="section-heading"><span>Methods</span><span>{{symbol.method_count}}</span></div>
   <div class="record-members method-details">{{#each methods}}<details class="record-member method-detail" id="{{id}}" open>
-    <summary class="member-summary"><code>{{signature}}</code></summary>
+    <summary class="member-summary"><code>{{#each signature_fragments}}{{#if has_href}}<a class="declaration-reference" href="{{href}}">{{text}}</a>{{/if}}{{#if plain}}{{text}}{{/if}}{{/each}}</code></summary>
     <div class="member-body">
       {{#if has_documentation}}<lito-doc-prose><div class="member-documentation prose">{{{documentation}}}</div></lito-doc-prose>{{/if}}
       <footer class="member-source"><span>Declared in</span><a href="{{source_href}}"><code>{{source_path}}:{{source_line}}</code></a></footer>

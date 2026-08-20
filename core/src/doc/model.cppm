@@ -35,6 +35,10 @@ enum class SymbolPlacement {
   RecordMember,
 };
 
+enum class DeclarationReferenceKind {
+  Type,
+};
+
 enum class DocumentationSeverity {
   Warning,
   Error,
@@ -54,14 +58,61 @@ struct DocumentationComment {
   DocumentationSpan span;
 };
 
+struct DeclarationReference {
+  usize begin{};
+  usize end{};
+  String semantic_identity;
+  DeclarationReferenceKind kind{DeclarationReferenceKind::Type};
+};
+
+struct DeclarationText {
+  String text;
+  Vec<DeclarationReference> references;
+
+  DeclarationText() = default;
+  DeclarationText(String value) : text(rstd::move(value)) {}
+
+  auto as_str() const -> ref<str> { return text.as_str(); }
+
+  auto clone() const -> DeclarationText {
+    auto result = DeclarationText{text.clone()};
+    result.references.reserve(references.len());
+    for (const auto &reference : references) {
+      result.references.push(DeclarationReference{
+          .begin = reference.begin,
+          .end = reference.end,
+          .semantic_identity = reference.semantic_identity.clone(),
+          .kind = reference.kind,
+      });
+    }
+    return result;
+  }
+
+  auto validate(ref<str> context) const -> Result<empty, String> {
+    auto previous_end = usize{};
+    for (const auto &reference : references) {
+      if (reference.begin >= reference.end || reference.end > text.len() ||
+          reference.begin < previous_end ||
+          !text.as_str().is_char_boundary(reference.begin) ||
+          !text.as_str().is_char_boundary(reference.end) ||
+          reference.semantic_identity.is_empty()) {
+        return Err(rstd::format("{} has invalid declaration reference [{}, {})",
+                                context, reference.begin, reference.end));
+      }
+      previous_end = reference.end;
+    }
+    return Ok(empty{});
+  }
+};
+
 struct DeclarationOutline {
   String semantic_identity;
   DeclarationKind kind{DeclarationKind::Variable};
   String name;
   String qualified_name;
   String namespace_name;
-  String signature;
-  String scope_signature;
+  DeclarationText signature;
+  DeclarationText scope_signature;
   Option<String> record_keyword;
   Option<String> record_header;
   bool is_definition{false};
@@ -143,6 +194,7 @@ struct Source {
 
 struct Symbol {
   String key;
+  String semantic_identity;
   String page;
   String module;
   String module_page;
@@ -150,8 +202,8 @@ struct Symbol {
   String name;
   String qualified_name;
   String namespace_name;
-  String signature;
-  String scope_signature;
+  DeclarationText signature;
+  DeclarationText scope_signature;
   Option<String> record_keyword;
   Option<String> record_header;
   bool is_definition{false};

@@ -61,6 +61,25 @@ auto json_usize(usize value) -> Json {
       u64(static_cast<rstd::uint64_t>(value.to_primitive()))));
 }
 
+auto encode_declaration_text(const DeclarationText &declaration) -> Json {
+  auto object = JsonMap::make();
+  object.insert(String::make("text"_str),
+                json_string(declaration.text.as_str()));
+  auto references = JsonArray::make();
+  for (const auto &reference : declaration.references) {
+    auto item = JsonMap::make();
+    item.insert(String::make("begin"_str), json_usize(reference.begin));
+    item.insert(String::make("end"_str), json_usize(reference.end));
+    item.insert(String::make("semantic-identity"_str),
+                json_string(reference.semantic_identity.as_str()));
+    item.insert(String::make("kind"_str), json_string("type"_str));
+    references.push(Json::Object(rstd::move(item)));
+  }
+  object.insert(String::make("references"_str),
+                Json::Array(rstd::move(references)));
+  return Json::Object(rstd::move(object));
+}
+
 auto json_text(const Json &value) -> String {
   auto result = rstd::json::to_string(
       value, rstd::json::FormatOptions{.pretty = true, .indent = usize(2)});
@@ -139,14 +158,14 @@ auto encode_source_fragment(ref<str> package, const Source &source) -> Json {
 auto encode_package(const Package &package) -> Json {
   auto root = JsonMap::make();
   root.insert(String::make("format"_str), json_string("lito-doc"_str));
-  root.insert(String::make("version"_str), json_usize(usize(3)));
+  root.insert(String::make("version"_str), json_usize(usize(4)));
   auto generator = JsonMap::make();
   generator.insert(String::make("frontend"_str),
                    json_string("lito-native-frontend-v1"_str));
   generator.insert(String::make("parser"_str),
                    json_string("lito-doc-outline-v1"_str));
   generator.insert(String::make("dataset"_str),
-                   json_string("lito-doc-data-v3"_str));
+                   json_string("lito-doc-data-v4"_str));
   generator.insert(String::make("toolchain-version"_str),
                    json_string(package.toolchain_version.as_str()));
   generator.insert(String::make("toolchain-target"_str),
@@ -188,6 +207,8 @@ auto encode_package(const Package &package) -> Json {
   for (const auto &symbol : package.symbols) {
     auto object = JsonMap::make();
     object.insert(String::make("key"_str), json_string(symbol.key.as_str()));
+    object.insert(String::make("semantic-identity"_str),
+                  json_string(symbol.semantic_identity.as_str()));
     object.insert(String::make("page"_str), json_string(symbol.page.as_str()));
     object.insert(String::make("module"_str),
                   json_string(symbol.module.as_str()));
@@ -200,10 +221,10 @@ auto encode_package(const Package &package) -> Json {
                   json_string(symbol.qualified_name.as_str()));
     object.insert(String::make("namespace"_str),
                   json_string(symbol.namespace_name.as_str()));
-    object.insert(String::make("signature"_str),
-                  json_string(symbol.signature.as_str()));
-    object.insert(String::make("scope-signature"_str),
-                  json_string(symbol.scope_signature.as_str()));
+    object.insert(String::make("declaration"_str),
+                  encode_declaration_text(symbol.signature));
+    object.insert(String::make("scope-declaration"_str),
+                  encode_declaration_text(symbol.scope_signature));
     object.insert(String::make("record-keyword"_str),
                   symbol.record_keyword.is_some()
                       ? json_string(symbol.record_keyword->as_str())
@@ -379,6 +400,43 @@ auto required_array(const Json &value, ref<str> name, ref<str> context)
   return Ok(*array);
 }
 
+auto decode_declaration_text(const Json &value, ref<str> context)
+    -> Result<DeclarationText, String> {
+  auto text = required_string(value, "text"_str, context);
+  auto references = required_array(value, "references"_str, context);
+  if (text.is_err())
+    return Err(rstd::move(text).unwrap_err());
+  if (references.is_err())
+    return Err(rstd::move(references).unwrap_err());
+  auto result = DeclarationText{rstd::move(text).unwrap()};
+  for (const auto &item : **references) {
+    auto begin = required_usize(item, "begin"_str, context);
+    auto end = required_usize(item, "end"_str, context);
+    auto identity = required_string(item, "semantic-identity"_str, context);
+    auto kind = required_string(item, "kind"_str, context);
+    if (begin.is_err())
+      return Err(rstd::move(begin).unwrap_err());
+    if (end.is_err())
+      return Err(rstd::move(end).unwrap_err());
+    if (identity.is_err())
+      return Err(rstd::move(identity).unwrap_err());
+    if (kind.is_err())
+      return Err(rstd::move(kind).unwrap_err());
+    if (kind->as_str() != "type"_str)
+      return Err(rstd::format("{} has unsupported reference kind '{}'", context,
+                              kind->as_str()));
+    result.references.push(DeclarationReference{
+        .begin = *begin,
+        .end = *end,
+        .semantic_identity = rstd::move(identity).unwrap(),
+    });
+  }
+  auto valid = result.validate(context);
+  if (valid.is_err())
+    return Err(rstd::move(valid).unwrap_err());
+  return Ok(rstd::move(result));
+}
+
 auto expect_header(const Json &value, ref<str> format, usize version,
                    ref<str> context) -> Result<empty, String> {
   auto actual_format = required_string(value, "format"_str, context);
@@ -525,7 +583,7 @@ auto decode_package(const Json &document, Option<ref<rstd::path::Path>> root,
                     Option<ref<JsonArray>> manifest_sources)
     -> Result<Package, String> {
   auto header =
-      expect_header(document, "lito-doc"_str, usize(3), "doc package"_str);
+      expect_header(document, "lito-doc"_str, usize(4), "doc package"_str);
   if (header.is_err())
     return Err(rstd::move(header).unwrap_err());
   auto generator =
@@ -607,6 +665,8 @@ auto decode_package(const Json &document, Option<ref<rstd::path::Path>> root,
     return Err(rstd::move(symbols).unwrap_err());
   for (const auto &value : **symbols) {
     auto key = required_string(value, "key"_str, "doc symbol"_str);
+    auto semantic_identity =
+        required_string(value, "semantic-identity"_str, "doc symbol"_str);
     auto page = required_string(value, "page"_str, "doc symbol"_str);
     auto module = required_string(value, "module"_str, "doc symbol"_str);
     auto module_page =
@@ -617,9 +677,10 @@ auto decode_package(const Json &document, Option<ref<rstd::path::Path>> root,
         required_string(value, "qualified-name"_str, "doc symbol"_str);
     auto namespace_name =
         defaulted_string(value, "namespace"_str, "doc symbol"_str);
-    auto signature = required_string(value, "signature"_str, "doc symbol"_str);
-    auto scope_signature =
-        required_string(value, "scope-signature"_str, "doc symbol"_str);
+    auto declaration =
+        required_member(value, "declaration"_str, "doc symbol"_str);
+    auto scope_declaration =
+        required_member(value, "scope-declaration"_str, "doc symbol"_str);
     auto record_keyword =
         optional_string(value, "record-keyword"_str, "doc symbol"_str);
     auto record_header =
@@ -637,6 +698,8 @@ auto decode_package(const Json &document, Option<ref<rstd::path::Path>> root,
     auto source = required_member(value, "source"_str, "doc symbol"_str);
     if (key.is_err())
       return Err(rstd::move(key).unwrap_err());
+    if (semantic_identity.is_err())
+      return Err(rstd::move(semantic_identity).unwrap_err());
     if (page.is_err())
       return Err(rstd::move(page).unwrap_err());
     if (module.is_err())
@@ -651,6 +714,14 @@ auto decode_package(const Json &document, Option<ref<rstd::path::Path>> root,
       return Err(rstd::move(qualified_name).unwrap_err());
     if (namespace_name.is_err())
       return Err(rstd::move(namespace_name).unwrap_err());
+    if (declaration.is_err())
+      return Err(rstd::move(declaration).unwrap_err());
+    if (scope_declaration.is_err())
+      return Err(rstd::move(scope_declaration).unwrap_err());
+    auto signature =
+        decode_declaration_text(**declaration, "doc symbol declaration"_str);
+    auto scope_signature = decode_declaration_text(
+        **scope_declaration, "doc symbol scope declaration"_str);
     if (signature.is_err())
       return Err(rstd::move(signature).unwrap_err());
     if (scope_signature.is_err())
@@ -715,6 +786,7 @@ auto decode_package(const Json &document, Option<ref<rstd::path::Path>> root,
       return Err(rstd::move(source_end_column).unwrap_err());
     package.symbols.push(Symbol{
         .key = rstd::move(key).unwrap(),
+        .semantic_identity = rstd::move(semantic_identity).unwrap(),
         .page = rstd::move(page).unwrap(),
         .module = rstd::move(module).unwrap(),
         .module_page = rstd::move(module_page).unwrap(),
@@ -903,9 +975,9 @@ auto dataset_manifest_json(const Dataset &dataset) -> String {
   manifest.insert(String::make("format"_str),
                   json_string("lito-doc-dataset"_str));
   manifest.insert(String::make("version"_str), json_usize(usize(1)));
-  manifest.insert(String::make("data-api"_str), json_usize(usize(3)));
+  manifest.insert(String::make("data-api"_str), json_usize(usize(4)));
   manifest.insert(String::make("generator"_str),
-                  json_string("lito-doc-data-v3"_str));
+                  json_string("lito-doc-data-v4"_str));
   manifest.insert(String::make("site"_str), Json::Object(rstd::move(site)));
   manifest.insert(String::make("packages"_str),
                   Json::Array(rstd::move(manifest_packages)));
@@ -948,7 +1020,7 @@ auto load_dataset(ref<rstd::path::Path> root) -> Result<Dataset, String> {
       required_usize(*manifest, "data-api"_str, "doc dataset manifest"_str);
   if (data_api.is_err())
     return Err(rstd::move(data_api).unwrap_err());
-  if (*data_api != usize(3))
+  if (*data_api != usize(4))
     return Err(rstd::format("unsupported doc data API {}", *data_api));
   auto generator =
       required_string(*manifest, "generator"_str, "doc dataset manifest"_str);
@@ -958,7 +1030,7 @@ auto load_dataset(ref<rstd::path::Path> root) -> Result<Dataset, String> {
     return Err(rstd::move(generator).unwrap_err());
   if (site.is_err())
     return Err(rstd::move(site).unwrap_err());
-  if (generator->as_str() != "lito-doc-data-v3"_str)
+  if (generator->as_str() != "lito-doc-data-v4"_str)
     return Err(rstd::format("unsupported doc data generator '{}'",
                             generator->as_str()));
   auto title = required_string(**site, "title"_str, "doc dataset site"_str);

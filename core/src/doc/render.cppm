@@ -150,6 +150,125 @@ struct PackageRenderIndex {
       children;
 };
 
+struct DeclarationTarget {
+  usize package{};
+  usize symbol{};
+};
+
+struct DeclarationTargetIndex {
+  rstd::collections::BTreeMap<String, Vec<DeclarationTarget>> targets;
+};
+
+auto declaration_target_index(const Dataset &dataset)
+    -> DeclarationTargetIndex {
+  auto result = DeclarationTargetIndex{
+      .targets =
+          rstd::collections::BTreeMap<String, Vec<DeclarationTarget>>::make(),
+  };
+  for (auto package = usize{}; package < dataset.packages.len(); ++package) {
+    for (auto symbol = usize{};
+         symbol < dataset.packages[package].symbols.len(); ++symbol) {
+      const auto &candidate = dataset.packages[package].symbols[symbol];
+      if (candidate.placement != SymbolPlacement::Standalone ||
+          candidate.semantic_identity.is_empty())
+        continue;
+      auto targets =
+          result.targets.get_mut(candidate.semantic_identity.as_str());
+      if (targets.is_none()) {
+        auto values = Vec<DeclarationTarget>::make();
+        values.push(DeclarationTarget{.package = package, .symbol = symbol});
+        result.targets.insert(candidate.semantic_identity.clone(),
+                              rstd::move(values));
+      } else {
+        (**targets).push(
+            DeclarationTarget{.package = package, .symbol = symbol});
+      }
+    }
+  }
+  return result;
+}
+
+auto resolve_declaration_target(const Dataset &dataset,
+                                const DeclarationTargetIndex &index,
+                                const Package &package, ref<str> identity,
+                                RenderLayout layout)
+    -> Option<DeclarationTarget> {
+  auto targets = index.targets.get(identity);
+  if (targets.is_none())
+    return None();
+  auto has_local = false;
+  auto local = DeclarationTarget{};
+  for (const auto &target : **targets) {
+    if (dataset.packages[target.package].name.as_str() != package.name.as_str())
+      continue;
+    if (has_local)
+      return None();
+    local = DeclarationTarget{
+        .package = target.package,
+        .symbol = target.symbol,
+    };
+    has_local = true;
+  }
+  if (has_local)
+    return Some(rstd::move(local));
+  if (layout == RenderLayout::Workspace && (**targets).len() == usize(1))
+    return Some(DeclarationTarget{
+        .package = (**targets)[usize{}].package,
+        .symbol = (**targets)[usize{}].symbol,
+    });
+  return None();
+}
+
+auto declaration_target_href(const Dataset &dataset, const Package &package,
+                             DeclarationTarget target, RenderLayout layout)
+    -> Option<String> {
+  const auto &target_package = dataset.packages[target.package];
+  const auto &target_symbol = target_package.symbols[target.symbol];
+  if (target_package.name.as_str() == package.name.as_str())
+    return Some(rstd::format("../{}", symbol_href(target_symbol)));
+  if (layout != RenderLayout::Workspace)
+    return None();
+  return Some(rstd::format("../../{}/{}", target_package.name.as_str(),
+                           symbol_href(target_symbol)));
+}
+
+auto declaration_fragments(const Dataset &dataset,
+                           const DeclarationTargetIndex &index,
+                           const Package &package,
+                           const DeclarationText &declaration,
+                           RenderLayout layout) -> TemplateValue {
+  auto result = TemplateValue::array_value();
+  auto append = [&result](ref<str> text, Option<String> href) {
+    if (text.is_empty())
+      return;
+    auto item = TemplateValue::object_value();
+    item.insert("text"_str, template_text(text));
+    item.insert("has_href"_str, TemplateValue::boolean_value(href.is_some()));
+    item.insert("plain"_str, TemplateValue::boolean_value(href.is_none()));
+    item.insert("href"_str,
+                template_text(href.is_some() ? href->as_str() : ""_str));
+    result.array.push(rstd::move(item));
+  };
+  auto position = usize{};
+  for (const auto &reference : declaration.references) {
+    append(declaration.text.as_str().get(position, reference.begin).unwrap(),
+           None());
+    auto target = resolve_declaration_target(
+        dataset, index, package, reference.semantic_identity.as_str(), layout);
+    auto href = target.is_some()
+                    ? declaration_target_href(dataset, package, *target, layout)
+                    : Option<String>{};
+    append(
+        declaration.text.as_str().get(reference.begin, reference.end).unwrap(),
+        rstd::move(href));
+    position = reference.end;
+  }
+  append(
+      declaration.text.as_str().get(position, declaration.text.len()).unwrap(),
+      None());
+  return result;
+}
+
 auto package_render_index(const Package &package) -> PackageRenderIndex {
   auto index = PackageRenderIndex{
       .symbols = rstd::collections::BTreeMap<String, usize>::make(),
@@ -194,11 +313,17 @@ auto declaration_link_value(const Symbol &symbol, ref<str> href_prefix)
   return item;
 }
 
-auto record_member_value(const Symbol &symbol) -> TemplateValue {
+auto record_member_value(const Dataset &dataset,
+                         const DeclarationTargetIndex &targets,
+                         const Package &package, const Symbol &symbol,
+                         RenderLayout layout) -> TemplateValue {
   auto item = TemplateValue::object_value();
   item.insert("id"_str, template_text(symbol.anchor->as_str()));
   item.insert("name"_str, template_text(symbol.name.as_str()));
   item.insert("signature"_str, template_text(symbol.scope_signature.as_str()));
+  item.insert("signature_fragments"_str,
+              declaration_fragments(dataset, targets, package,
+                                    symbol.scope_signature, layout));
   item.insert("has_documentation"_str,
               TemplateValue::boolean_value(symbol.comment.is_some()));
   item.insert("documentation"_str,
@@ -542,7 +667,8 @@ auto module_context(const Dataset &dataset, const Package &package,
 }
 
 auto symbol_context(const Dataset &dataset, const Package &package,
-                    const PackageRenderIndex &index, const Symbol &symbol,
+                    const PackageRenderIndex &index,
+                    const DeclarationTargetIndex &targets, const Symbol &symbol,
                     RenderLayout layout = RenderLayout::Workspace)
     -> TemplateValue {
   auto asset_prefix =
@@ -619,7 +745,8 @@ auto symbol_context(const Dataset &dataset, const Package &package,
         const auto &candidate = package.symbols[**position];
         switch (candidate.kind) {
         case DeclarationKind::Function:
-          methods.array.push(record_member_value(candidate));
+          methods.array.push(record_member_value(dataset, targets, package,
+                                                 candidate, layout));
           ++method_count;
           break;
         case DeclarationKind::Record:
@@ -630,7 +757,8 @@ auto symbol_context(const Dataset &dataset, const Package &package,
           ++member_type_count;
           break;
         case DeclarationKind::Field:
-          fields.array.push(record_member_value(candidate));
+          fields.array.push(record_member_value(dataset, targets, package,
+                                                candidate, layout));
           field_declarations.push_str(symbol.record_keyword.is_some() &&
                                               symbol.record_keyword->as_str() ==
                                                   "class"_str
@@ -762,7 +890,7 @@ auto site_manifest_json(const FrontendBundle &frontend, ref<str> data_digest)
   object.insert(String::make("version"_str),
                 RenderJson::Number(rstd::json::Number::from_u64(u64(1))));
   object.insert(String::make("data-api"_str),
-                RenderJson::Number(rstd::json::Number::from_u64(u64(3))));
+                RenderJson::Number(rstd::json::Number::from_u64(u64(4))));
   object.insert(String::make("frontend"_str),
                 RenderJson::String(frontend.identity.clone()));
   object.insert(String::make("frontend-digest"_str),
@@ -805,6 +933,7 @@ auto render_package_site(ref<rstd::path::Path> root, const Dataset &dataset,
                            &files);
   if (written.is_err())
     return written;
+  auto target_index = declaration_target_index(dataset);
   for (const auto &module : package.modules) {
     auto context =
         module_context(dataset, package, module, RenderLayout::Package);
@@ -816,8 +945,8 @@ auto render_package_site(ref<rstd::path::Path> root, const Dataset &dataset,
   for (const auto &symbol : package.symbols) {
     if (symbol.placement != SymbolPlacement::Standalone)
       continue;
-    auto context = symbol_context(dataset, package, render_index, symbol,
-                                  RenderLayout::Package);
+    auto context = symbol_context(dataset, package, render_index, target_index,
+                                  symbol, RenderLayout::Package);
     written = render_page(root, symbol.page.as_str(), frontend,
                           frontend.symbol_template.as_str(), context, &files);
     if (written.is_err())
@@ -858,6 +987,7 @@ auto render_site(ref<rstd::path::Path> root, const Dataset &dataset,
                         frontend.root_template.as_str(), root_value);
   if (written.is_err())
     return written;
+  auto target_index = declaration_target_index(dataset);
   for (const auto &package : dataset.packages) {
     auto render_index = package_render_index(package);
     auto prefix = rstd::format("package/{}/", package.name.as_str());
@@ -884,7 +1014,8 @@ auto render_site(ref<rstd::path::Path> root, const Dataset &dataset,
     for (const auto &symbol : package.symbols) {
       if (symbol.placement != SymbolPlacement::Standalone)
         continue;
-      auto context = symbol_context(dataset, package, render_index, symbol);
+      auto context =
+          symbol_context(dataset, package, render_index, target_index, symbol);
       written = render_page(
           root,
           rstd::format("{}{}", prefix.as_str(), symbol.page.as_str()).as_str(),

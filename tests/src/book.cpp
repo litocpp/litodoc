@@ -247,7 +247,7 @@ TEST(Book, PreservesVersionOneApiFrontendCompatibility) {
                          "  \"format\": \"lito-doc-frontend\",\n"
                          "  \"version\": 1,\n"
                          "  \"template-api\": 1,\n"
-                         "  \"data-api\": 3,\n"
+                         "  \"data-api\": 4,\n"
                          "  \"templates\": {\n"
                          "    \"root\": \"root.html\",\n"
                          "    \"package\": \"package.html\",\n"

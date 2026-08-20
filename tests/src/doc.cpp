@@ -169,14 +169,20 @@ auto record_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
       .kind = lito::doc::DeclarationKind::Function,
       .name = String::make("get"_str),
       .qualified_name = String::make("Box::get"_str),
-      .signature = String::make("auto Box::get() && -> T;"_str),
-      .scope_signature = String::make("auto get() && -> T;"_str),
+      .signature = String::make("auto Box::get() && -> Box<T>;"_str),
+      .scope_signature = String::make("auto get() && -> Box<T>;"_str),
       .is_scope_declaration = true,
       .exported = true,
       .parent = Some(usize(0)),
       .spelling_span = source_span(source, usize(11)),
       .expansion_span = source_span(source, usize(11)),
   });
+  unit.declarations[usize(4)].scope_signature.references.push(
+      lito::doc::DeclarationReference{
+          .begin = usize(17),
+          .end = usize(20),
+          .semantic_identity = String::make("records::Box"_str),
+      });
   unit.declarations.push(lito::doc::DeclarationOutline{
       .semantic_identity = String::make("records::Box::Nested"_str),
       .kind = lito::doc::DeclarationKind::Record,
@@ -266,6 +272,30 @@ auto record_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
   package.units.push(rstd::move(unit));
   package.units.push(rstd::move(definition));
   return package;
+}
+
+auto symbol_page_containing(ref<rstd::path::Path> package_directory,
+                            ref<str> needle) -> Result<String, String> {
+  auto directory = PathBuf::from(package_directory)
+                       .join(PathBuf::from("symbol"_str).as_path());
+  auto opened = rstd::fs::read_dir(directory.as_path());
+  if (opened.is_err())
+    return Err(rstd::format("cannot enumerate '{}': {}", directory.as_path(),
+                            rstd::move(opened).unwrap_err()));
+  auto entries = rstd::move(opened).unwrap();
+  for (auto next = entries.next(); next.is_some(); next = entries.next()) {
+    auto entry = rstd::move(next).unwrap();
+    if (entry.is_err())
+      return Err(rstd::format("cannot enumerate '{}': {}", directory.as_path(),
+                              rstd::move(entry).unwrap_err()));
+    auto contents = rstd::fs::read_to_string(entry->path().as_path());
+    if (contents.is_err())
+      return Err(rstd::format("cannot read '{}': {}", entry->path().as_path(),
+                              rstd::move(contents).unwrap_err()));
+    if (contents->as_str().contains(needle))
+      return Ok(rstd::move(contents).unwrap());
+  }
+  return Err(rstd::format("cannot find symbol page containing '{}'", needle));
 }
 
 auto occurrences(ref<str> contents, ref<str> needle) -> usize {
@@ -417,8 +447,11 @@ TEST(DocPublication, InlinesRecordFunctionsAndFieldsOnTheRecordPage) {
       "template &lt;typename T&gt;\nclass Box {"_str));
   EXPECT_TRUE(record_html.as_str().contains("T value{};"_str));
   EXPECT_TRUE(record_html.as_str().contains("unsigned int flags : 3 = 1;"_str));
-  EXPECT_TRUE(
-      record_html.as_str().contains("auto get() &amp;&amp; -&gt; T;"_str));
+  EXPECT_TRUE(record_html.as_str().contains(
+      "auto get() &amp;&amp; -&gt; <a class=\"declaration-reference\""_str));
+  EXPECT_TRUE(record_html.as_str().contains(
+      "class=\"declaration-reference\" href=\"../symbol/"_str));
+  EXPECT_TRUE(record_html.as_str().contains("\">Box</a>&lt;T&gt;;"_str));
   EXPECT_TRUE(record_html.as_str().contains(
       "template &lt;typename U&gt;\n    requires Numeric&lt;U&gt;\n"
       "[[nodiscard]] constexpr auto get"_str));
@@ -438,4 +471,115 @@ TEST(DocPublication, InlinesRecordFunctionsAndFieldsOnTheRecordPage) {
   ASSERT_TRUE(search.is_ok());
   EXPECT_EQ(occurrences(search->as_str(), "#method-"_str), usize(2));
   EXPECT_EQ(occurrences(search->as_str(), "#field-"_str), usize(2));
+}
+
+TEST(DocPublication, RejectsInvalidDeclarationReferenceRanges) {
+  auto temporary = rstd::test::TempDir::make();
+  ASSERT_TRUE(temporary.is_ok());
+  auto root = temporary->path();
+  auto package = record_package(root);
+  package.units[usize{}]
+      .declarations[usize(4)]
+      .scope_signature.references[usize{}]
+      .end = usize(1024);
+  auto input = lito::doc::SiteInput{
+      .title = String::make("Invalid declaration reference"_str),
+      .output = child(root, "publication"_str),
+      .data_output = child(root, "data"_str),
+      .data_only = true,
+  };
+  input.packages.push(rstd::move(package));
+
+  auto generated = lito::doc::generate(rstd::move(input));
+  ASSERT_TRUE(generated.is_err());
+  EXPECT_TRUE(generated.unwrap_err().as_str().contains(
+      "invalid declaration reference [17, 1024)"_str));
+}
+
+TEST(DocPublication, ResolvesOnlyAvailableUnambiguousTypePages) {
+  auto temporary = rstd::test::TempDir::make();
+  ASSERT_TRUE(temporary.is_ok());
+  auto root = temporary->path();
+  auto owner_package = [root]() mutable {
+    auto package = record_package(root);
+    package.name = String::make("owner"_str);
+    package.source_identity = String::make("path+owner"_str);
+    auto &holder = package.units[usize{}].declarations[usize{}];
+    holder.semantic_identity = String::make("owner::Holder"_str);
+    holder.name = String::make("Holder"_str);
+    holder.qualified_name = String::make("Holder"_str);
+    holder.signature =
+        String::make("template <typename T>\nclass Holder {};"_str);
+    holder.scope_signature =
+        String::make("template <typename T>\nclass Holder {};"_str);
+    holder.record_header =
+        Some(String::make("template <typename T>\nclass Holder"_str));
+    return package;
+  };
+  auto target_package = [root](ref<str> name) mutable {
+    auto package = record_package(root);
+    package.name = String::make(name);
+    package.source_identity = rstd::format("path+{}", name);
+    return package;
+  };
+
+  auto frontend = lito::doc::web::load_default_frontend();
+  ASSERT_TRUE(frontend.is_ok());
+  auto workspace = lito::doc::SiteInput{
+      .title = String::make("Workspace links"_str),
+      .output = child(root, "workspace"_str),
+      .data_output = child(root, "workspace-data"_str),
+  };
+  workspace.packages.push(owner_package());
+  workspace.packages.push(target_package("target"_str));
+  auto generated = lito::doc::generate(rstd::move(workspace),
+                                       Some(rstd::move(frontend).unwrap()));
+  ASSERT_TRUE(generated.is_ok());
+  auto workspace_page =
+      symbol_page_containing(generated->packages[usize{}].directory.as_path(),
+                             "<h1 class=\"page-title\">Holder</h1>"_str);
+  ASSERT_TRUE(workspace_page.is_ok());
+  EXPECT_TRUE(
+      workspace_page->as_str().contains("href=\"../../target/symbol/"_str));
+
+  frontend = lito::doc::web::load_default_frontend();
+  ASSERT_TRUE(frontend.is_ok());
+  auto publications = lito::doc::SiteInput{
+      .title = String::make("Package links"_str),
+      .output = child(root, "publications"_str),
+      .data_output = child(root, "publications-data"_str),
+      .publication = lito::doc::PublicationKind::PackageSet,
+  };
+  publications.packages.push(owner_package());
+  publications.packages.push(target_package("target"_str));
+  generated = lito::doc::generate(rstd::move(publications),
+                                  Some(rstd::move(frontend).unwrap()));
+  ASSERT_TRUE(generated.is_ok());
+  ASSERT_TRUE(generated->publication_set.is_some());
+  auto package_page = symbol_page_containing(
+      generated->publication_set->packages[usize{}].directory.as_path(),
+      "<h1 class=\"page-title\">Holder</h1>"_str);
+  ASSERT_TRUE(package_page.is_ok());
+  EXPECT_FALSE(
+      package_page->as_str().contains("href=\"../../target/symbol/"_str));
+
+  frontend = lito::doc::web::load_default_frontend();
+  ASSERT_TRUE(frontend.is_ok());
+  auto ambiguous = lito::doc::SiteInput{
+      .title = String::make("Ambiguous links"_str),
+      .output = child(root, "ambiguous"_str),
+      .data_output = child(root, "ambiguous-data"_str),
+  };
+  ambiguous.packages.push(owner_package());
+  ambiguous.packages.push(target_package("target-a"_str));
+  ambiguous.packages.push(target_package("target-b"_str));
+  generated = lito::doc::generate(rstd::move(ambiguous),
+                                  Some(rstd::move(frontend).unwrap()));
+  ASSERT_TRUE(generated.is_ok());
+  auto ambiguous_page =
+      symbol_page_containing(generated->packages[usize{}].directory.as_path(),
+                             "<h1 class=\"page-title\">Holder</h1>"_str);
+  ASSERT_TRUE(ambiguous_page.is_ok());
+  EXPECT_FALSE(
+      ambiguous_page->as_str().contains("class=\"declaration-reference\""_str));
 }
