@@ -12,10 +12,16 @@ path = "core"
 [workspace.dependencies.litodoc-web]
 path = "web"
 
+[workspace.dependencies.licrypto]
+git = "https://github.com/litocpp/licrypto.git"
+
 [workspace.dependencies.rstd-std]
 git = "https://github.com/litocpp/rstd.git"
 
 [workspace.dependencies.rstd-json]
+git = "https://github.com/litocpp/rstd.git"
+
+[workspace.dependencies.rstd-serde]
 git = "https://github.com/litocpp/rstd.git"
 
 [workspace.dependencies.rstd-toml]

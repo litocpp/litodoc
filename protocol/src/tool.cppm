@@ -34,6 +34,7 @@ module;
 module litodoc.executable;
 
 import rstd;
+import lito.crypto;
 import lito.doc;
 import lito.doc.web;
 
@@ -97,7 +98,7 @@ auto read_json(ref<rstd::path::Path> path, ref<str> expected_digest,
         rstd::format("cannot read {} '{}': {}", context, path,
                      rstd::move(contents).unwrap_err()));
   }
-  auto digest = rstd::crypto::sha256_hex(contents->as_str());
+  auto digest = lito::crypto::sha256_hex(contents->as_str());
   if (digest.as_str() != expected_digest) {
     return failure<llvm::json::Value>(
         rstd::format("{} '{}' has digest '{}', expected '{}'", context, path,

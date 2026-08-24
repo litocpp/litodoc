@@ -21,3 +21,7 @@ visibility = "private"
 [dependencies.rstd-test]
 workspace = true
 visibility = "private"
+
+[dependencies.licrypto]
+workspace = true
+visibility = "private"

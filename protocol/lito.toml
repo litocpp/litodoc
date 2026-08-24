@@ -23,6 +23,10 @@ visibility = "private"
 workspace = true
 visibility = "private"
 
+[dependencies.licrypto]
+workspace = true
+visibility = "private"
+
 [external-dependencies.cmake.clang]
 package = "Clang"
 targets = [

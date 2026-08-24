@@ -2,6 +2,7 @@ export module lito.doc:render;
 
 import rstd;
 import rstd.json;
+import lito.crypto;
 import :model;
 import :data;
 import :markdown;
@@ -57,7 +58,7 @@ auto write_doc_file(ref<rstd::path::Path> root, ref<str> relative,
     publication->push(PublicationFile{
         .path = String::make(relative),
         .size = contents.len(),
-        .sha256 = rstd::crypto::sha256_hex(contents),
+        .sha256 = lito::crypto::sha256_hex(contents),
         .media_type = String::make(publication_media_type(relative)),
         .cache = String::make("immutable"_str),
     });

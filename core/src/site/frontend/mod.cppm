@@ -5,12 +5,11 @@ export module lito.site:frontend;
 
 import rstd;
 import rstd.json;
+import :frontend_manifest;
 import :templates;
 
 using namespace rstd::prelude;
 using namespace rstd::literals;
-using FrontendJson = rstd::json::Value;
-using FrontendJsonArray = rstd::json::Array;
 
 export namespace lito::site {
 
@@ -101,237 +100,141 @@ auto safe_frontend_path(ref<str> value) -> bool {
   return true;
 }
 
-auto frontend_member(const FrontendJson &value, ref<str> name, ref<str> context)
-    -> Result<ref<FrontendJson>, String> {
-  auto member = value.get(name);
-  if (member.is_none())
-    return Err(rstd::format("{} is missing '{}'", context, name));
-  return Ok(*member);
-}
-
-auto frontend_string(const FrontendJson &value, ref<str> name, ref<str> context)
-    -> Result<String, String> {
-  auto member = frontend_member(value, name, context);
-  if (member.is_err())
-    return Err(rstd::move(member).unwrap_err());
-  auto text = (**member).as_str();
-  if (text.is_none())
-    return Err(rstd::format("{}.{} must be a string", context, name));
-  return Ok(String::make(*text));
-}
-
-auto frontend_usize(const FrontendJson &value, ref<str> name, ref<str> context)
-    -> Result<usize, String> {
-  auto member = frontend_member(value, name, context);
-  if (member.is_err())
-    return Err(rstd::move(member).unwrap_err());
-  auto number = (**member).as_u64();
-  if (number.is_none() || *number > u64(usize::MAX.to_primitive()))
-    return Err(
-        rstd::format("{}.{} must be an unsigned integer", context, name));
-  return Ok(usize(static_cast<size_t>((*number).to_primitive())));
-}
-
-auto frontend_array(const FrontendJson &value, ref<str> name, ref<str> context)
-    -> Result<ref<FrontendJsonArray>, String> {
-  auto member = frontend_member(value, name, context);
-  if (member.is_err())
-    return Err(rstd::move(member).unwrap_err());
-  auto array = (**member).as_array();
-  if (array.is_none())
-    return Err(rstd::format("{}.{} must be an array", context, name));
-  return Ok(*array);
-}
-
 auto parse_frontend_manifest(ref<str> contents)
-    -> Result<FrontendJson, String> {
-  auto parsed = rstd::json::from_str(contents);
+    -> Result<FrontendManifest, String> {
+  auto parsed = rstd::json::decode<FrontendManifest>(contents);
   if (parsed.is_err())
     return Err(rstd::format("invalid frontend manifest JSON: {}",
                             parsed.unwrap_err()));
-  if (!parsed->is_object())
-    return Err(String::make("frontend manifest must be an object"_str));
-  auto format = frontend_string(*parsed, "format"_str, "frontend manifest"_str);
-  auto version =
-      frontend_usize(*parsed, "version"_str, "frontend manifest"_str);
-  auto template_api =
-      frontend_usize(*parsed, "template-api"_str, "frontend manifest"_str);
-  if (format.is_err())
-    return Err(rstd::move(format).unwrap_err());
-  if (version.is_err())
-    return Err(rstd::move(version).unwrap_err());
-  if (template_api.is_err())
-    return Err(rstd::move(template_api).unwrap_err());
-  if (format->as_str() != "lito-doc-frontend"_str)
+  if (parsed->format.as_str() != "lito-doc-frontend"_str)
     return Err(
-        rstd::format("unsupported frontend format '{}'", format->as_str()));
-  if (*version != usize(1) && *version != usize(2))
-    return Err(
-        rstd::format("unsupported frontend bundle version {}", *version));
-  if (*template_api != usize(1))
+        rstd::format("unsupported frontend format '{}'", parsed->format));
+  if (parsed->version != usize(1) && parsed->version != usize(2))
+    return Err(rstd::format("unsupported frontend bundle version {}",
+                            parsed->version));
+  if (parsed->template_api != usize(1))
     return Err(rstd::format("frontend requires unsupported template API {}",
-                            *template_api));
-  if (*version == usize(1)) {
-    auto data_api =
-        frontend_usize(*parsed, "data-api"_str, "frontend manifest"_str);
-    if (data_api.is_err())
-      return Err(rstd::move(data_api).unwrap_err());
-    if (*data_api != usize(4))
+                            parsed->template_api));
+  if (parsed->version == usize(1)) {
+    if (parsed->data_api.is_none())
+      return Err(String::make("frontend manifest is missing 'data-api'"_str));
+    if (*parsed->data_api != usize(4))
       return Err(rstd::format("frontend requires unsupported doc data API {}",
-                              *data_api));
+                              *parsed->data_api));
     return Ok(rstd::move(parsed).unwrap());
   }
-  auto capabilities =
-      frontend_array(*parsed, "capabilities"_str, "frontend manifest"_str);
-  if (capabilities.is_err())
-    return Err(rstd::move(capabilities).unwrap_err());
+  if (parsed->capabilities.is_none())
+    return Err(String::make("frontend manifest is missing 'capabilities'"_str));
   auto api = false;
   auto book = false;
-  for (const auto &capability : **capabilities) {
-    auto name = capability.as_str();
-    if (name.is_none())
-      return Err(String::make("frontend capability must be a string"_str));
-    if (*name == "api"_str) {
+  for (const auto &capability : *parsed->capabilities) {
+    if (capability.as_str() == "api"_str) {
       if (api)
         return Err(String::make("frontend repeats capability 'api'"_str));
       api = true;
-    } else if (*name == "book"_str) {
+    } else if (capability.as_str() == "book"_str) {
       if (book)
         return Err(String::make("frontend repeats capability 'book'"_str));
       book = true;
     } else {
-      return Err(rstd::format("unsupported frontend capability '{}'", *name));
+      return Err(
+          rstd::format("unsupported frontend capability '{}'", capability));
     }
   }
   if (!api && !book)
     return Err(
         String::make("frontend must declare at least one capability"_str));
   if (api) {
-    auto data_api =
-        frontend_usize(*parsed, "data-api"_str, "frontend manifest"_str);
-    if (data_api.is_err())
-      return Err(rstd::move(data_api).unwrap_err());
-    if (*data_api != usize(4))
+    if (parsed->data_api.is_none())
+      return Err(String::make("frontend manifest is missing 'data-api'"_str));
+    if (*parsed->data_api != usize(4))
       return Err(rstd::format("frontend requires unsupported doc data API {}",
-                              *data_api));
+                              *parsed->data_api));
   }
   if (book) {
-    auto data_api =
-        frontend_usize(*parsed, "book-data-api"_str, "frontend manifest"_str);
-    if (data_api.is_err())
-      return Err(rstd::move(data_api).unwrap_err());
-    if (*data_api != usize(1))
+    if (parsed->book_data_api.is_none())
+      return Err(
+          String::make("frontend manifest is missing 'book-data-api'"_str));
+    if (*parsed->book_data_api != usize(1))
       return Err(rstd::format("frontend requires unsupported book data API {}",
-                              *data_api));
+                              *parsed->book_data_api));
   }
   return Ok(rstd::move(parsed).unwrap());
 }
 
-auto frontend_version(const FrontendJson &manifest) -> Result<usize, String> {
-  return frontend_usize(manifest, "version"_str, "frontend manifest"_str);
-}
-
-auto frontend_capability(const FrontendJson &manifest, ref<str> requested)
-    -> Result<bool, String> {
-  auto version = frontend_version(manifest);
-  if (version.is_err())
-    return Err(rstd::move(version).unwrap_err());
-  if (*version == usize(1))
-    return Ok(requested == "api"_str);
-  auto capabilities =
-      frontend_array(manifest, "capabilities"_str, "frontend manifest"_str);
-  if (capabilities.is_err())
-    return Err(rstd::move(capabilities).unwrap_err());
-  for (const auto &capability : **capabilities) {
-    auto name = capability.as_str();
-    if (name.is_some() && *name == requested)
-      return Ok(true);
+auto frontend_capability(const FrontendManifest &manifest, ref<str> requested)
+    -> bool {
+  if (manifest.version == usize(1))
+    return requested == "api"_str;
+  for (const auto &capability : *manifest.capabilities) {
+    if (capability.as_str() == requested)
+      return true;
   }
-  return Ok(false);
+  return false;
 }
 
-auto frontend_manifest_paths(const FrontendJson &manifest)
+auto frontend_manifest_paths(const FrontendManifest &manifest)
     -> Result<Vec<String>, String> {
-  auto templates =
-      frontend_member(manifest, "templates"_str, "frontend manifest"_str);
-  auto partials =
-      frontend_array(manifest, "partials"_str, "frontend manifest"_str);
-  auto assets = frontend_array(manifest, "assets"_str, "frontend manifest"_str);
-  if (templates.is_err())
-    return Err(rstd::move(templates).unwrap_err());
-  if (partials.is_err())
-    return Err(rstd::move(partials).unwrap_err());
-  if (assets.is_err())
-    return Err(rstd::move(assets).unwrap_err());
+  if (manifest.templates.is_none())
+    return Err(String::make("frontend manifest is missing 'templates'"_str));
+  if (manifest.partials.is_none())
+    return Err(String::make("frontend manifest is missing 'partials'"_str));
+  if (manifest.assets.is_none())
+    return Err(String::make("frontend manifest is missing 'assets'"_str));
   auto paths = Vec<String>::make();
-  auto append_template = [&paths,
-                          &templates](ref<str> name) -> Result<empty, String> {
-    auto path = frontend_string(**templates, name, "frontend templates"_str);
-    if (path.is_err())
-      return Err(rstd::move(path).unwrap_err());
+  auto append_template = [&paths](const Option<String> &path,
+                                  ref<str> name) -> Result<empty, String> {
+    if (path.is_none())
+      return Err(rstd::format("frontend templates is missing '{}'", name));
     if (!safe_frontend_path(path->as_str()))
       return Err(
           rstd::format("invalid frontend template path '{}'", path->as_str()));
-    paths.push(rstd::move(path).unwrap());
+    paths.push(path->clone());
     return Ok(empty{});
   };
+  const auto &templates = *manifest.templates;
   auto api = frontend_capability(manifest, "api"_str);
-  if (api.is_err())
-    return Err(rstd::move(api).unwrap_err());
   auto book = frontend_capability(manifest, "book"_str);
-  if (book.is_err())
-    return Err(rstd::move(book).unwrap_err());
-  if (*api) {
-    auto appended = append_template("root"_str);
+  if (api) {
+    auto appended = append_template(templates.root, "root"_str);
     if (appended.is_err())
       return Err(rstd::move(appended).unwrap_err());
-    appended = append_template("package"_str);
+    appended = append_template(templates.package, "package"_str);
     if (appended.is_err())
       return Err(rstd::move(appended).unwrap_err());
-    appended = append_template("module"_str);
+    appended = append_template(templates.module, "module"_str);
     if (appended.is_err())
       return Err(rstd::move(appended).unwrap_err());
-    appended = append_template("symbol"_str);
+    appended = append_template(templates.symbol, "symbol"_str);
     if (appended.is_err())
       return Err(rstd::move(appended).unwrap_err());
-    appended = append_template("source"_str);
-    if (appended.is_err())
-      return Err(rstd::move(appended).unwrap_err());
-  }
-  if (*book) {
-    auto appended = append_template("book-root"_str);
-    if (appended.is_err())
-      return Err(rstd::move(appended).unwrap_err());
-    appended = append_template("book-page"_str);
+    appended = append_template(templates.source, "source"_str);
     if (appended.is_err())
       return Err(rstd::move(appended).unwrap_err());
   }
-  for (const auto &partial : **partials) {
-    auto text = partial.as_str();
-    if (text.is_none())
-      return Err(String::make("frontend partial path must be a string"_str));
-    if (!safe_frontend_path(*text))
-      return Err(rstd::format("invalid frontend partial path '{}'", *text));
-    paths.push(String::make(*text));
+  if (book) {
+    auto appended = append_template(templates.book_root, "book-root"_str);
+    if (appended.is_err())
+      return Err(rstd::move(appended).unwrap_err());
+    appended = append_template(templates.book_page, "book-page"_str);
+    if (appended.is_err())
+      return Err(rstd::move(appended).unwrap_err());
   }
-  for (const auto &asset : **assets) {
-    auto path = frontend_string(asset, "path"_str, "frontend asset"_str);
-    auto media_type =
-        frontend_string(asset, "media-type"_str, "frontend asset"_str);
-    if (path.is_err())
-      return Err(rstd::move(path).unwrap_err());
-    if (media_type.is_err())
-      return Err(rstd::move(media_type).unwrap_err());
-    if (!safe_frontend_path(path->as_str()))
-      return Err(
-          rstd::format("invalid frontend asset path '{}'", path->as_str()));
-    paths.push(rstd::move(path).unwrap());
+  for (const auto &partial : *manifest.partials) {
+    if (!safe_frontend_path(partial.as_str()))
+      return Err(rstd::format("invalid frontend partial path '{}'", partial));
+    paths.push(partial.clone());
+  }
+  for (const auto &asset : *manifest.assets) {
+    if (!safe_frontend_path(asset.path.as_str()))
+      return Err(rstd::format("invalid frontend asset path '{}'", asset.path));
+    paths.push(asset.path.clone());
   }
   return Ok(rstd::move(paths));
 }
 
 struct FrontendManifestDescription {
-  FrontendJson manifest;
+  FrontendManifest manifest;
   Vec<String> paths;
   rstd::collections::BTreeSet<String> declared;
 };
@@ -357,24 +260,15 @@ auto describe_frontend_manifest(ref<str> contents)
 auto make_frontend_bundle(
     String identity, String digest,
     rstd::collections::BTreeMap<String, FrontendResource> resources,
-    FrontendJson manifest) -> Result<FrontendBundle, String> {
-  auto templates =
-      frontend_member(manifest, "templates"_str, "frontend manifest"_str);
-  auto partials =
-      frontend_array(manifest, "partials"_str, "frontend manifest"_str);
-  auto assets = frontend_array(manifest, "assets"_str, "frontend manifest"_str);
-  if (templates.is_err())
-    return Err(rstd::move(templates).unwrap_err());
-  if (partials.is_err())
-    return Err(rstd::move(partials).unwrap_err());
-  if (assets.is_err())
-    return Err(rstd::move(assets).unwrap_err());
+    FrontendManifest manifest) -> Result<FrontendBundle, String> {
+  if (manifest.templates.is_none())
+    return Err(String::make("frontend manifest is missing 'templates'"_str));
+  if (manifest.partials.is_none())
+    return Err(String::make("frontend manifest is missing 'partials'"_str));
+  if (manifest.assets.is_none())
+    return Err(String::make("frontend manifest is missing 'assets'"_str));
   auto supports_api = frontend_capability(manifest, "api"_str);
-  if (supports_api.is_err())
-    return Err(rstd::move(supports_api).unwrap_err());
   auto supports_book = frontend_capability(manifest, "book"_str);
-  if (supports_book.is_err())
-    return Err(rstd::move(supports_book).unwrap_err());
   auto root_template = String::make();
   auto package_template = String::make();
   auto module_template = String::make();
@@ -382,19 +276,26 @@ auto make_frontend_bundle(
   auto source_template = String::make();
   auto book_root_template = String::make();
   auto book_page_template = String::make();
-  auto read_template = [&templates](ref<str> name) -> Result<String, String> {
-    return frontend_string(**templates, name, "frontend templates"_str);
+  auto read_template = [](Option<String> &value,
+                          ref<str> name) -> Result<String, String> {
+    if (value.is_none())
+      return Err(rstd::format("frontend templates is missing '{}'", name));
+    return Ok(rstd::move(value).unwrap());
   };
-  if (*supports_api) {
-    root_template = rstd_try(read_template("root"_str));
-    package_template = rstd_try(read_template("package"_str));
-    module_template = rstd_try(read_template("module"_str));
-    symbol_template = rstd_try(read_template("symbol"_str));
-    source_template = rstd_try(read_template("source"_str));
+  auto &templates = *manifest.templates;
+  if (supports_api) {
+    root_template = rstd_try(read_template(templates.root, "root"_str));
+    package_template =
+        rstd_try(read_template(templates.package, "package"_str));
+    module_template = rstd_try(read_template(templates.module, "module"_str));
+    symbol_template = rstd_try(read_template(templates.symbol, "symbol"_str));
+    source_template = rstd_try(read_template(templates.source, "source"_str));
   }
-  if (*supports_book) {
-    book_root_template = rstd_try(read_template("book-root"_str));
-    book_page_template = rstd_try(read_template("book-page"_str));
+  if (supports_book) {
+    book_root_template =
+        rstd_try(read_template(templates.book_root, "book-root"_str));
+    book_page_template =
+        rstd_try(read_template(templates.book_page, "book-page"_str));
   }
 
   auto set = TemplateSet{
@@ -403,22 +304,19 @@ auto make_frontend_bundle(
           rstd::collections::BTreeMap<String, TemplateDocument>::make(),
   };
   auto template_paths = Vec<String>::make();
-  if (*supports_api) {
+  if (supports_api) {
     template_paths.push(root_template.clone());
     template_paths.push(package_template.clone());
     template_paths.push(module_template.clone());
     template_paths.push(symbol_template.clone());
     template_paths.push(source_template.clone());
   }
-  if (*supports_book) {
+  if (supports_book) {
     template_paths.push(book_root_template.clone());
     template_paths.push(book_page_template.clone());
   }
-  for (const auto &partial : **partials) {
-    auto text = partial.as_str();
-    if (text.is_none())
-      return Err(String::make("frontend partial path must be a string"_str));
-    template_paths.push(String::make(*text));
+  for (const auto &partial : *manifest.partials) {
+    template_paths.push(partial.clone());
   }
   auto seen = rstd::collections::BTreeSet<String>::make();
   for (const auto &path : template_paths) {
@@ -435,32 +333,25 @@ auto make_frontend_bundle(
   }
 
   auto frontend_assets = Vec<FrontendAsset>::make();
-  for (const auto &asset : **assets) {
-    auto path = frontend_string(asset, "path"_str, "frontend asset"_str);
-    auto media_type =
-        frontend_string(asset, "media-type"_str, "frontend asset"_str);
-    if (path.is_err())
-      return Err(rstd::move(path).unwrap_err());
-    if (media_type.is_err())
-      return Err(rstd::move(media_type).unwrap_err());
-    auto resource = resources.get(path->as_str());
+  for (auto &asset : *manifest.assets) {
+    auto resource = resources.get(asset.path.as_str());
     if (resource.is_none())
       return Err(rstd::format("frontend '{}' is missing asset '{}'",
-                              identity.as_str(), path->as_str()));
-    if ((**resource).media_type.as_str() != media_type->as_str())
-      return Err(rstd::format("frontend asset '{}' media type mismatch",
-                              path->as_str()));
+                              identity.as_str(), asset.path));
+    if ((**resource).media_type.as_str() != asset.media_type.as_str())
+      return Err(
+          rstd::format("frontend asset '{}' media type mismatch", asset.path));
     frontend_assets.push(FrontendAsset{
-        .path = rstd::move(path).unwrap(),
-        .media_type = rstd::move(media_type).unwrap(),
+        .path = rstd::move(asset.path),
+        .media_type = rstd::move(asset.media_type),
         .contents = (**resource).contents.clone(),
     });
   }
   return Ok(FrontendBundle{
       .identity = rstd::move(identity),
       .digest = rstd::move(digest),
-      .supports_api = *supports_api,
-      .supports_book = *supports_book,
+      .supports_api = supports_api,
+      .supports_book = supports_book,
       .root_template = rstd::move(root_template),
       .package_template = rstd::move(package_template),
       .module_template = rstd::move(module_template),
@@ -587,20 +478,11 @@ auto load_frontend_directory(ref<rstd::path::Path> root)
       rstd::collections::BTreeMap<String, FrontendResource>::make();
   resources.insert(String::make("frontend.json"_str),
                    rstd::move(manifest_resource).unwrap());
-  auto assets = frontend_array(description->manifest, "assets"_str,
-                               "frontend manifest"_str);
-  if (assets.is_err())
-    return Err(rstd::move(assets).unwrap_err());
+  if (description->manifest.assets.is_none())
+    return Err(String::make("frontend manifest is missing 'assets'"_str));
   auto media = rstd::collections::BTreeMap<String, String>::make();
-  for (const auto &asset : **assets) {
-    auto path = frontend_string(asset, "path"_str, "frontend asset"_str);
-    auto media_type =
-        frontend_string(asset, "media-type"_str, "frontend asset"_str);
-    if (path.is_err())
-      return Err(rstd::move(path).unwrap_err());
-    if (media_type.is_err())
-      return Err(rstd::move(media_type).unwrap_err());
-    media.insert(rstd::move(path).unwrap(), rstd::move(media_type).unwrap());
+  for (const auto &asset : *description->manifest.assets) {
+    media.insert(asset.path.clone(), asset.media_type.clone());
   }
   for (const auto &path : description->paths) {
     if (resources.contains_key(path.as_str()))

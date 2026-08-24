@@ -1,284 +1,171 @@
-{
-  "packages": [
-    {
-      "dependencies": [
-        "litodoc-core",
-        "litodoc-web",
-        "rstd-argparse",
-        "rstd-std"
-      ],
-      "externals": [],
-      "manifest": "book/lito.toml",
-      "name": "litobook",
-      "runtime-dependencies": [],
-      "source": {
-        "kind": "path",
-        "path": "."
-      },
-      "version": "0.1.0"
-    },
-    {
-      "dependencies": [
-        "litodoc-core",
-        "litodoc-web",
-        "rstd-json",
-        "rstd-std"
-      ],
-      "externals": [],
-      "manifest": "protocol/lito.toml",
-      "name": "litodoc",
-      "runtime-dependencies": [],
-      "source": {
-        "kind": "path",
-        "path": "."
-      },
-      "version": "0.1.0"
-    },
-    {
-      "dependencies": [
-        "rstd-json",
-        "rstd-std",
-        "rstd-toml"
-      ],
-      "externals": [],
-      "manifest": "core/lito.toml",
-      "name": "litodoc-core",
-      "runtime-dependencies": [],
-      "source": {
-        "kind": "path",
-        "path": "."
-      },
-      "version": "0.1.0"
-    },
-    {
-      "dependencies": [
-        "litodoc-core",
-        "litodoc-web",
-        "rstd-std",
-        "rstd-test"
-      ],
-      "externals": [],
-      "manifest": "tests/lito.toml",
-      "name": "litodoc-tests",
-      "runtime-dependencies": [],
-      "source": {
-        "kind": "path",
-        "path": "."
-      },
-      "version": "0.1.0"
-    },
-    {
-      "dependencies": [
-        "litodoc-core",
-        "rstd-std"
-      ],
-      "externals": [
-        {
-          "architectures": [
-            "aarch64"
-          ],
-          "name": "build-tool:esbuild:linux",
-          "source": {
-            "kind": "archive",
-            "sha256": "2145e9e686c95ee47c1181f83f272f0ff95820e52d7736fdcd9eeb106fd6456a",
-            "url": "https://registry.npmjs.org/@esbuild/linux-arm64/-/linux-arm64-0.28.1.tgz"
-          }
-        },
-        {
-          "architectures": [
-            "x86_64"
-          ],
-          "name": "build-tool:esbuild:linux",
-          "source": {
-            "kind": "archive",
-            "sha256": "9ed00ab5330c94386f3273eda99a1fb0e8f37cfd6cb5270e4ad2fe3527da3546",
-            "url": "https://registry.npmjs.org/@esbuild/linux-x64/-/linux-x64-0.28.1.tgz"
-          }
-        }
-      ],
-      "manifest": "web/lito.toml",
-      "name": "litodoc-web",
-      "runtime-dependencies": [],
-      "source": {
-        "kind": "path",
-        "path": "."
-      },
-      "version": "0.1.0"
-    },
-    {
-      "dependencies": [
-        "rstd-core",
-        "rstd-runtime"
-      ],
-      "externals": [],
-      "manifest": "src/alloc/lito.toml",
-      "name": "rstd-alloc",
-      "runtime-dependencies": [],
-      "source": {
-        "commit": "6a7376b99d1e9b56818f091cc6abece69322b19f",
-        "kind": "git",
-        "reference": {
-          "kind": "default",
-          "value": ""
-        },
-        "url": "https://github.com/litocpp/rstd.git"
-      },
-      "version": "0.1.0"
-    },
-    {
-      "dependencies": [
-        "rstd-std"
-      ],
-      "externals": [],
-      "manifest": "src/argparse/lito.toml",
-      "name": "rstd-argparse",
-      "runtime-dependencies": [],
-      "source": {
-        "commit": "6a7376b99d1e9b56818f091cc6abece69322b19f",
-        "kind": "git",
-        "reference": {
-          "kind": "default",
-          "value": ""
-        },
-        "url": "https://github.com/litocpp/rstd.git"
-      },
-      "version": "0.1.0"
-    },
-    {
-      "dependencies": [],
-      "externals": [],
-      "manifest": "src/basic/lito.toml",
-      "name": "rstd-basic",
-      "runtime-dependencies": [],
-      "source": {
-        "commit": "6a7376b99d1e9b56818f091cc6abece69322b19f",
-        "kind": "git",
-        "reference": {
-          "kind": "default",
-          "value": ""
-        },
-        "url": "https://github.com/litocpp/rstd.git"
-      },
-      "version": "0.1.0"
-    },
-    {
-      "dependencies": [
-        "rstd-basic",
-        "rstd-runtime"
-      ],
-      "externals": [],
-      "manifest": "src/core/lito.toml",
-      "name": "rstd-core",
-      "runtime-dependencies": [],
-      "source": {
-        "commit": "6a7376b99d1e9b56818f091cc6abece69322b19f",
-        "kind": "git",
-        "reference": {
-          "kind": "default",
-          "value": ""
-        },
-        "url": "https://github.com/litocpp/rstd.git"
-      },
-      "version": "0.1.0"
-    },
-    {
-      "dependencies": [
-        "rstd-core",
-        "rstd-std"
-      ],
-      "externals": [],
-      "manifest": "src/json/lito.toml",
-      "name": "rstd-json",
-      "runtime-dependencies": [],
-      "source": {
-        "commit": "6a7376b99d1e9b56818f091cc6abece69322b19f",
-        "kind": "git",
-        "reference": {
-          "kind": "default",
-          "value": ""
-        },
-        "url": "https://github.com/litocpp/rstd.git"
-      },
-      "version": "0.1.0"
-    },
-    {
-      "dependencies": [
-        "rstd-basic"
-      ],
-      "externals": [],
-      "manifest": "src/runtime/lito.toml",
-      "name": "rstd-runtime",
-      "runtime-dependencies": [],
-      "source": {
-        "commit": "6a7376b99d1e9b56818f091cc6abece69322b19f",
-        "kind": "git",
-        "reference": {
-          "kind": "default",
-          "value": ""
-        },
-        "url": "https://github.com/litocpp/rstd.git"
-      },
-      "version": "0.1.0"
-    },
-    {
-      "dependencies": [
-        "rstd-alloc",
-        "rstd-core"
-      ],
-      "externals": [],
-      "manifest": "src/std/lito.toml",
-      "name": "rstd-std",
-      "runtime-dependencies": [],
-      "source": {
-        "commit": "6a7376b99d1e9b56818f091cc6abece69322b19f",
-        "kind": "git",
-        "reference": {
-          "kind": "default",
-          "value": ""
-        },
-        "url": "https://github.com/litocpp/rstd.git"
-      },
-      "version": "0.1.0"
-    },
-    {
-      "dependencies": [
-        "rstd-std"
-      ],
-      "externals": [],
-      "manifest": "src/test/lito.toml",
-      "name": "rstd-test",
-      "runtime-dependencies": [],
-      "source": {
-        "commit": "6a7376b99d1e9b56818f091cc6abece69322b19f",
-        "kind": "git",
-        "reference": {
-          "kind": "default",
-          "value": ""
-        },
-        "url": "https://github.com/litocpp/rstd.git"
-      },
-      "version": "0.1.0"
-    },
-    {
-      "dependencies": [
-        "rstd-alloc",
-        "rstd-core"
-      ],
-      "externals": [],
-      "manifest": "src/toml/lito.toml",
-      "name": "rstd-toml",
-      "runtime-dependencies": [],
-      "source": {
-        "commit": "6a7376b99d1e9b56818f091cc6abece69322b19f",
-        "kind": "git",
-        "reference": {
-          "kind": "default",
-          "value": ""
-        },
-        "url": "https://github.com/litocpp/rstd.git"
-      },
-      "version": "0.1.0"
-    }
-  ],
-  "version": 2
-}
+version = 1
+
+[[packages]]
+name = "licrypto"
+version = "0.1.0"
+dependencies = [
+  "rstd-std",
+  "rstd-test",
+]
+
+[[packages]]
+name = "litobook"
+version = "0.1.0"
+dependencies = [
+  "litodoc-core",
+  "litodoc-web",
+  "rstd-argparse",
+  "rstd-std",
+]
+
+[[packages]]
+name = "litodoc"
+version = "0.1.0"
+dependencies = [
+  "licrypto",
+  "litodoc-core",
+  "litodoc-web",
+  "rstd-json",
+  "rstd-std",
+]
+
+[[packages]]
+name = "litodoc-core"
+version = "0.1.0"
+dependencies = [
+  "licrypto",
+  "rstd-json",
+  "rstd-serde",
+  "rstd-std",
+  "rstd-toml",
+]
+
+[[packages]]
+name = "litodoc-tests"
+version = "0.1.0"
+dependencies = [
+  "licrypto",
+  "litodoc-core",
+  "litodoc-web",
+  "rstd-std",
+  "rstd-test",
+]
+
+[[packages]]
+name = "litodoc-web"
+version = "0.1.0"
+dependencies = [
+  "litodoc-core",
+  "rstd-std",
+]
+
+[[packages.externals]]
+name = "build-tool:esbuild:linux"
+source = "archive+https://registry.npmjs.org/@esbuild/linux-arm64/-/linux-arm64-0.28.1.tgz"
+checksum = "sha256:2145e9e686c95ee47c1181f83f272f0ff95820e52d7736fdcd9eeb106fd6456a"
+architectures = [
+  "aarch64",
+]
+
+[[packages.externals]]
+name = "build-tool:esbuild:linux"
+source = "archive+https://registry.npmjs.org/@esbuild/linux-x64/-/linux-x64-0.28.1.tgz"
+checksum = "sha256:9ed00ab5330c94386f3273eda99a1fb0e8f37cfd6cb5270e4ad2fe3527da3546"
+architectures = [
+  "x86_64",
+]
+
+[[packages]]
+name = "rstd-alloc"
+version = "0.1.0"
+source = "git+https://github.com/litocpp/rstd.git#fdb99aaa894d76b04032cd301ac82b5ee6e3ec6d"
+dependencies = [
+  "rstd-core",
+  "rstd-runtime",
+]
+
+[[packages]]
+name = "rstd-argparse"
+version = "0.1.0"
+source = "git+https://github.com/litocpp/rstd.git#fdb99aaa894d76b04032cd301ac82b5ee6e3ec6d"
+dependencies = [
+  "rstd-std",
+]
+
+[[packages]]
+name = "rstd-basic"
+version = "0.1.0"
+source = "git+https://github.com/litocpp/rstd.git#fdb99aaa894d76b04032cd301ac82b5ee6e3ec6d"
+
+[[packages]]
+name = "rstd-core"
+version = "0.1.0"
+source = "git+https://github.com/litocpp/rstd.git#fdb99aaa894d76b04032cd301ac82b5ee6e3ec6d"
+dependencies = [
+  "rstd-basic",
+  "rstd-runtime",
+]
+
+[[packages]]
+name = "rstd-json"
+version = "0.1.0"
+source = "git+https://github.com/litocpp/rstd.git#fdb99aaa894d76b04032cd301ac82b5ee6e3ec6d"
+dependencies = [
+  "rstd-core",
+  "rstd-parse",
+  "rstd-serde",
+  "rstd-std",
+]
+
+[[packages]]
+name = "rstd-parse"
+version = "0.1.0"
+source = "git+https://github.com/litocpp/rstd.git#fdb99aaa894d76b04032cd301ac82b5ee6e3ec6d"
+dependencies = [
+  "rstd-alloc",
+  "rstd-core",
+]
+
+[[packages]]
+name = "rstd-runtime"
+version = "0.1.0"
+source = "git+https://github.com/litocpp/rstd.git#fdb99aaa894d76b04032cd301ac82b5ee6e3ec6d"
+dependencies = [
+  "rstd-basic",
+]
+
+[[packages]]
+name = "rstd-serde"
+version = "0.1.0"
+source = "git+https://github.com/litocpp/rstd.git#fdb99aaa894d76b04032cd301ac82b5ee6e3ec6d"
+dependencies = [
+  "rstd-alloc",
+]
+
+[[packages]]
+name = "rstd-std"
+version = "0.1.0"
+source = "git+https://github.com/litocpp/rstd.git#fdb99aaa894d76b04032cd301ac82b5ee6e3ec6d"
+dependencies = [
+  "rstd-alloc",
+  "rstd-core",
+]
+
+[[packages]]
+name = "rstd-test"
+version = "0.1.0"
+source = "git+https://github.com/litocpp/rstd.git#fdb99aaa894d76b04032cd301ac82b5ee6e3ec6d"
+dependencies = [
+  "rstd-std",
+]
+
+[[packages]]
+name = "rstd-toml"
+version = "0.1.0"
+source = "git+https://github.com/litocpp/rstd.git#fdb99aaa894d76b04032cd301ac82b5ee6e3ec6d"
+dependencies = [
+  "rstd-alloc",
+  "rstd-core",
+  "rstd-parse",
+  "rstd-serde",
+]

@@ -9,6 +9,7 @@ archive = "lito.doc"
 sources = [
   "src/site/html.cppm",
   "src/site/templates/mod.cppm",
+  "src/site/frontend_manifest.cppm",
   "src/site/frontend/mod.cppm",
   "src/site/publication.cppm",
   "src/site/lib.cppm",
@@ -37,6 +38,14 @@ visibility = "public"
 workspace = true
 visibility = "private"
 
+[dependencies.rstd-serde]
+workspace = true
+visibility = "private"
+
 [dependencies.rstd-toml]
+workspace = true
+visibility = "private"
+
+[dependencies.licrypto]
 workspace = true
 visibility = "private"
