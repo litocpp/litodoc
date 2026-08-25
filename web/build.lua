@@ -35,6 +35,7 @@ local resources = {
   { path = "static/favicon.svg", media_type = "image/svg+xml", source = "src/static/favicon.svg" },
   { path = "static/style.css", media_type = "text/css", entry = "styles/style.css" },
   { path = "static/theme-bootstrap.js", media_type = "text/javascript", entry = "theme-bootstrap.ts", target = "es2020" },
+  { path = "static/theme-icons.svg", media_type = "image/svg+xml", source = "src/static/theme-icons.svg" },
   { path = "templates/book-page.html", media_type = "text/html", source = "src/templates/book-page.html" },
   { path = "templates/book-root.html", media_type = "text/html", source = "src/templates/book-root.html" },
   { path = "templates/module.html", media_type = "text/html", source = "src/templates/module.html" },

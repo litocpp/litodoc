@@ -33,6 +33,7 @@ export class LitoDocNavigationElement extends HTMLElement {
     this.#markCurrentPage();
     this.#prepareFolders(events.signal);
     this.#prepareOutline();
+    const sidebarPosition = this.#prepareSidebarPosition(events.signal);
     window.addEventListener("scroll", () => this.#scheduleOutlineUpdate(), {
       passive: true,
       signal: events.signal,
@@ -40,11 +41,12 @@ export class LitoDocNavigationElement extends HTMLElement {
     window.addEventListener("resize", () => this.#scheduleOutlineUpdate(), {
       signal: events.signal,
     });
-    this.toggleAttribute("data-ready", true);
-    this.#resolveReady();
     requestAnimationFrame(() => {
-      this.#centerCurrentPage();
+      if (events.signal.aborted) return;
+      if (!this.#restoreSidebarPosition(sidebarPosition)) this.#centerCurrentPage();
       this.#updateOutline();
+      this.toggleAttribute("data-ready", true);
+      this.#resolveReady();
     });
   }
 
@@ -182,6 +184,49 @@ export class LitoDocNavigationElement extends HTMLElement {
     button.setAttribute("aria-expanded", String(folder.hasAttribute("data-open")));
   }
 
+  #prepareSidebarPosition(signal: AbortSignal): number | undefined {
+    const value = this.getAttribute("scroll-state-url");
+    const sidebar = this.closest<HTMLElement>(".sidebar")?.querySelector<HTMLElement>(
+      ".sidebar-scroll",
+    );
+    if (!value || !sidebar) return undefined;
+    let key: string;
+    try {
+      key = `lito-doc-navigation-scroll:${documentUrl(value)}`;
+    } catch {
+      return undefined;
+    }
+    window.addEventListener(
+      "pagehide",
+      () => {
+        try {
+          sessionStorage.setItem(key, String(sidebar.scrollTop));
+        } catch {
+          return;
+        }
+      },
+      { signal },
+    );
+    try {
+      const stored = sessionStorage.getItem(key);
+      if (stored === null) return undefined;
+      const position = Number.parseFloat(stored);
+      return Number.isFinite(position) && position >= 0 ? position : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  #restoreSidebarPosition(position: number | undefined): boolean {
+    if (position === undefined) return false;
+    const sidebar = this.closest<HTMLElement>(".sidebar")?.querySelector<HTMLElement>(
+      ".sidebar-scroll",
+    );
+    if (!sidebar) return false;
+    sidebar.scrollTop = position;
+    return true;
+  }
+
   #prepareOutline(): void {
     const navigation = this.querySelector<HTMLElement>("[data-outline-navigation]");
     if (!navigation) return;
@@ -230,7 +275,11 @@ export class LitoDocNavigationElement extends HTMLElement {
     const current = this.querySelector<HTMLElement>('[data-page-navigation] [aria-current="page"]');
     const sidebar = this.closest<HTMLElement>(".sidebar")?.querySelector<HTMLElement>(".sidebar-scroll");
     if (!current || !sidebar || sidebar.scrollHeight <= sidebar.clientHeight) return;
-    const target = current.offsetTop - sidebar.clientHeight * 0.35;
+    const target =
+      current.getBoundingClientRect().top -
+      sidebar.getBoundingClientRect().top +
+      sidebar.scrollTop -
+      sidebar.clientHeight * 0.35;
     sidebar.scrollTop = Math.max(0, target);
   }
 }

@@ -9,24 +9,28 @@ import {
 
 export class LitoDocThemePickerElement extends HTMLElement {
   #events?: AbortController;
-  #select?: HTMLSelectElement;
+  #button?: HTMLButtonElement;
+  #preference?: MediaQueryList;
+  #mode: ThemeMode = "auto";
 
   connectedCallback(): void {
     if (this.#events) return;
-    const select = this.querySelector("[data-theme-select]");
-    if (!(select instanceof HTMLSelectElement)) {
-      console.error("lito-doc-theme-picker requires a select");
+    const button = this.querySelector("[data-theme-toggle]");
+    if (!(button instanceof HTMLButtonElement)) {
+      console.error("lito-doc-theme-picker requires a toggle button");
       return;
     }
 
     const events = new AbortController();
+    const preference = window.matchMedia("(prefers-color-scheme: dark)");
     this.#events = events;
-    this.#select = select;
+    this.#button = button;
+    this.#preference = preference;
     this.apply(readBrowserTheme(), false);
-    select.addEventListener(
-      "change",
+    button.addEventListener(
+      "click",
       () => {
-        const mode = parseTheme(select.value);
+        const mode = this.#resolvedTheme() === "dark" ? "light" : "dark";
         this.apply(mode, true);
         this.dispatchEvent(
           new CustomEvent<ThemeMode>("lito-theme-change", {
@@ -35,6 +39,13 @@ export class LitoDocThemePickerElement extends HTMLElement {
             detail: mode,
           }),
         );
+      },
+      { signal: events.signal },
+    );
+    preference.addEventListener(
+      "change",
+      () => {
+        if (this.#mode === "auto") this.#syncButton();
       },
       { signal: events.signal },
     );
@@ -53,12 +64,14 @@ export class LitoDocThemePickerElement extends HTMLElement {
   disconnectedCallback(): void {
     this.#events?.abort();
     this.#events = undefined;
-    this.#select = undefined;
+    this.#button = undefined;
+    this.#preference = undefined;
     this.removeAttribute("data-ready");
+    this.removeAttribute("data-current-theme");
   }
 
   get mode(): ThemeMode {
-    return parseTheme(this.#select?.value);
+    return this.#mode;
   }
 
   set mode(mode: ThemeMode) {
@@ -66,8 +79,22 @@ export class LitoDocThemePickerElement extends HTMLElement {
   }
 
   apply(mode: ThemeMode, persist: boolean): void {
-    if (this.#select) this.#select.value = mode;
-    applyTheme(document.documentElement, mode);
-    if (persist) storeBrowserTheme(mode);
+    this.#mode = parseTheme(mode);
+    applyTheme(document.documentElement, this.#mode);
+    if (persist) storeBrowserTheme(this.#mode);
+    this.#syncButton();
+  }
+
+  #resolvedTheme(): Exclude<ThemeMode, "auto"> {
+    if (this.#mode !== "auto") return this.#mode;
+    return this.#preference?.matches ? "dark" : "light";
+  }
+
+  #syncButton(): void {
+    const current = this.#resolvedTheme();
+    const target = current === "dark" ? "light" : "dark";
+    this.dataset.currentTheme = current;
+    this.#button?.setAttribute("aria-label", `Use ${target} theme`);
+    this.#button?.setAttribute("title", `Use ${target} theme`);
   }
 }

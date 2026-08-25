@@ -5,7 +5,7 @@ defineLitoDocComponents();
 
 const navigationReady = Array.from(
   document.querySelectorAll<LitoDocNavigationElement>(
-    "lito-doc-navigation[module-navigation-url]",
+    "lito-doc-navigation[scroll-state-url]",
   ),
   (navigation) => navigation.ready,
 );

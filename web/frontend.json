@@ -32,6 +32,10 @@
       "media-type": "text/javascript"
     },
     {
+      "path": "static/theme-icons.svg",
+      "media-type": "image/svg+xml"
+    },
+    {
       "path": "static/app.js",
       "media-type": "text/javascript"
     }

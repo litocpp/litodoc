@@ -1,6 +1,6 @@
 lito-doc-theme-picker {
   display: block;
-  width: 100%;
+  flex: 0 0 auto;
 }
 
 lito-doc-theme-picker:not([data-ready]) {
@@ -8,31 +8,37 @@ lito-doc-theme-picker:not([data-ready]) {
   pointer-events: none;
 }
 
-lito-doc-theme-picker > label {
-  display: block;
-}
-
-lito-doc-theme-picker > label > span {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-}
-
-lito-doc-theme-picker select {
-  width: 100%;
-  min-height: 2.25rem;
-  padding: 0.375rem 2rem 0.375rem 0.75rem;
+lito-doc-theme-picker .theme-toggle {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  padding: 0;
   color: var(--muted);
-  background-color: transparent;
-  border: 0;
-  border-radius: var(--radius-small);
-  font-size: 0.875rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-medium);
+  cursor: pointer;
+  transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease, transform 100ms ease;
 }
 
-lito-doc-theme-picker select:hover,
-lito-doc-theme-picker select:focus {
+lito-doc-theme-picker .theme-toggle:hover {
   color: var(--ink-strong);
-  background-color: var(--surface-raised);
+  background: var(--surface-raised);
+  border-color: var(--border);
+}
+
+lito-doc-theme-picker .theme-toggle:active {
+  transform: translateY(1px);
+}
+
+lito-doc-theme-picker [data-theme-icon] {
+  display: none;
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+lito-doc-theme-picker[data-current-theme="light"] [data-theme-icon="dark"],
+lito-doc-theme-picker[data-current-theme="dark"] [data-theme-icon="light"] {
+  display: block;
 }

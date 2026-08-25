@@ -441,11 +441,17 @@ auto navigation_value(const Dataset &dataset, const Package *current,
     module_navigation_url = rstd::format("{}navigation.json", href_prefix);
     module_fallback_url = rstd::format("{}index.html", href_prefix);
   }
+  auto show_modules = show_module_supplement && modules.count != usize{};
   navigation.insert("has_modules"_str,
                     TemplateValue::boolean_value(modules.count != usize{}));
   navigation.insert("show_modules"_str,
-                    TemplateValue::boolean_value(show_module_supplement &&
-                                                 modules.count != usize{}));
+                    TemplateValue::boolean_value(show_modules));
+  navigation.insert("has_scroll_state"_str,
+                    TemplateValue::boolean_value(show_modules));
+  navigation.insert(
+      "scroll_state_url"_str,
+      TemplateValue::text_value(show_modules ? module_navigation_url.clone()
+                                             : String::make()));
   navigation.insert(
       "module_navigation_url"_str,
       TemplateValue::text_value(rstd::move(module_navigation_url)));

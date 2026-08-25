@@ -238,6 +238,45 @@ TEST(Book, ReportsSummaryAndLinkDiagnosticsWithLocations) {
   EXPECT_TRUE(manifest_error.as_str().contains("book.unexpected"_str));
 }
 
+TEST(Book, DefaultFrontendKeepsOneNavigationScrollIdentity) {
+  auto created = make_book_project();
+  ASSERT_TRUE(created.is_ok());
+  auto project = rstd::move(created).unwrap();
+  ASSERT_TRUE(write_text(project.path(), "book.toml"_str,
+                         "[book]\n"
+                         "name = \"inline-book\"\n"
+                         "title = \"Inline Book\"\n"
+                         "version = \"1.2.3\"\n"
+                         "language = \"en\"\n"
+                         "\n"
+                         "[output.html]\n"
+                         "frontend = \"default\"\n"_str)
+                  .is_ok());
+  auto frontend = lito::doc::web::load_default_frontend();
+  ASSERT_TRUE(frontend.is_ok());
+  auto built = lito::book::build(
+      lito::book::BookBuildInput{
+          .directory = PathBuf::from(project.path()),
+      },
+      Some(rstd::move(frontend).unwrap()));
+  ASSERT_TRUE(built.is_ok());
+  auto root_page = rstd::fs::read_to_string(
+      child(project.path(), "build/book/index.html"_str).as_path());
+  ASSERT_TRUE(root_page.is_ok());
+  EXPECT_TRUE(
+      root_page->as_str().contains("scroll-state-url=\"data/book.json\""_str));
+  EXPECT_TRUE(root_page->as_str().contains("static/theme-icons.svg#moon"_str));
+  EXPECT_FALSE(root_page->as_str().contains("sidebar-footer"_str));
+  auto nested_page = rstd::fs::read_to_string(
+      child(project.path(), "build/book/guide/install/index.html"_str)
+          .as_path());
+  ASSERT_TRUE(nested_page.is_ok());
+  EXPECT_TRUE(nested_page->as_str().contains(
+      "scroll-state-url=\"../../data/book.json\""_str));
+  EXPECT_TRUE(
+      nested_page->as_str().contains("../../static/theme-icons.svg#sun"_str));
+}
+
 TEST(Book, PreservesVersionOneApiFrontendCompatibility) {
   auto temporary = rstd::test::TempDir::make();
   ASSERT_TRUE(temporary.is_ok());
@@ -347,11 +386,13 @@ TEST(Frontend, LoadsEmbeddedDefaultBundle) {
   ASSERT_TRUE(frontend.is_ok());
   EXPECT_TRUE(frontend->supports_api);
   EXPECT_TRUE(frontend->supports_book);
-  EXPECT_EQ(frontend->assets.len(), usize(4));
+  EXPECT_EQ(frontend->assets.len(), usize(5));
   EXPECT_FALSE(frontend->digest.is_empty());
   auto bootstrap_gates_document = false;
   auto application_reveals_document = false;
+  auto application_persists_navigation = false;
   auto stylesheet_gates_document = false;
+  auto theme_icons_are_embedded = false;
   for (const auto &asset : frontend->assets) {
     if (asset.path.as_str() == "static/theme-bootstrap.js"_str)
       bootstrap_gates_document =
@@ -359,11 +400,20 @@ TEST(Frontend, LoadsEmbeddedDefaultBundle) {
     if (asset.path.as_str() == "static/app.js"_str)
       application_reveals_document =
           asset.contents.as_str().contains("data-document-pending"_str);
+    if (asset.path.as_str() == "static/app.js"_str)
+      application_persists_navigation =
+          asset.contents.as_str().contains("lito-doc-navigation-scroll:"_str);
     if (asset.path.as_str() == "static/style.css"_str)
       stylesheet_gates_document =
           asset.contents.as_str().contains("data-document-pending"_str);
+    if (asset.path.as_str() == "static/theme-icons.svg"_str)
+      theme_icons_are_embedded =
+          asset.contents.as_str().contains("<symbol id=\"sun\""_str) &&
+          asset.contents.as_str().contains("<symbol id=\"moon\""_str);
   }
   EXPECT_TRUE(bootstrap_gates_document);
   EXPECT_TRUE(application_reveals_document);
+  EXPECT_TRUE(application_persists_navigation);
   EXPECT_TRUE(stylesheet_gates_document);
+  EXPECT_TRUE(theme_icons_are_embedded);
 }

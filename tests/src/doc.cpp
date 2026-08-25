@@ -404,6 +404,11 @@ TEST(DocPublication, PublishesRelocatablePackageSitesFromOneDataset) {
   EXPECT_TRUE(module_navigation_page.as_str().contains(
       "module-navigation-package=\"alpha\""_str));
   EXPECT_TRUE(module_navigation_page.as_str().contains(
+      "scroll-state-url=\"../navigation.json\""_str));
+  EXPECT_TRUE(module_navigation_page.as_str().contains(
+      "../static/theme-icons.svg#moon"_str));
+  EXPECT_FALSE(module_navigation_page.as_str().contains("sidebar-footer"_str));
+  EXPECT_TRUE(module_navigation_page.as_str().contains(
       "<link rel=\"preload\" href=\"../navigation.json\" as=\"fetch\" "
       "crossorigin=\"anonymous\">"_str));
   EXPECT_TRUE(module_navigation_page.as_str().contains(
@@ -595,6 +600,8 @@ TEST(DocPublication, ResolvesOnlyAvailableUnambiguousTypePages) {
       workspace_page->as_str().contains("href=\"../../target/symbol/"_str));
   EXPECT_TRUE(workspace_page->as_str().contains(
       "module-navigation-url=\"../../../package/owner/navigation.json\""_str));
+  EXPECT_TRUE(workspace_page->as_str().contains(
+      "scroll-state-url=\"../../../package/owner/navigation.json\""_str));
   EXPECT_TRUE(workspace_page->as_str().contains(
       "href=\"../../../package/owner/index.html\">View package modules"_str));
 

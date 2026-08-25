@@ -33,6 +33,12 @@
             <div id="search-results" data-search-results hidden aria-live="polite"></div>
           </lito-doc-search>{{/if}}
         </div>
+        <lito-doc-theme-picker>
+          <button class="theme-toggle" data-theme-toggle type="button" aria-label="Switch color theme" title="Switch color theme">
+            <svg data-theme-icon="dark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="{{page.asset_prefix}}static/theme-icons.svg#moon"></use></svg>
+            <svg data-theme-icon="light" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="{{page.asset_prefix}}static/theme-icons.svg#sun"></use></svg>
+          </button>
+        </lito-doc-theme-picker>
         <button class="menu-button" type="button" data-drawer-trigger aria-controls="sidebar" aria-expanded="false">
           <span class="menu-glyph" aria-hidden="true"></span><span class="sr-only">Open documentation navigation</span>
         </button>
@@ -54,7 +60,7 @@
           </lito-doc-search>{{/if}}
         </div>
         <div class="sidebar-scroll">
-          <lito-doc-navigation{{#if navigation.show_modules}} module-navigation-url="{{navigation.module_navigation_url}}" module-navigation-package="{{page.search_package}}"{{/if}}>
+          <lito-doc-navigation{{#if navigation.has_scroll_state}} scroll-state-url="{{navigation.scroll_state_url}}"{{/if}}{{#if navigation.show_modules}} module-navigation-url="{{navigation.module_navigation_url}}" module-navigation-package="{{page.search_package}}"{{/if}}>
           {{#if navigation.has_packages}}
           <div class="sidebar-section" data-navigation-section>
             <nav aria-label="Packages" data-page-navigation>
@@ -86,18 +92,6 @@
           </div>
           {{/if}}
           </lito-doc-navigation>
-        </div>
-        <div class="sidebar-footer">
-          <lito-doc-theme-picker>
-            <label for="theme-mode">
-              <span>Theme</span>
-              <select id="theme-mode" data-theme-select>
-                <option value="auto">System</option>
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-              </select>
-            </label>
-          </lito-doc-theme-picker>
         </div>
       </aside>
       <main id="content" class="content">

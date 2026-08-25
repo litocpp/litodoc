@@ -114,6 +114,10 @@ auto book_navigation(const BookGraph &graph, ref<str> current_output)
   navigation.insert("packages"_str, TemplateValue::array_value());
   navigation.insert("show_modules"_str, TemplateValue::boolean_value(false));
   navigation.insert("modules"_str, TemplateValue::array_value());
+  navigation.insert("has_scroll_state"_str, TemplateValue::boolean_value(true));
+  navigation.insert("scroll_state_url"_str,
+                    TemplateValue::text_value(
+                        relative_url(current_output, "data/book.json"_str)));
   navigation.insert("has_pages"_str,
                     TemplateValue::boolean_value(!graph.pages.is_empty()));
   auto pages = TemplateValue::array_value();
