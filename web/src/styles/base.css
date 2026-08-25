@@ -21,6 +21,10 @@ body {
   background: var(--canvas);
 }
 
+:root[data-document-pending] body {
+  visibility: hidden;
+}
+
 body[data-navigation-open] {
   overflow: hidden;
 }

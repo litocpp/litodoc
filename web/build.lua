@@ -6,6 +6,7 @@ local frontend_sources = {
   "theme.ts",
   "search/catalog.ts",
   "search/book.ts",
+  "navigation/data.ts",
   "components/registry.ts",
   "components/module-identity/element.ts",
   "components/module-identity/style.css",

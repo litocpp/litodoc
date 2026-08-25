@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/litocpp/litodoc/main/schema/navigation.schema.json",
+  "title": "litodoc module navigation v1",
+  "type": "object",
+  "required": ["format", "version", "package", "modules"],
+  "properties": {
+    "format": { "const": "lito-doc-navigation" },
+    "version": { "const": 1 },
+    "package": { "type": "string", "minLength": 1 },
+    "modules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["label", "url"],
+        "properties": {
+          "label": { "type": "string", "minLength": 1 },
+          "url": { "$ref": "#/$defs/relativePath" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*[\\\\:%?#]).+$"
+    }
+  }
+}

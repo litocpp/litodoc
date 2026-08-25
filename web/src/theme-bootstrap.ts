@@ -1,3 +1,6 @@
 import { applyTheme, readBrowserTheme } from "./theme";
 
-applyTheme(document.documentElement, readBrowserTheme());
+const root = document.documentElement;
+root.toggleAttribute("data-document-pending", true);
+window.setTimeout(() => root.removeAttribute("data-document-pending"), 3000);
+applyTheme(root, readBrowserTheme());

@@ -87,6 +87,19 @@ auto publication_package(ref<rstd::path::Path> root, ref<str> name,
   return package;
 }
 
+auto append_module(lito::doc::PackageInput &package, ref<rstd::path::Path> root,
+                   ref<str> module) -> void {
+  package.units.push(lito::doc::DocumentationUnit{
+      .source = child(root, "src/child.cppm"_str),
+      .source_contents = rstd::format("export module {};\n", module),
+      .logical_module = String::make(module),
+      .is_interface = true,
+      .module_comment = Some(lito::doc::DocumentationComment{
+          .text = String::make("Child module documentation."_str),
+      }),
+  });
+}
+
 auto record_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
   auto source = child(root, "src/box.cppm"_str);
   auto unit = lito::doc::DocumentationUnit{
@@ -326,7 +339,9 @@ TEST(DocPublication, PublishesRelocatablePackageSitesFromOneDataset) {
       .data_output = child(root, "data"_str),
       .publication = lito::doc::PublicationKind::PackageSet,
   };
-  input.packages.push(publication_package(root, "alpha"_str, "alpha"_str));
+  auto alpha_package = publication_package(root, "alpha"_str, "alpha"_str);
+  append_module(alpha_package, root, "alpha:child"_str);
+  input.packages.push(rstd::move(alpha_package));
   input.packages.push(publication_package(root, "beta"_str, "beta"_str));
 
   auto generated = lito::doc::generate(rstd::move(input),
@@ -362,6 +377,41 @@ TEST(DocPublication, PublishesRelocatablePackageSitesFromOneDataset) {
   ASSERT_TRUE(search.is_ok());
   EXPECT_FALSE(search->as_str().contains("package/alpha/"_str));
   EXPECT_TRUE(search->as_str().contains("symbol/"_str));
+  auto navigation = rstd::fs::read_to_string(
+      child(root, "publication/alpha/navigation.json"_str).as_path());
+  ASSERT_TRUE(navigation.is_ok());
+  EXPECT_TRUE(
+      navigation->as_str().contains("\"format\": \"lito-doc-navigation\""_str));
+  EXPECT_TRUE(navigation->as_str().contains("\"package\": \"alpha\""_str));
+  EXPECT_TRUE(navigation->as_str().contains("\"label\": \"child\""_str));
+  EXPECT_TRUE(navigation->as_str().contains("\"url\": \"module/"_str));
+  EXPECT_FALSE(navigation->as_str().contains("package/alpha/"_str));
+  auto module_navigation_page = String::make();
+  for (const auto &file : alpha.files) {
+    if (!file.path.as_str().starts_with("module/"_str) ||
+        !file.path.as_str().ends_with(".html"_str))
+      continue;
+    auto contents = rstd::fs::read_to_string(
+        child(root, rstd::format("publication/alpha/{}", file.path).as_str())
+            .as_path());
+    ASSERT_TRUE(contents.is_ok());
+    if (contents->as_str().contains("module-navigation-url"_str))
+      module_navigation_page = rstd::move(contents).unwrap();
+  }
+  ASSERT_TRUE(!module_navigation_page.is_empty());
+  EXPECT_TRUE(module_navigation_page.as_str().contains(
+      "module-navigation-url=\"../navigation.json\""_str));
+  EXPECT_TRUE(module_navigation_page.as_str().contains(
+      "module-navigation-package=\"alpha\""_str));
+  EXPECT_TRUE(module_navigation_page.as_str().contains(
+      "<link rel=\"preload\" href=\"../navigation.json\" as=\"fetch\" "
+      "crossorigin=\"anonymous\">"_str));
+  EXPECT_TRUE(module_navigation_page.as_str().contains(
+      "<ul class=\"nav-list module-list\" data-module-navigation>"_str));
+  EXPECT_TRUE(module_navigation_page.as_str().contains(
+      "<a href=\"../index.html\">View package modules</a>"_str));
+  EXPECT_FALSE(
+      module_navigation_page.as_str().contains("<li><a href=\"../module/"_str));
 }
 
 TEST(DocPublication, PackageManifestDoesNotDependOnSiblingPackages) {
@@ -515,6 +565,7 @@ TEST(DocPublication, ResolvesOnlyAvailableUnambiguousTypePages) {
         String::make("template <typename T>\nclass Holder {};"_str);
     holder.record_header =
         Some(String::make("template <typename T>\nclass Holder"_str));
+    append_module(package, root, "records:child"_str);
     return package;
   };
   auto target_package = [root](ref<str> name) mutable {
@@ -542,6 +593,10 @@ TEST(DocPublication, ResolvesOnlyAvailableUnambiguousTypePages) {
   ASSERT_TRUE(workspace_page.is_ok());
   EXPECT_TRUE(
       workspace_page->as_str().contains("href=\"../../target/symbol/"_str));
+  EXPECT_TRUE(workspace_page->as_str().contains(
+      "module-navigation-url=\"../../../package/owner/navigation.json\""_str));
+  EXPECT_TRUE(workspace_page->as_str().contains(
+      "href=\"../../../package/owner/index.html\">View package modules"_str));
 
   frontend = lito::doc::web::load_default_frontend();
   ASSERT_TRUE(frontend.is_ok());
@@ -563,6 +618,8 @@ TEST(DocPublication, ResolvesOnlyAvailableUnambiguousTypePages) {
   ASSERT_TRUE(package_page.is_ok());
   EXPECT_FALSE(
       package_page->as_str().contains("href=\"../../target/symbol/"_str));
+  EXPECT_TRUE(package_page->as_str().contains(
+      "module-navigation-url=\"../navigation.json\""_str));
 
   frontend = lito::doc::web::load_default_frontend();
   ASSERT_TRUE(frontend.is_ok());

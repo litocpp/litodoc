@@ -6,6 +6,7 @@
   <meta name="generator" content="Lito">
   <title>{{page.title}} · {{site.title}}</title>
   <link rel="icon" href="{{page.asset_prefix}}static/favicon.svg" type="image/svg+xml">
+  {{#if navigation.show_modules}}<link rel="preload" href="{{navigation.module_navigation_url}}" as="fetch" crossorigin="anonymous">{{/if}}
   <link rel="stylesheet" href="{{page.asset_prefix}}static/style.css">
   <script src="{{page.asset_prefix}}static/theme-bootstrap.js"></script>
   <script defer src="{{page.asset_prefix}}static/app.js"></script>
@@ -53,7 +54,7 @@
           </lito-doc-search>{{/if}}
         </div>
         <div class="sidebar-scroll">
-          <lito-doc-navigation>
+          <lito-doc-navigation{{#if navigation.show_modules}} module-navigation-url="{{navigation.module_navigation_url}}" module-navigation-package="{{page.search_package}}"{{/if}}>
           {{#if navigation.has_packages}}
           <div class="sidebar-section" data-navigation-section>
             <nav aria-label="Packages" data-page-navigation>
@@ -78,8 +79,8 @@
           <div class="sidebar-section" data-navigation-section>
             <div class="sidebar-heading">Modules</div>
             <nav aria-label="Package modules" data-page-navigation>
-              <ul class="nav-list module-list">
-                {{#each navigation.modules}}<li><a href="{{href}}"><code>{{label}}</code></a></li>{{/each}}
+              <ul class="nav-list module-list" data-module-navigation>
+                <li><a href="{{navigation.module_fallback_url}}">View package modules</a></li>
               </ul>
             </nav>
           </div>

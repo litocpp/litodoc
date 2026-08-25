@@ -349,4 +349,21 @@ TEST(Frontend, LoadsEmbeddedDefaultBundle) {
   EXPECT_TRUE(frontend->supports_book);
   EXPECT_EQ(frontend->assets.len(), usize(4));
   EXPECT_FALSE(frontend->digest.is_empty());
+  auto bootstrap_gates_document = false;
+  auto application_reveals_document = false;
+  auto stylesheet_gates_document = false;
+  for (const auto &asset : frontend->assets) {
+    if (asset.path.as_str() == "static/theme-bootstrap.js"_str)
+      bootstrap_gates_document =
+          asset.contents.as_str().contains("data-document-pending"_str);
+    if (asset.path.as_str() == "static/app.js"_str)
+      application_reveals_document =
+          asset.contents.as_str().contains("data-document-pending"_str);
+    if (asset.path.as_str() == "static/style.css"_str)
+      stylesheet_gates_document =
+          asset.contents.as_str().contains("data-document-pending"_str);
+  }
+  EXPECT_TRUE(bootstrap_gates_document);
+  EXPECT_TRUE(application_reveals_document);
+  EXPECT_TRUE(stylesheet_gates_document);
 }

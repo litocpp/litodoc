@@ -1,3 +1,5 @@
+import { loadModuleNavigation } from "../../navigation/data";
+
 function documentUrl(value: string): string {
   const url = new URL(value, document.baseURI);
   url.hash = "";
@@ -9,11 +11,25 @@ export class LitoDocNavigationElement extends HTMLElement {
   #events?: AbortController;
   #outline: ReadonlyArray<readonly [HTMLElement, HTMLAnchorElement]> = [];
   #updatePending = false;
+  #resolveReady: () => void = () => {};
+  #ready = new Promise<void>((resolve) => {
+    this.#resolveReady = resolve;
+  });
+
+  get ready(): Promise<void> {
+    return this.#ready;
+  }
 
   connectedCallback(): void {
     if (this.#events) return;
     const events = new AbortController();
     this.#events = events;
+    void this.#initialize(events);
+  }
+
+  async #initialize(events: AbortController): Promise<void> {
+    await this.#loadModuleNavigation(events.signal);
+    if (events.signal.aborted) return;
     this.#markCurrentPage();
     this.#prepareFolders(events.signal);
     this.#prepareOutline();
@@ -25,6 +41,7 @@ export class LitoDocNavigationElement extends HTMLElement {
       signal: events.signal,
     });
     this.toggleAttribute("data-ready", true);
+    this.#resolveReady();
     requestAnimationFrame(() => {
       this.#centerCurrentPage();
       this.#updateOutline();
@@ -37,6 +54,51 @@ export class LitoDocNavigationElement extends HTMLElement {
     this.#outline = [];
     this.#updatePending = false;
     this.removeAttribute("data-ready");
+  }
+
+  async #loadModuleNavigation(signal: AbortSignal): Promise<void> {
+    const value = this.getAttribute("module-navigation-url");
+    if (!value) return;
+    const list = this.querySelector<HTMLUListElement>("[data-module-navigation]");
+    const navigation = list?.closest<HTMLElement>("[data-page-navigation]");
+    if (!list || !navigation) {
+      console.error("lito-doc-navigation requires a module navigation list");
+      return;
+    }
+    navigation.setAttribute("aria-busy", "true");
+    try {
+      const url = new URL(value, document.baseURI);
+      const data = await loadModuleNavigation(url.href, fetch, signal);
+      if (signal.aborted) return;
+      const expectedPackage = this.getAttribute("module-navigation-package");
+      if (expectedPackage && data.package !== expectedPackage) {
+        throw new Error(
+          `module navigation package '${data.package}' does not match '${expectedPackage}'`,
+        );
+      }
+      const fragment = document.createDocumentFragment();
+      for (const entry of data.modules) {
+        const item = document.createElement("li");
+        const link = document.createElement("a");
+        const code = document.createElement("code");
+        link.href = new URL(entry.url, url).href;
+        code.textContent = entry.label;
+        link.append(code);
+        item.append(link);
+        fragment.append(item);
+      }
+      if (!data.modules.length) {
+        navigation.closest<HTMLElement>("[data-navigation-section]")?.toggleAttribute("hidden", true);
+      } else {
+        list.replaceChildren(fragment);
+      }
+    } catch (error: unknown) {
+      if (!signal.aborted) {
+        console.error(error);
+      }
+    } finally {
+      if (!signal.aborted) navigation.setAttribute("aria-busy", "false");
+    }
   }
 
   #markCurrentPage(): void {

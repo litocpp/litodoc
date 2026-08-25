@@ -135,6 +135,12 @@ auto direct_module_child(ref<str> parent, ref<str> candidate) -> bool {
   return true;
 }
 
+struct ModuleNavigationEntry {
+  String name;
+  String label;
+  String path;
+};
+
 struct ModuleLinks {
   TemplateValue items;
   usize count{};
@@ -340,23 +346,64 @@ auto record_member_value(const Dataset &dataset,
   return item;
 }
 
-auto direct_module_links(const Package &package, ref<str> parent,
-                         ref<str> href_prefix) -> ModuleLinks {
-  auto result = ModuleLinks{.items = TemplateValue::array_value()};
+auto direct_module_navigation(const Package &package, ref<str> parent)
+    -> Vec<ModuleNavigationEntry> {
+  auto result = Vec<ModuleNavigationEntry>::make();
   for (const auto &module : package.modules) {
     if (!direct_module_child(parent, module.name.as_str()))
       continue;
+    result.push(ModuleNavigationEntry{
+        .name = module.name.clone(),
+        .label =
+            String::make(module.name.as_str()
+                             .get(parent.len() + usize(1), module.name.len())
+                             .unwrap()),
+        .path = module.page.clone(),
+    });
+  }
+  return result;
+}
+
+auto module_links(const Vec<ModuleNavigationEntry> &entries,
+                  ref<str> href_prefix) -> ModuleLinks {
+  auto result = ModuleLinks{.items = TemplateValue::array_value()};
+  for (const auto &entry : entries) {
     auto item = TemplateValue::object_value();
-    item.insert("name"_str, template_text(module.name.as_str()));
-    item.insert("label"_str, template_text(module.name.as_str()
-                                               .get(parent.len() + usize(1),
-                                                    module.name.len())
-                                               .unwrap()));
+    item.insert("name"_str, template_text(entry.name.as_str()));
+    item.insert("label"_str, template_text(entry.label.as_str()));
     item.insert("href"_str, TemplateValue::text_value(rstd::format(
-                                "{}{}", href_prefix, module.page.as_str())));
+                                "{}{}", href_prefix, entry.path.as_str())));
     result.items.array.push(rstd::move(item));
     ++result.count;
   }
+  return result;
+}
+
+auto module_navigation_json(const Package &package) -> String {
+  auto root = RenderJsonMap::make();
+  root.insert(String::make("format"_str),
+              RenderJson::String(String::make("lito-doc-navigation"_str)));
+  root.insert(String::make("version"_str),
+              RenderJson::Number(rstd::json::Number::from_u64(u64(1))));
+  root.insert(String::make("package"_str),
+              RenderJson::String(package.name.clone()));
+  auto modules = rstd::json::Array::make();
+  auto entries =
+      direct_module_navigation(package, package.root_module.as_str());
+  for (const auto &entry : entries) {
+    auto module = RenderJsonMap::make();
+    module.insert(String::make("label"_str),
+                  RenderJson::String(entry.label.clone()));
+    module.insert(String::make("url"_str),
+                  RenderJson::String(entry.path.clone()));
+    modules.push(RenderJson::Object(rstd::move(module)));
+  }
+  root.insert(String::make("modules"_str),
+              RenderJson::Array(rstd::move(modules)));
+  auto result = rstd::json::to_string(
+      RenderJson::Object(rstd::move(root)),
+      rstd::json::FormatOptions{.pretty = true, .indent = usize(2)});
+  result.push_ascii('\n');
   return result;
 }
 
@@ -381,19 +428,29 @@ auto navigation_value(const Dataset &dataset, const Package *current,
                     TemplateValue::boolean_value(current == nullptr));
   navigation.insert("packages"_str, rstd::move(packages));
   auto modules = ModuleLinks{.items = TemplateValue::array_value()};
+  auto module_navigation_url = String::make();
+  auto module_fallback_url = String::make();
   if (current != nullptr) {
     auto href_prefix = layout == RenderLayout::Package
                            ? String::make(asset_prefix)
                            : rstd::format("{}package/{}/", asset_prefix,
                                           current->name.as_str());
-    modules = direct_module_links(*current, current->root_module.as_str(),
-                                  href_prefix.as_str());
+    auto entries =
+        direct_module_navigation(*current, current->root_module.as_str());
+    modules = module_links(entries, href_prefix.as_str());
+    module_navigation_url = rstd::format("{}navigation.json", href_prefix);
+    module_fallback_url = rstd::format("{}index.html", href_prefix);
   }
   navigation.insert("has_modules"_str,
                     TemplateValue::boolean_value(modules.count != usize{}));
   navigation.insert("show_modules"_str,
                     TemplateValue::boolean_value(show_module_supplement &&
                                                  modules.count != usize{}));
+  navigation.insert(
+      "module_navigation_url"_str,
+      TemplateValue::text_value(rstd::move(module_navigation_url)));
+  navigation.insert("module_fallback_url"_str,
+                    TemplateValue::text_value(rstd::move(module_fallback_url)));
   navigation.insert("modules"_str, rstd::move(modules.items));
   return navigation;
 }
@@ -484,8 +541,9 @@ auto package_context(const Dataset &dataset, const Package &package,
                            has_documentation
                                ? render_markdown(root_module->comment->as_str())
                                : String::make()));
-  auto modules =
-      direct_module_links(package, package.root_module.as_str(), ""_str);
+  auto module_navigation =
+      direct_module_navigation(package, package.root_module.as_str());
+  auto modules = module_links(module_navigation, ""_str);
   package_value.insert("module_count"_str, template_number(modules.count));
   context.insert("package"_str, rstd::move(package_value));
   context.insert("modules"_str, rstd::move(modules.items));
@@ -544,7 +602,9 @@ auto module_context(const Dataset &dataset, const Package &package,
     reexports.array.push(rstd::move(item));
   }
   context.insert("reexports"_str, rstd::move(reexports));
-  auto modules = direct_module_links(package, module.name.as_str(), "../"_str);
+  auto module_navigation =
+      direct_module_navigation(package, module.name.as_str());
+  auto modules = module_links(module_navigation, "../"_str);
   module_value.insert("has_modules"_str,
                       TemplateValue::boolean_value(modules.count != usize{}));
   module_value.insert("module_count"_str, template_number(modules.count));
@@ -924,6 +984,10 @@ auto render_package_site(ref<rstd::path::Path> root, const Dataset &dataset,
                            package_search_json(package).as_str(), &files);
   if (written.is_err())
     return written;
+  written = write_doc_file(root, "navigation.json"_str,
+                           module_navigation_json(package).as_str(), &files);
+  if (written.is_err())
+    return written;
   auto render_index = package_render_index(package);
   written = render_page(
       root, "index.html"_str, frontend, frontend.package_template.as_str(),
@@ -992,6 +1056,11 @@ auto render_site(ref<rstd::path::Path> root, const Dataset &dataset,
   for (const auto &package : dataset.packages) {
     auto render_index = package_render_index(package);
     auto prefix = rstd::format("package/{}/", package.name.as_str());
+    written = write_doc_file(
+        root, rstd::format("{}navigation.json", prefix.as_str()).as_str(),
+        module_navigation_json(package).as_str());
+    if (written.is_err())
+      return written;
     auto package_value = package_context(dataset, package);
     auto package_relative = rstd::format("{}index.html", prefix.as_str());
     written = render_page(root, package_relative.as_str(), frontend,
