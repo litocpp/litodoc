@@ -5,7 +5,7 @@ export module lito.book:data;
 
 import rstd;
 import rstd.json;
-import lito.crypto;
+import licrypto;
 import lito.site;
 import :model;
 
@@ -407,8 +407,7 @@ auto load_book_dataset(ref<rstd::path::Path> root)
       return Err(
           rstd::format("duplicate Book page data path '{}'", data.as_str()));
     auto page_text = rstd_try(read_book_data(root, data.as_str()));
-    if (lito::crypto::sha256_hex(page_text.as_str()).as_str() !=
-        digest.as_str())
+    if (licrypto::sha256_hex(page_text.as_str()).as_str() != digest.as_str())
       return Err(
           rstd::format("Book page '{}' digest mismatch", identity.as_str()));
     auto document =
@@ -447,7 +446,7 @@ auto publish_book_dataset(ref<rstd::path::Path> root,
     entry.insert(String::make("data"_str), book_json_string(relative.as_str()));
     entry.insert(
         String::make("digest"_str),
-        book_json_string(lito::crypto::sha256_hex(text.as_str()).as_str()));
+        book_json_string(licrypto::sha256_hex(text.as_str()).as_str()));
     pages.push(BookJson::Object(rstd::move(entry)));
     summary.pages.push(BookDataPageSummary{
         .identity = page.identity.clone(),
@@ -473,7 +472,7 @@ auto publish_book_dataset(ref<rstd::path::Path> root,
   manifest.insert(String::make("pages"_str),
                   BookJson::Array(rstd::move(pages)));
   auto text = book_json_text(BookJson::Object(rstd::move(manifest)));
-  summary.digest = lito::crypto::sha256_hex(text.as_str());
+  summary.digest = licrypto::sha256_hex(text.as_str());
   summary.manifest =
       rstd_try(write_book_data_file(root, "data/book.json"_str, text.as_str()));
   auto validated = rstd_try(load_book_dataset(root));

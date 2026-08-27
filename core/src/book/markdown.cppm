@@ -4,7 +4,7 @@ module;
 export module lito.book:markdown;
 
 import rstd;
-import lito.crypto;
+import licrypto;
 import lito.site;
 import :model;
 
@@ -177,7 +177,7 @@ auto heading_slug(ref<str> text) -> String {
     }
   }
   if (result.is_empty()) {
-    auto digest = lito::crypto::sha256_hex(text);
+    auto digest = licrypto::sha256_hex(text);
     result = rstd::format("section-{}",
                           digest.as_str().get(usize{}, usize(12)).unwrap());
   }
@@ -652,7 +652,7 @@ auto resolve_book_content(const BookProject &project, const BookGraph &graph,
             if (name.is_none() || name->to_str().is_none())
               return Err(markdown_error(
                   item.span, "local image has no UTF-8 file name"_str));
-            auto digest = lito::crypto::sha256_hex(
+            auto digest = licrypto::sha256_hex(
                 local.as_path().to_string_lossy().as_str());
             output =
                 rstd::format("assets/{}-{}",

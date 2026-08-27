@@ -5,7 +5,7 @@ export module lito.book:project;
 
 import rstd;
 import rstd.toml;
-import lito.crypto;
+import licrypto;
 import :model;
 
 using namespace rstd::prelude;
@@ -319,7 +319,7 @@ auto load_book_project(
         root.as_path(), frontend_text.as_str(), manifest.as_path(),
         "output.html.frontend"_str)));
   }
-  auto identity = lito::crypto::sha256_hex(
+  auto identity = licrypto::sha256_hex(
       rstd::format("lito-book-project-v1\n{}", name->as_str()).as_str());
   return Ok(BookProject{
       .root = rstd::move(root),

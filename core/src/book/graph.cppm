@@ -4,7 +4,7 @@ module;
 export module lito.book:graph;
 
 import rstd;
-import lito.crypto;
+import licrypto;
 import :model;
 
 using namespace rstd::prelude;
@@ -71,7 +71,7 @@ auto build_book_graph(const BookProject &project, SummaryDocument summary)
     auto parent = entry.depth == usize{}
                       ? Option<usize>{}
                       : Some(parents[entry.depth - usize(1)]);
-    auto identity = lito::crypto::sha256_hex(
+    auto identity = licrypto::sha256_hex(
         rstd::format("lito-book-page-v1\n{}\n{}", project.identity.as_str(),
                      entry.source.as_str())
             .as_str());
