@@ -3,6 +3,7 @@ version = 1
 [[packages]]
 name = "licrypto"
 version = "0.1.0"
+source = "git+https://github.com/litocpp/licrypto.git#b7156942a4b85780a21bd11092c08cb6893b05d4"
 dependencies = [
   "rstd-std",
   "rstd-test",
@@ -10,7 +11,7 @@ dependencies = [
 
 [[packages]]
 name = "litobook"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
   "litodoc-core",
   "litodoc-web",
@@ -20,7 +21,7 @@ dependencies = [
 
 [[packages]]
 name = "litodoc"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
   "licrypto",
   "litodoc-core",
@@ -31,7 +32,7 @@ dependencies = [
 
 [[packages]]
 name = "litodoc-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
   "licrypto",
   "rstd-json",
@@ -42,7 +43,7 @@ dependencies = [
 
 [[packages]]
 name = "litodoc-tests"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
   "licrypto",
   "litodoc-core",
@@ -53,7 +54,7 @@ dependencies = [
 
 [[packages]]
 name = "litodoc-web"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
   "litodoc-core",
   "rstd-std",
@@ -62,7 +63,7 @@ dependencies = [
 [[packages.externals]]
 name = "build-tool:esbuild:linux"
 source = "archive+https://registry.npmjs.org/@esbuild/linux-arm64/-/linux-arm64-0.28.1.tgz"
-checksum = "sha256:2145e9e686c95ee47c1181f83f272f0ff95820e52d7736fdcd9eeb106fd6456a"
+checksum = "2145e9e686c95ee47c1181f83f272f0ff95820e52d7736fdcd9eeb106fd6456a"
 architectures = [
   "aarch64",
 ]
@@ -70,7 +71,7 @@ architectures = [
 [[packages.externals]]
 name = "build-tool:esbuild:linux"
 source = "archive+https://registry.npmjs.org/@esbuild/linux-x64/-/linux-x64-0.28.1.tgz"
-checksum = "sha256:9ed00ab5330c94386f3273eda99a1fb0e8f37cfd6cb5270e4ad2fe3527da3546"
+checksum = "9ed00ab5330c94386f3273eda99a1fb0e8f37cfd6cb5270e4ad2fe3527da3546"
 architectures = [
   "x86_64",
 ]
@@ -78,7 +79,7 @@ architectures = [
 [[packages]]
 name = "rstd-alloc"
 version = "0.1.0"
-source = "git+https://github.com/litocpp/rstd.git#fdb99aaa894d76b04032cd301ac82b5ee6e3ec6d"
+source = "git+https://github.com/litocpp/rstd.git#73565151b9c96017e55462bb266dea02ef5b07b8"
 dependencies = [
   "rstd-core",
   "rstd-runtime",
@@ -87,7 +88,7 @@ dependencies = [
 [[packages]]
 name = "rstd-argparse"
 version = "0.1.0"
-source = "git+https://github.com/litocpp/rstd.git#fdb99aaa894d76b04032cd301ac82b5ee6e3ec6d"
+source = "git+https://github.com/litocpp/rstd.git#73565151b9c96017e55462bb266dea02ef5b07b8"
 dependencies = [
   "rstd-std",
 ]
@@ -95,12 +96,12 @@ dependencies = [
 [[packages]]
 name = "rstd-basic"
 version = "0.1.0"
-source = "git+https://github.com/litocpp/rstd.git#fdb99aaa894d76b04032cd301ac82b5ee6e3ec6d"
+source = "git+https://github.com/litocpp/rstd.git#73565151b9c96017e55462bb266dea02ef5b07b8"
 
 [[packages]]
 name = "rstd-core"
 version = "0.1.0"
-source = "git+https://github.com/litocpp/rstd.git#fdb99aaa894d76b04032cd301ac82b5ee6e3ec6d"
+source = "git+https://github.com/litocpp/rstd.git#73565151b9c96017e55462bb266dea02ef5b07b8"
 dependencies = [
   "rstd-basic",
   "rstd-runtime",
@@ -109,7 +110,7 @@ dependencies = [
 [[packages]]
 name = "rstd-json"
 version = "0.1.0"
-source = "git+https://github.com/litocpp/rstd.git#fdb99aaa894d76b04032cd301ac82b5ee6e3ec6d"
+source = "git+https://github.com/litocpp/rstd.git#73565151b9c96017e55462bb266dea02ef5b07b8"
 dependencies = [
   "rstd-core",
   "rstd-parse",
@@ -120,7 +121,7 @@ dependencies = [
 [[packages]]
 name = "rstd-parse"
 version = "0.1.0"
-source = "git+https://github.com/litocpp/rstd.git#fdb99aaa894d76b04032cd301ac82b5ee6e3ec6d"
+source = "git+https://github.com/litocpp/rstd.git#73565151b9c96017e55462bb266dea02ef5b07b8"
 dependencies = [
   "rstd-alloc",
   "rstd-core",
@@ -129,7 +130,7 @@ dependencies = [
 [[packages]]
 name = "rstd-runtime"
 version = "0.1.0"
-source = "git+https://github.com/litocpp/rstd.git#fdb99aaa894d76b04032cd301ac82b5ee6e3ec6d"
+source = "git+https://github.com/litocpp/rstd.git#73565151b9c96017e55462bb266dea02ef5b07b8"
 dependencies = [
   "rstd-basic",
 ]
@@ -137,7 +138,7 @@ dependencies = [
 [[packages]]
 name = "rstd-serde"
 version = "0.1.0"
-source = "git+https://github.com/litocpp/rstd.git#fdb99aaa894d76b04032cd301ac82b5ee6e3ec6d"
+source = "git+https://github.com/litocpp/rstd.git#73565151b9c96017e55462bb266dea02ef5b07b8"
 dependencies = [
   "rstd-alloc",
 ]
@@ -145,7 +146,7 @@ dependencies = [
 [[packages]]
 name = "rstd-std"
 version = "0.1.0"
-source = "git+https://github.com/litocpp/rstd.git#fdb99aaa894d76b04032cd301ac82b5ee6e3ec6d"
+source = "git+https://github.com/litocpp/rstd.git#73565151b9c96017e55462bb266dea02ef5b07b8"
 dependencies = [
   "rstd-alloc",
   "rstd-core",
@@ -154,7 +155,7 @@ dependencies = [
 [[packages]]
 name = "rstd-test"
 version = "0.1.0"
-source = "git+https://github.com/litocpp/rstd.git#fdb99aaa894d76b04032cd301ac82b5ee6e3ec6d"
+source = "git+https://github.com/litocpp/rstd.git#73565151b9c96017e55462bb266dea02ef5b07b8"
 dependencies = [
   "rstd-std",
 ]
@@ -162,7 +163,7 @@ dependencies = [
 [[packages]]
 name = "rstd-toml"
 version = "0.1.0"
-source = "git+https://github.com/litocpp/rstd.git#fdb99aaa894d76b04032cd301ac82b5ee6e3ec6d"
+source = "git+https://github.com/litocpp/rstd.git#73565151b9c96017e55462bb266dea02ef5b07b8"
 dependencies = [
   "rstd-alloc",
   "rstd-core",

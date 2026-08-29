@@ -336,6 +336,7 @@ struct Summary {
 
 auto declaration_kind_name(DeclarationKind kind) -> ref<str>;
 auto declaration_kind_slug(DeclarationKind kind) -> ref<str>;
+auto litodoc_version() noexcept -> ref<str>;
 auto is_published_symbol_kind(DeclarationKind kind) -> bool;
 auto published_symbol_statistics(const Package &package)
     -> PublishedSymbolStatistics;
@@ -343,6 +344,12 @@ auto published_symbol_statistics(const Package &package)
 } // namespace lito::doc
 
 namespace lito::doc {
+
+auto litodoc_version() noexcept -> ref<str> {
+  return ref<str>::from_raw_parts_unchecked(
+      reinterpret_cast<const byte *>(LITO_PKG_VERSION),
+      usize(sizeof(LITO_PKG_VERSION) - sizeof(char)));
+}
 
 auto declaration_kind_name(DeclarationKind kind) -> ref<str> {
   switch (kind) {

@@ -1121,7 +1121,7 @@ auto encode_response(const ExtractionRequest &request,
       {"request_id", as_std(request.request_id.as_str())},
       {"producer",
        llvm::json::Object{
-           {"litodoc", "0.1.0"},
+           {"litodoc", as_std(litodoc_version())},
            {"clang", clang::getClangFullVersion()},
        }},
       {"package", as_std(request.package_name.as_str())},
@@ -1490,7 +1490,7 @@ auto capabilities() -> String {
       {"site_manifest_versions", rstd::move(site_versions)},
       {"data_api_versions", rstd::move(data_versions)},
       {"features", rstd::move(features)},
-      {"litodoc_build", "0.1.0"},
+      {"litodoc_build", as_std(litodoc_version())},
       {"clang_version", CLANG_VERSION_STRING},
       {"clang_build", clang::getClangFullVersion()},
   });

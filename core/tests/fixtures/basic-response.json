@@ -3,7 +3,7 @@
   "version": 1,
   "request_id": "fixture-basic-response-v1",
   "producer": {
-    "litodoc": "0.1.0",
+    "litodoc": "0.2.0",
     "clang": "fixture"
   },
   "package": "litodoc-fixture",

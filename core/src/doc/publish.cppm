@@ -71,7 +71,7 @@ auto package_publication_json(const Package &package,
               PublishJson::Object(rstd::move(source)));
   auto generator = PublishJsonMap::make();
   generator.insert(String::make("litodoc"_str),
-                   publish_json_string("0.1.0"_str));
+                   publish_json_string(litodoc_version()));
   generator.insert(String::make("frontend"_str),
                    publish_json_string(frontend.identity.as_str()));
   generator.insert(String::make("frontend_digest"_str),
