@@ -15,12 +15,17 @@ lito-doc-module-identity > nav {
 }
 
 lito-doc-module-identity a,
+lito-doc-module-identity .namespace-name,
 lito-doc-module-identity strong {
   min-width: 0;
   overflow: hidden;
   color: inherit;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+lito-doc-module-identity .namespace-name code {
+  font-size: inherit;
 }
 
 lito-doc-module-identity a {

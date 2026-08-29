@@ -157,6 +157,7 @@ auto summary_for(ref<rstd::path::Path> output, const Dataset &dataset,
       .data = copy_data_summary(data),
   };
   for (const auto &package : dataset.packages) {
+    auto statistics = published_symbol_statistics(package);
     auto directory =
         rstd::path::PathBuf::from(output)
             .join(rstd::path::PathBuf::from("package"_str).as_path())
@@ -169,9 +170,9 @@ auto summary_for(ref<rstd::path::Path> output, const Dataset &dataset,
         .data_json = data_json_for(data, package.name.as_str()),
         .index = directory.join(
             rstd::path::PathBuf::from("index.html"_str).as_path()),
-        .symbols = package.symbols.len(),
-        .documented = package.documented,
-        .undocumented = package.undocumented,
+        .symbols = statistics.total,
+        .documented = statistics.documented,
+        .undocumented = statistics.undocumented,
         .unsupported = package.unsupported,
         .diagnostics = package.diagnostics.len(),
     };

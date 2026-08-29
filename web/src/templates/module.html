@@ -12,12 +12,6 @@
   <ul class="api-list">{{#each modules}}<li><a href="{{href}}"><code>{{label}}</code></a></li>{{/each}}</ul>
 </section>
 {{/if}}
-{{#if module.has_namespaces}}
-<section class="api-section" id="namespaces">
-  <div class="section-heading"><span>Namespaces</span><span>{{module.namespace_count}}</span></div>
-  <ul class="api-list declaration-list">{{#each namespaces}}<li><a href="{{href}}"><code>{{name}}</code></a>{{#if has_namespace}}<span class="namespace-label">{{namespace}}</span>{{/if}}</li>{{/each}}</ul>
-</section>
-{{/if}}
 {{#if module.has_structs}}
 <section class="api-section" id="structs">
   <div class="section-heading"><span>Structs</span><span>{{module.struct_count}}</span></div>

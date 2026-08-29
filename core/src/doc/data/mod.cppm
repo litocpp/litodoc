@@ -1155,6 +1155,8 @@ auto publish_dataset(ref<rstd::path::Path> output, const Dataset &dataset)
 auto append_search_entries(JsonArray &entries, const Package &package,
                            bool package_root) -> void {
   for (const auto &symbol : package.symbols) {
+    if (!is_published_symbol_kind(symbol.kind))
+      continue;
     auto href = symbol_href(symbol);
     auto object = JsonMap::make();
     object.insert(String::make("package"_str),

@@ -176,7 +176,8 @@ auto declaration_target_index(const Dataset &dataset)
     for (auto symbol = usize{};
          symbol < dataset.packages[package].symbols.len(); ++symbol) {
       const auto &candidate = dataset.packages[package].symbols[symbol];
-      if (candidate.placement != SymbolPlacement::Standalone ||
+      if (!is_published_symbol_kind(candidate.kind) ||
+          candidate.placement != SymbolPlacement::Standalone ||
           candidate.semantic_identity.is_empty())
         continue;
       auto targets =
@@ -284,8 +285,17 @@ auto package_render_index(const Package &package) -> PackageRenderIndex {
   };
   for (auto position = usize{}; position < package.symbols.len(); ++position) {
     const auto &symbol = package.symbols[position];
+    if (!is_published_symbol_kind(symbol.kind))
+      continue;
     index.symbols.insert(symbol.key.clone(), position);
+  }
+  for (auto position = usize{}; position < package.symbols.len(); ++position) {
+    const auto &symbol = package.symbols[position];
+    if (!is_published_symbol_kind(symbol.kind))
+      continue;
     if (symbol.parent_key.is_none())
+      continue;
+    if (!index.symbols.contains_key(symbol.parent_key->as_str()))
       continue;
     auto children = index.children.get_mut(symbol.parent_key->as_str());
     if (children.is_none()) {
@@ -525,12 +535,13 @@ auto package_context(const Dataset &dataset, const Package &package,
       base_context(dataset, rstd::addressof(package), package.name.as_str(),
                    "package"_str, asset_prefix, false, layout);
   auto package_value = package_link_value(package, "index.html"_str);
-  package_value.insert("documented"_str, template_number(package.documented));
+  auto statistics = published_symbol_statistics(package);
+  package_value.insert("documented"_str,
+                       template_number(statistics.documented));
   package_value.insert("undocumented"_str,
-                       template_number(package.undocumented));
+                       template_number(statistics.undocumented));
   package_value.insert("unsupported"_str, template_number(package.unsupported));
-  package_value.insert("symbol_count"_str,
-                       template_number(package.symbols.len()));
+  package_value.insert("symbol_count"_str, template_number(statistics.total));
   const Module *root_module = nullptr;
   for (const auto &module : package.modules) {
     if (module.name.as_str() == package.root_module.as_str()) {
@@ -555,6 +566,8 @@ auto package_context(const Dataset &dataset, const Package &package,
   context.insert("modules"_str, rstd::move(modules.items));
   auto symbols = TemplateValue::array_value();
   for (const auto &symbol : package.symbols) {
+    if (!is_published_symbol_kind(symbol.kind))
+      continue;
     auto item = TemplateValue::object_value();
     item.insert("kind"_str, template_text(declaration_kind_name(symbol.kind)));
     item.insert("qualified_name"_str,
@@ -626,7 +639,6 @@ auto module_context(const Dataset &dataset, const Package &package,
   auto functions = TemplateValue::array_value();
   auto variables = TemplateValue::array_value();
   auto symbol_count = usize{};
-  auto namespace_count = usize{};
   auto struct_count = usize{};
   auto enum_count = usize{};
   auto concept_count = usize{};
@@ -634,7 +646,8 @@ auto module_context(const Dataset &dataset, const Package &package,
   auto function_count = usize{};
   auto variable_count = usize{};
   for (const auto &symbol : package.symbols) {
-    if (symbol.module.as_str() != module.name.as_str())
+    if (!is_published_symbol_kind(symbol.kind) ||
+        symbol.module.as_str() != module.name.as_str())
       continue;
     auto item = TemplateValue::object_value();
     item.insert("kind"_str, template_text(declaration_kind_name(symbol.kind)));
@@ -649,8 +662,6 @@ auto module_context(const Dataset &dataset, const Package &package,
       continue;
     switch (symbol.kind) {
     case DeclarationKind::Namespace:
-      namespaces.array.push(declaration_link_value(symbol, "../"_str));
-      ++namespace_count;
       break;
     case DeclarationKind::Record:
       structs.array.push(declaration_link_value(symbol, "../"_str));
@@ -682,8 +693,8 @@ auto module_context(const Dataset &dataset, const Package &package,
   }
   module_value.insert("symbol_count"_str, template_number(symbol_count));
   module_value.insert("has_namespaces"_str,
-                      TemplateValue::boolean_value(namespace_count != usize{}));
-  module_value.insert("namespace_count"_str, template_number(namespace_count));
+                      TemplateValue::boolean_value(false));
+  module_value.insert("namespace_count"_str, template_number(usize{}));
   module_value.insert("has_structs"_str,
                       TemplateValue::boolean_value(struct_count != usize{}));
   module_value.insert("struct_count"_str, template_number(struct_count));
@@ -716,8 +727,6 @@ auto module_context(const Dataset &dataset, const Package &package,
     append_outline(*page, "#documentation"_str, "Documentation"_str);
   if (modules.count != usize{})
     append_outline(*page, "#modules"_str, "Modules"_str);
-  if (namespace_count != usize{})
-    append_outline(*page, "#namespaces"_str, "Namespaces"_str);
   if (struct_count != usize{})
     append_outline(*page, "#structs"_str, "Structs"_str);
   if (enum_count != usize{})
@@ -762,6 +771,14 @@ auto symbol_context(const Dataset &dataset, const Package &package,
                       template_text(symbol.qualified_name.as_str()));
   symbol_value.insert("kind"_str,
                       template_text(declaration_kind_name(symbol.kind)));
+  auto has_namespace = !symbol.namespace_name.is_empty() &&
+                       symbol.placement == SymbolPlacement::Standalone &&
+                       (symbol.kind == DeclarationKind::Record ||
+                        symbol.kind == DeclarationKind::Function);
+  symbol_value.insert("has_namespace"_str,
+                      TemplateValue::boolean_value(has_namespace));
+  symbol_value.insert("namespace"_str,
+                      template_text(symbol.namespace_name.as_str()));
   symbol_value.insert("signature"_str,
                       template_text(symbol.signature.as_str()));
   symbol_value.insert("has_documentation"_str,
@@ -1014,7 +1031,8 @@ auto render_package_site(ref<rstd::path::Path> root, const Dataset &dataset,
       return written;
   }
   for (const auto &symbol : package.symbols) {
-    if (symbol.placement != SymbolPlacement::Standalone)
+    if (!is_published_symbol_kind(symbol.kind) ||
+        symbol.placement != SymbolPlacement::Standalone)
       continue;
     auto context = symbol_context(dataset, package, render_index, target_index,
                                   symbol, RenderLayout::Package);
@@ -1088,7 +1106,8 @@ auto render_site(ref<rstd::path::Path> root, const Dataset &dataset,
         return written;
     }
     for (const auto &symbol : package.symbols) {
-      if (symbol.placement != SymbolPlacement::Standalone)
+      if (!is_published_symbol_kind(symbol.kind) ||
+          symbol.placement != SymbolPlacement::Standalone)
         continue;
       auto context =
           symbol_context(dataset, package, render_index, target_index, symbol);

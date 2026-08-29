@@ -218,6 +218,8 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
         if (!declaration.exported ||
             declaration.access != DeclarationAccess::Public)
           continue;
+        if (!is_published_symbol_kind(declaration.kind))
+          continue;
         auto key = stable_key(package.name.as_str(), module_name, declaration);
         auto comment = clone_optional_text(declaration.comment);
         auto parent = Option<String>{};
@@ -226,13 +228,20 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
             *declaration.parent < unit.declarations.len()) {
           const auto &parent_declaration =
               unit.declarations[*declaration.parent];
-          parent = Some(stable_key(package.name.as_str(), module_name,
-                                   parent_declaration));
-          record_member = parent_declaration.kind == DeclarationKind::Record &&
-                          (declaration.kind == DeclarationKind::Function ||
-                           declaration.kind == DeclarationKind::Field);
-          if (record_member && !symbols.contains_key(parent->as_str()))
-            record_member = false;
+          if (parent_declaration.exported &&
+              parent_declaration.access == DeclarationAccess::Public &&
+              is_published_symbol_kind(parent_declaration.kind)) {
+            parent = Some(stable_key(package.name.as_str(), module_name,
+                                     parent_declaration));
+            record_member =
+                parent_declaration.kind == DeclarationKind::Record &&
+                (declaration.kind == DeclarationKind::Function ||
+                 declaration.kind == DeclarationKind::Field);
+            if (record_member && !symbols.contains_key(parent->as_str())) {
+              record_member = false;
+              parent = None();
+            }
+          }
         }
         auto placement = record_member ? SymbolPlacement::RecordMember
                                        : SymbolPlacement::Standalone;
@@ -367,12 +376,11 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
       package.sources.push(rstd::move(**item));
     for (const auto &key : symbol_order) {
       auto item = symbols.remove(key.as_str()).unwrap();
-      if (item.comment.is_some())
-        ++package.documented;
-      else
-        ++package.undocumented;
       package.symbols.push(rstd::move(item));
     }
+    auto statistics = published_symbol_statistics(package);
+    package.documented = statistics.documented;
+    package.undocumented = statistics.undocumented;
     database.packages.push(rstd::move(package));
   }
   return Ok(rstd::move(database));

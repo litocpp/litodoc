@@ -261,6 +261,12 @@ struct Package {
   usize unsupported{};
 };
 
+struct PublishedSymbolStatistics {
+  usize total{};
+  usize documented{};
+  usize undocumented{};
+};
+
 struct Database {
   Vec<Package> packages;
 };
@@ -330,6 +336,9 @@ struct Summary {
 
 auto declaration_kind_name(DeclarationKind kind) -> ref<str>;
 auto declaration_kind_slug(DeclarationKind kind) -> ref<str>;
+auto is_published_symbol_kind(DeclarationKind kind) -> bool;
+auto published_symbol_statistics(const Package &package)
+    -> PublishedSymbolStatistics;
 
 } // namespace lito::doc
 
@@ -381,6 +390,25 @@ auto declaration_kind_slug(DeclarationKind kind) -> ref<str> {
     return "field"_str;
   }
   __builtin_unreachable();
+}
+
+auto is_published_symbol_kind(DeclarationKind kind) -> bool {
+  return kind != DeclarationKind::Namespace;
+}
+
+auto published_symbol_statistics(const Package &package)
+    -> PublishedSymbolStatistics {
+  auto result = PublishedSymbolStatistics{};
+  for (const auto &symbol : package.symbols) {
+    if (!is_published_symbol_kind(symbol.kind))
+      continue;
+    ++result.total;
+    if (symbol.comment.is_some())
+      ++result.documented;
+    else
+      ++result.undocumented;
+  }
+  return result;
 }
 
 } // namespace lito::doc

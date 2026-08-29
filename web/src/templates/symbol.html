@@ -1,7 +1,7 @@
 {{> templates/partials/head.html}}
 <lito-doc-module-identity variant="module">
   <nav aria-label="Module identity">
-    <a href="{{package.href}}">{{package.name}}</a><span aria-hidden="true">→</span><a href="{{module.href}}">{{module.prefix}}</a>{{#if module.partition}}<span class="partition-mark">:</span><a class="partition-name" href="{{module.href}}">{{module.partition}}</a>{{/if}}<span aria-hidden="true">→</span>{{#if symbol.has_parent}}<a href="{{symbol.parent_href}}">{{symbol.parent_name}}</a><span aria-hidden="true">→</span>{{/if}}<strong>{{symbol.name}}</strong>
+    <a href="{{package.href}}">{{package.name}}</a><span aria-hidden="true">→</span><a href="{{module.href}}">{{module.prefix}}</a>{{#if module.partition}}<span class="partition-mark">:</span><a class="partition-name" href="{{module.href}}">{{module.partition}}</a>{{/if}}<span aria-hidden="true">→</span>{{#if symbol.has_namespace}}<span class="namespace-name">namespace <code>{{symbol.namespace}}</code></span><span aria-hidden="true">→</span>{{/if}}{{#if symbol.has_parent}}<a href="{{symbol.parent_href}}">{{symbol.parent_name}}</a><span aria-hidden="true">→</span>{{/if}}<strong>{{symbol.name}}</strong>
   </nav>
 </lito-doc-module-identity>
 <section class="symbol-identity">

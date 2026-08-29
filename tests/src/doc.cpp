@@ -288,6 +288,106 @@ auto record_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
   return package;
 }
 
+auto namespace_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
+  auto source = child(root, "src/namespaced.cppm"_str);
+  auto unit = lito::doc::DocumentationUnit{
+      .source = source.clone(),
+      .source_contents =
+          String::make("export module namespaced;\n\n"
+                       "export namespace alpha {\n"
+                       "struct Widget { auto get() const -> int; };\n"
+                       "auto make_widget() -> Widget;\n"
+                       "}\n"
+                       "auto global_helper() -> int;\n"_str),
+      .logical_module = String::make("namespaced"_str),
+      .is_interface = true,
+  };
+  unit.declarations.push(lito::doc::DeclarationOutline{
+      .semantic_identity = String::make("namespaced::alpha"_str),
+      .kind = lito::doc::DeclarationKind::Namespace,
+      .name = String::make("alpha"_str),
+      .qualified_name = String::make("alpha"_str),
+      .signature = String::make("namespace alpha;"_str),
+      .scope_signature = String::make("namespace alpha;"_str),
+      .is_definition = true,
+      .exported = true,
+      .comment = comment(source, usize(3), "Namespace documentation."_str),
+      .spelling_span = source_span(source, usize(3)),
+      .expansion_span = source_span(source, usize(3)),
+  });
+  unit.declarations.push(lito::doc::DeclarationOutline{
+      .semantic_identity = String::make("namespaced::alpha::Widget"_str),
+      .kind = lito::doc::DeclarationKind::Record,
+      .name = String::make("Widget"_str),
+      .qualified_name = String::make("alpha::Widget"_str),
+      .namespace_name = String::make("alpha"_str),
+      .signature = String::make("struct alpha::Widget {};"_str),
+      .scope_signature = String::make("struct Widget {};"_str),
+      .record_keyword = Some(String::make("struct"_str)),
+      .record_header = Some(String::make("struct Widget"_str)),
+      .is_definition = true,
+      .exported = true,
+      .parent = Some(usize(0)),
+      .comment = comment(source, usize(4), "Widget documentation."_str),
+      .spelling_span = source_span(source, usize(4)),
+      .expansion_span = source_span(source, usize(4)),
+  });
+  unit.declarations.push(lito::doc::DeclarationOutline{
+      .semantic_identity = String::make("namespaced::alpha::Widget::get"_str),
+      .kind = lito::doc::DeclarationKind::Function,
+      .name = String::make("get"_str),
+      .qualified_name = String::make("alpha::Widget::get"_str),
+      .namespace_name = String::make("alpha"_str),
+      .signature = String::make("auto alpha::Widget::get() const -> int;"_str),
+      .scope_signature = String::make("auto get() const -> int;"_str),
+      .is_scope_declaration = true,
+      .exported = true,
+      .parent = Some(usize(1)),
+      .comment = comment(source, usize(4), "Method documentation."_str),
+      .spelling_span = source_span(source, usize(4)),
+      .expansion_span = source_span(source, usize(4)),
+  });
+  unit.declarations.push(lito::doc::DeclarationOutline{
+      .semantic_identity = String::make("namespaced::alpha::make_widget"_str),
+      .kind = lito::doc::DeclarationKind::Function,
+      .name = String::make("make_widget"_str),
+      .qualified_name = String::make("alpha::make_widget"_str),
+      .namespace_name = String::make("alpha"_str),
+      .signature = String::make("auto alpha::make_widget() -> Widget;"_str),
+      .scope_signature = String::make("auto make_widget() -> Widget;"_str),
+      .exported = true,
+      .parent = Some(usize(0)),
+      .comment = comment(source, usize(5), "Function documentation."_str),
+      .spelling_span = source_span(source, usize(5)),
+      .expansion_span = source_span(source, usize(5)),
+  });
+  unit.declarations.push(lito::doc::DeclarationOutline{
+      .semantic_identity = String::make("namespaced::global_helper"_str),
+      .kind = lito::doc::DeclarationKind::Function,
+      .name = String::make("global_helper"_str),
+      .qualified_name = String::make("global_helper"_str),
+      .signature = String::make("auto global_helper() -> int;"_str),
+      .scope_signature = String::make("auto global_helper() -> int;"_str),
+      .exported = true,
+      .comment = comment(source, usize(7), "Global helper documentation."_str),
+      .spelling_span = source_span(source, usize(7)),
+      .expansion_span = source_span(source, usize(7)),
+  });
+  auto package = lito::doc::PackageInput{
+      .name = String::make("namespaced"_str),
+      .version = String::make("1.0.0"_str),
+      .source_identity = String::make("path+namespaced"_str),
+      .root_module = String::make("namespaced"_str),
+      .profile = String::make("release"_str),
+      .root = PathBuf::from(root),
+      .toolchain_version = String::make("clang 22"_str),
+      .toolchain_target = String::make("x86_64-unknown-linux-gnu"_str),
+      .language_standard = String::make("c++20"_str),
+  };
+  package.units.push(rstd::move(unit));
+  return package;
+}
+
 auto symbol_page_containing(ref<rstd::path::Path> package_directory,
                             ref<str> needle) -> Result<String, String> {
   auto directory = PathBuf::from(package_directory)
@@ -527,6 +627,87 @@ TEST(DocPublication, InlinesRecordFunctionsAndFieldsOnTheRecordPage) {
   ASSERT_TRUE(search.is_ok());
   EXPECT_EQ(occurrences(search->as_str(), "#method-"_str), usize(2));
   EXPECT_EQ(occurrences(search->as_str(), "#field-"_str), usize(2));
+}
+
+TEST(DocPublication, OmitsNamespaceItemsAndShowsDeclarationNamespace) {
+  auto temporary = rstd::test::TempDir::make();
+  ASSERT_TRUE(temporary.is_ok());
+  auto root = temporary->path();
+  auto frontend = lito::doc::web::load_default_frontend();
+  ASSERT_TRUE(frontend.is_ok());
+  auto input = lito::doc::SiteInput{
+      .title = String::make("Namespace fixture"_str),
+      .output = child(root, "publication"_str),
+      .data_output = child(root, "data"_str),
+      .publication = lito::doc::PublicationKind::PackageSet,
+  };
+  input.packages.push(namespace_package(root));
+
+  auto generated = lito::doc::generate(rstd::move(input),
+                                       Some(rstd::move(frontend).unwrap()));
+  ASSERT_TRUE(generated.is_ok());
+  ASSERT_TRUE(generated->publication_set.is_some());
+  ASSERT_EQ(generated->packages.len(), usize(1));
+  EXPECT_EQ(generated->packages[usize{}].symbols, usize(4));
+  EXPECT_EQ(generated->packages[usize{}].documented, usize(4));
+  EXPECT_EQ(generated->packages[usize{}].undocumented, usize{});
+
+  const auto &publication = generated->publication_set->packages[usize{}];
+  auto symbol_pages = usize{};
+  auto module_html = String::make();
+  for (const auto &file : publication.files) {
+    EXPECT_FALSE(file.path.as_str().starts_with("symbol/ns-"_str));
+    if (file.path.as_str().starts_with("symbol/"_str) &&
+        file.path.as_str().ends_with(".html"_str))
+      ++symbol_pages;
+    if (!file.path.as_str().starts_with("module/"_str) ||
+        !file.path.as_str().ends_with(".html"_str))
+      continue;
+    auto contents = rstd::fs::read_to_string(
+        child(root,
+              rstd::format("publication/namespaced/{}", file.path).as_str())
+            .as_path());
+    ASSERT_TRUE(contents.is_ok());
+    module_html = rstd::move(contents).unwrap();
+  }
+  EXPECT_EQ(symbol_pages, usize(3));
+  ASSERT_TRUE(!module_html.is_empty());
+  EXPECT_FALSE(module_html.as_str().contains("id=\"namespaces\""_str));
+  EXPECT_FALSE(module_html.as_str().contains("Namespace documentation."_str));
+  EXPECT_EQ(occurrences(module_html.as_str(),
+                        "<span class=\"namespace-label\">alpha</span>"_str),
+            usize(2));
+
+  auto record_html =
+      symbol_page_containing(publication.directory.as_path(),
+                             "<h1 class=\"page-title\">alpha::Widget</h1>"_str);
+  auto function_html = symbol_page_containing(
+      publication.directory.as_path(),
+      "<h1 class=\"page-title\">alpha::make_widget</h1>"_str);
+  auto global_function_html =
+      symbol_page_containing(publication.directory.as_path(),
+                             "<h1 class=\"page-title\">global_helper</h1>"_str);
+  ASSERT_TRUE(record_html.is_ok());
+  ASSERT_TRUE(function_html.is_ok());
+  ASSERT_TRUE(global_function_html.is_ok());
+  constexpr auto namespace_identity =
+      "<span class=\"namespace-name\">namespace <code>alpha</code></span>"_str;
+  EXPECT_EQ(occurrences(record_html->as_str(), namespace_identity), usize(1));
+  EXPECT_EQ(occurrences(function_html->as_str(), namespace_identity), usize(1));
+  EXPECT_FALSE(global_function_html->as_str().contains("namespace-name"_str));
+  EXPECT_TRUE(record_html->as_str().contains("Method documentation."_str));
+  EXPECT_FALSE(record_html->as_str().contains("Namespace documentation."_str));
+
+  auto data = rstd::fs::read_to_string(
+      child(root, "publication/namespaced/doc.json"_str).as_path());
+  auto search = rstd::fs::read_to_string(
+      child(root, "publication/namespaced/search-index.json"_str).as_path());
+  ASSERT_TRUE(data.is_ok());
+  ASSERT_TRUE(search.is_ok());
+  EXPECT_FALSE(data->as_str().contains("\"kind\": \"namespace\""_str));
+  EXPECT_FALSE(search->as_str().contains("\"kind\": \"namespace\""_str));
+  EXPECT_EQ(occurrences(data->as_str(), "\"namespace\": \"alpha\""_str),
+            usize(3));
 }
 
 TEST(DocPublication, RejectsInvalidDeclarationReferenceRanges) {
