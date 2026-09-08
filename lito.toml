@@ -5,33 +5,19 @@ default-members = ["book"]
 
 [workspace.package]
 version = "0.2.0"
+license = "MIT OR Apache-2.0"
+authors = ["hypengw <hypengwip@gmail.com>"]
 
-[workspace.dependencies.litodoc-core]
-path = "core"
-
-[workspace.dependencies.litodoc-web]
-path = "web"
-
-[workspace.dependencies.licrypto]
-git = "https://github.com/litocpp/licrypto.git"
-
-[workspace.dependencies.rstd-std]
-git = "https://github.com/litocpp/rstd.git"
-
-[workspace.dependencies.rstd-json]
-git = "https://github.com/litocpp/rstd.git"
-
-[workspace.dependencies.rstd-serde]
-git = "https://github.com/litocpp/rstd.git"
-
-[workspace.dependencies.rstd-toml]
-git = "https://github.com/litocpp/rstd.git"
-
-[workspace.dependencies.rstd-argparse]
-git = "https://github.com/litocpp/rstd.git"
-
-[workspace.dependencies.rstd-test]
-git = "https://github.com/litocpp/rstd.git"
+[workspace.dependencies]
+litodoc-core = { path = "core" }
+litodoc-web = { path = "web" }
+licrypto = "0.1.0"
+rstd-std = "0.1.0"
+rstd-json = "0.1.0"
+rstd-serde = "0.1.0"
+rstd-toml = "0.1.0"
+rstd-argparse = "0.1.0"
+rstd-test = "0.1.0"
 
 [profile]
 exceptions = false

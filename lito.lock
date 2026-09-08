@@ -3,7 +3,8 @@ version = 1
 [[packages]]
 name = "licrypto"
 version = "0.1.0"
-source = "git+https://github.com/litocpp/licrypto.git#b7156942a4b85780a21bd11092c08cb6893b05d4"
+source = "registry+https://registry.litocpp.org/"
+checksum = "eed4984fac8080d67e14e83b15861dd0b4a22264a2ba8f2e1a143155811ac6cd"
 dependencies = [
   "rstd-std",
   "rstd-test",
@@ -79,7 +80,8 @@ architectures = [
 [[packages]]
 name = "rstd-alloc"
 version = "0.1.0"
-source = "git+https://github.com/litocpp/rstd.git#73565151b9c96017e55462bb266dea02ef5b07b8"
+source = "registry+https://registry.litocpp.org/"
+checksum = "d5209327d6fd03f2ccf79081dc40bc3239b8a3dbbbf5ca3c99bff59d0b70a5d3"
 dependencies = [
   "rstd-core",
   "rstd-runtime",
@@ -88,7 +90,8 @@ dependencies = [
 [[packages]]
 name = "rstd-argparse"
 version = "0.1.0"
-source = "git+https://github.com/litocpp/rstd.git#73565151b9c96017e55462bb266dea02ef5b07b8"
+source = "registry+https://registry.litocpp.org/"
+checksum = "3590da4c6dc90f4ed42fc5983e520c6e7f12966d6ff2d3708469db97631647a6"
 dependencies = [
   "rstd-std",
 ]
@@ -96,12 +99,14 @@ dependencies = [
 [[packages]]
 name = "rstd-basic"
 version = "0.1.0"
-source = "git+https://github.com/litocpp/rstd.git#73565151b9c96017e55462bb266dea02ef5b07b8"
+source = "registry+https://registry.litocpp.org/"
+checksum = "7a294e444c3356dbdc034f248bd7474e29834c61f6d44227d26cfd2814137636"
 
 [[packages]]
 name = "rstd-core"
 version = "0.1.0"
-source = "git+https://github.com/litocpp/rstd.git#73565151b9c96017e55462bb266dea02ef5b07b8"
+source = "registry+https://registry.litocpp.org/"
+checksum = "b4cc9c7fbc26ced52d150168b281537c33cb5663f083787976e093f034102845"
 dependencies = [
   "rstd-basic",
   "rstd-runtime",
@@ -110,7 +115,8 @@ dependencies = [
 [[packages]]
 name = "rstd-json"
 version = "0.1.0"
-source = "git+https://github.com/litocpp/rstd.git#73565151b9c96017e55462bb266dea02ef5b07b8"
+source = "registry+https://registry.litocpp.org/"
+checksum = "edf374ebeb024fda08bf71cfd39a01cf014fb0369df5342662a5a9c8cca73031"
 dependencies = [
   "rstd-core",
   "rstd-parse",
@@ -121,7 +127,8 @@ dependencies = [
 [[packages]]
 name = "rstd-parse"
 version = "0.1.0"
-source = "git+https://github.com/litocpp/rstd.git#73565151b9c96017e55462bb266dea02ef5b07b8"
+source = "registry+https://registry.litocpp.org/"
+checksum = "a6090dd501bebbbdab5166e15047078197f817843c26c319fe992419942ea870"
 dependencies = [
   "rstd-alloc",
   "rstd-core",
@@ -130,7 +137,8 @@ dependencies = [
 [[packages]]
 name = "rstd-runtime"
 version = "0.1.0"
-source = "git+https://github.com/litocpp/rstd.git#73565151b9c96017e55462bb266dea02ef5b07b8"
+source = "registry+https://registry.litocpp.org/"
+checksum = "74e6c2e2dc315f95983f319edba00348b7fbafbf703e5ef47728e2ab3c4fcbc3"
 dependencies = [
   "rstd-basic",
 ]
@@ -138,7 +146,8 @@ dependencies = [
 [[packages]]
 name = "rstd-serde"
 version = "0.1.0"
-source = "git+https://github.com/litocpp/rstd.git#73565151b9c96017e55462bb266dea02ef5b07b8"
+source = "registry+https://registry.litocpp.org/"
+checksum = "1809e3a422b309d3ae85f757d9cdc7041e600de935123ca414d134078f868ad8"
 dependencies = [
   "rstd-alloc",
 ]
@@ -146,7 +155,8 @@ dependencies = [
 [[packages]]
 name = "rstd-std"
 version = "0.1.0"
-source = "git+https://github.com/litocpp/rstd.git#73565151b9c96017e55462bb266dea02ef5b07b8"
+source = "registry+https://registry.litocpp.org/"
+checksum = "6f96c5be8d83ec3fafd0d5df61fb9bfaa3edddedc0156c58b82e01147bd07cd1"
 dependencies = [
   "rstd-alloc",
   "rstd-core",
@@ -155,7 +165,8 @@ dependencies = [
 [[packages]]
 name = "rstd-test"
 version = "0.1.0"
-source = "git+https://github.com/litocpp/rstd.git#73565151b9c96017e55462bb266dea02ef5b07b8"
+source = "registry+https://registry.litocpp.org/"
+checksum = "34a01ef65821e0378fd90c7460f394fbbd98b41c93b354fe83717649061cdb51"
 dependencies = [
   "rstd-std",
 ]
@@ -163,7 +174,8 @@ dependencies = [
 [[packages]]
 name = "rstd-toml"
 version = "0.1.0"
-source = "git+https://github.com/litocpp/rstd.git#73565151b9c96017e55462bb266dea02ef5b07b8"
+source = "registry+https://registry.litocpp.org/"
+checksum = "01e9317a19964925344a8097165590073b858012bce5cd246debb365ce23f2bf"
 dependencies = [
   "rstd-alloc",
   "rstd-core",
