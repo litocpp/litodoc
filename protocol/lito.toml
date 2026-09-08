@@ -25,6 +25,10 @@ visibility = "private"
 workspace = true
 visibility = "private"
 
+[dependencies.rstd-argparse]
+workspace = true
+visibility = "private"
+
 [dependencies.licrypto]
 workspace = true
 visibility = "private"

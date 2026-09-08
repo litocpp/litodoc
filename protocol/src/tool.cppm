@@ -34,13 +34,16 @@ module;
 module litodoc.executable;
 
 import rstd;
+import rstd.argparse;
 import licrypto;
 import lito.doc;
 import lito.doc.web;
 
 using namespace rstd::prelude;
 using namespace rstd::literals;
+using namespace rstd::argparse;
 using PathBuf = rstd::path::PathBuf;
+using rstd::ffi::OsString;
 
 namespace lito::doc::tool {
 
@@ -1496,13 +1499,98 @@ auto capabilities() -> String {
   });
 }
 
-auto argument_value(const Vec<String> &arguments, ref<str> name)
-    -> Option<PathBuf> {
-  for (usize index{}; index + usize(1) < arguments.len(); ++index) {
-    if (arguments[index].as_str() == name)
-      return Some(PathBuf::from(arguments[index + usize(1)].as_str()));
-  }
-  return None();
+struct CliSchema {
+  Parser parser;
+  CommandKey capabilities;
+  CommandKey extract;
+  CommandKey generate;
+  ArgKey<String> request;
+  ArgKey<String> response;
+  ArgKey<String> manifest;
+};
+
+auto make_cli() -> Result<CliSchema, String> {
+  auto capabilities_command = Command::make("capabilities"_str);
+  capabilities_command.about("Report supported documentation protocols"_str);
+  auto capabilities_key = capabilities_command.key();
+  (void)capabilities_command.add_arg(Arg<bool>::flag("json"_str)
+                                         .long_name("json"_str)
+                                         .help("Write capabilities as JSON"_str)
+                                         .required());
+
+  auto extract_command = Command::make("extract"_str);
+  extract_command.about(
+      "Extract documentation from one C++ compilation unit"_str);
+  auto extract_key = extract_command.key();
+  auto request = extract_command.add_arg(
+      Arg<String>::value("request"_str, string_parser())
+          .long_name("request"_str)
+          .value_name("PATH"_str)
+          .help("Read the extraction request from PATH"_str)
+          .required());
+  auto response = extract_command.add_arg(
+      Arg<String>::value("response"_str, string_parser())
+          .long_name("response"_str)
+          .value_name("PATH"_str)
+          .help("Write the extraction response to PATH"_str)
+          .required());
+
+  auto generate_command = Command::make("generate"_str);
+  generate_command.about("Generate documentation from extracted units"_str);
+  auto generate_key = generate_command.key();
+  auto manifest = generate_command.add_arg(
+      Arg<String>::value("manifest"_str, string_parser())
+          .long_name("manifest"_str)
+          .value_name("PATH"_str)
+          .help("Read the site manifest from PATH"_str)
+          .required());
+
+  auto root = Command::make("litodoc"_str);
+  root.about("Extract and generate C++ API documentation"_str);
+  root.version(litodoc_version());
+  root.require_subcommand();
+  root.add_subcommand(rstd::move(capabilities_command));
+  root.add_subcommand(rstd::move(extract_command));
+  root.add_subcommand(rstd::move(generate_command));
+  auto parser = rstd::move(root).build();
+  if (parser.is_err())
+    return Err(rstd::format("invalid command definition: {}",
+                            rstd::move(parser).unwrap_err()));
+  return Ok(CliSchema{
+      .parser = rstd::move(parser).unwrap(),
+      .capabilities = capabilities_key,
+      .extract = extract_key,
+      .generate = generate_key,
+      .request = request,
+      .response = response,
+      .manifest = manifest,
+  });
+}
+
+auto arguments() -> Vec<OsString> {
+  auto result = Vec<OsString>::make();
+  result.push(OsString::from("litodoc"_str));
+  auto input = rstd::env::args_os();
+  (void)input.next();
+  for (auto value = input.next(); value.is_some(); value = input.next())
+    result.push(rstd::move(value).unwrap());
+  return result;
+}
+
+auto argument(const Matches &matches, const ArgKey<String> &key)
+    -> Result<PathBuf, String> {
+  auto value = matches.get_one(key);
+  if (value.is_err())
+    return Err(rstd::format("cannot read parsed argument: {}",
+                            rstd::move(value).unwrap_err()));
+  if (value->is_none())
+    return Err(String::make("required argument is missing"_str));
+  return Ok(PathBuf::from((***value).as_str()));
+}
+
+auto fail(ref<str> message, i32 code = i32(1)) -> int {
+  rstd::io::eprintln("litodoc: {}", message);
+  return code.to_primitive();
 }
 
 } // namespace lito::doc::tool
@@ -1510,48 +1598,58 @@ auto argument_value(const Vec<String> &arguments, ref<str> name)
 namespace lito::doc::tool {
 
 auto run() -> int {
-  auto arguments = rstd::env::args().collect<Vec<String>>();
-  if (arguments.len() < usize(2)) {
-    rstd::io::eprintln("litodoc: expected capabilities, extract, or generate");
-    return 2;
+  auto schema = make_cli();
+  if (schema.is_err())
+    return fail(schema.unwrap_err().as_str());
+  auto parsed = schema->parser.parse_from(arguments());
+  if (parsed.is_err()) {
+    auto report = schema->parser.render_error(rstd::move(parsed).unwrap_err());
+    if (report.target() == OutputTarget::Tag::Stderr)
+      rstd::io::eprint("{}", report.text());
+    else
+      rstd::io::print("{}", report.text());
+    return report.exit_code().to_primitive();
   }
-  auto command = arguments[usize(1)].as_str();
-  if (command == "capabilities"_str) {
-    if (arguments.len() != usize(3) ||
-        arguments[usize(2)].as_str() != "--json"_str) {
-      rstd::io::eprintln("litodoc: usage: litodoc capabilities --json");
-      return 2;
-    }
+  auto outcome = rstd::move(parsed).unwrap();
+  if (outcome.is_Display()) {
+    auto request = rstd::move(outcome).as_Display().request;
+    if (request.target() == OutputTarget::Tag::Stderr)
+      rstd::io::eprint("{}", request.text());
+    else
+      rstd::io::print("{}", request.text());
+    if (request.kind() == DisplayKind::Tag::Version)
+      rstd::io::print("\n");
+    return request.exit_code().to_primitive();
+  }
+  auto matches = rstd::move(outcome).as_Parsed().value;
+  if (matches.subcommand_matches(schema->capabilities).is_some()) {
     rstd::io::print("{}", capabilities().as_str());
     return 0;
   }
 
-  if (command == "extract"_str) {
-    auto request = argument_value(arguments, "--request"_str);
-    auto response = argument_value(arguments, "--response"_str);
-    if (request.is_none() || response.is_none()) {
-      rstd::io::eprintln(
-          "litodoc: usage: litodoc extract --request <path> --response <path>");
-      return 2;
-    }
+  auto extract_matches = matches.subcommand_matches(schema->extract);
+  if (extract_matches.is_some()) {
+    auto request = argument(**extract_matches, schema->request);
+    auto response = argument(**extract_matches, schema->response);
+    if (request.is_err())
+      return fail(request.unwrap_err().as_str(), i32(2));
+    if (response.is_err())
+      return fail(response.unwrap_err().as_str(), i32(2));
     auto result = execute_extract(request->as_path(), response->as_path());
     if (result.is_err()) {
-      rstd::io::eprintln("litodoc: {}", rstd::move(result).unwrap_err());
-      return 1;
+      return fail(rstd::move(result).unwrap_err().as_str());
     }
     return 0;
   }
 
-  if (command == "generate"_str) {
-    auto manifest = argument_value(arguments, "--manifest"_str);
-    if (manifest.is_none()) {
-      rstd::io::eprintln("litodoc: usage: litodoc generate --manifest <path>");
-      return 2;
-    }
+  auto generate_matches = matches.subcommand_matches(schema->generate);
+  if (generate_matches.is_some()) {
+    auto manifest = argument(**generate_matches, schema->manifest);
+    if (manifest.is_err())
+      return fail(manifest.unwrap_err().as_str(), i32(2));
     auto result = execute_generate(manifest->as_path());
     if (result.is_err()) {
-      rstd::io::eprintln("litodoc: {}", rstd::move(result).unwrap_err());
-      return 1;
+      return fail(rstd::move(result).unwrap_err().as_str());
     }
     if (result->publication_set.is_some()) {
       rstd::io::println("generated {}",
@@ -1562,8 +1660,7 @@ auto run() -> int {
     return 0;
   }
 
-  rstd::io::eprintln("litodoc: unsupported command '{}'", command);
-  return 2;
+  return fail("expected capabilities, extract, or generate"_str, i32(2));
 }
 
 } // namespace lito::doc::tool

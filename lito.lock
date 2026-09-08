@@ -27,6 +27,7 @@ dependencies = [
   "licrypto",
   "litodoc-core",
   "litodoc-web",
+  "rstd-argparse",
   "rstd-json",
   "rstd-std",
 ]
