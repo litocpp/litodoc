@@ -160,7 +160,6 @@ body[data-has-sidebar] .sidebar {
 @media (min-width: 48rem) {
   .content {
     padding-right: 3rem;
-    padding-left: 3rem;
   }
 }
 
