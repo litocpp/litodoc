@@ -16,9 +16,10 @@
   <lito-doc-shell>
     <header class="topbar">
       <div class="topbar-frame">
-        <a class="brand" href="{{page.asset_prefix}}index.html">
-          <strong>{{site.title}}</strong>
-        </a>
+        <div class="brand">
+          <a class="brand-home" href="https://litocpp.org/" aria-label="Litocpp home"><span>Lito</span><span class="brand-cpp">cpp</span></a>
+          <a class="brand-product" href="{{page.asset_prefix}}index.html"><span class="brand-mark">::</span><span class="brand-title">{{site.title}}</span></a>
+        </div>
         <div class="desktop-search">
           {{#if page.is_api}}<lito-doc-search root-prefix="{{page.asset_prefix}}" catalog-url="{{page.asset_prefix}}search-index.json" current-package="{{page.search_package}}" current-module="{{page.search_module}}">
             <label for="doc-search">Search documentation</label>

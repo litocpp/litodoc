@@ -1,6 +1,8 @@
 local esbuild = lito.tool("esbuild")
 
 local frontend_sources = {
+  "static/fonts/IBMPlexSans-Bold-Latin1.woff2",
+  "static/fonts/IBMPlexMono-Bold-Latin1.woff2",
   "app.ts",
   "theme-bootstrap.ts",
   "theme.ts",
@@ -30,6 +32,7 @@ local frontend_sources = {
 }
 
 local resources = {
+  { path = "static/fonts/LICENSE.txt", media_type = "text/plain", source = "src/static/fonts/LICENSE.txt" },
   { path = "frontend.json", media_type = "application/json", source = "frontend.json" },
   { path = "static/app.js", media_type = "text/javascript", entry = "app.ts", target = "es2020" },
   { path = "static/favicon.svg", media_type = "image/svg+xml", source = "src/static/favicon.svg" },
@@ -71,6 +74,7 @@ for index = 1, #resources do
       resource.entry,
       "--bundle",
       "--minify",
+      "--loader:.woff2=dataurl",
       "--outfile=@OUTPUT@",
     }
     if resource.target then

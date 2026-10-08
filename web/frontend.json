@@ -20,6 +20,10 @@
   ],
   "assets": [
     {
+      "path": "static/fonts/LICENSE.txt",
+      "media-type": "text/plain"
+    },
+    {
       "path": "static/favicon.svg",
       "media-type": "image/svg+xml"
     },

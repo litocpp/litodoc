@@ -1,54 +1,108 @@
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../../static/fonts/IBMPlexSans-Bold-Latin1.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../../static/fonts/IBMPlexMono-Bold-Latin1.woff2") format("woff2");
+}
+
 lito-doc-shell {
   display: block;
   min-height: 100vh;
 }
 
 .topbar {
+  --header-ink: #13202a;
+  --header-muted: #64737e;
+  --header-accent: #004482;
   position: sticky;
   z-index: 30;
   top: 0;
   width: 100%;
   height: var(--topbar-height);
-  background: color-mix(in srgb, var(--surface) 70%, transparent);
-  border-bottom: 1px solid var(--border);
-  backdrop-filter: blur(12px);
+  background: rgb(248 250 251 / 94%);
+  border-bottom: 1px solid rgb(202 213 220 / 84%);
+  backdrop-filter: blur(14px);
 }
 
 .topbar-frame {
   display: flex;
-  width: 100%;
-  max-width: var(--content-width);
+  width: min(1120px, calc(100% - 48px));
   height: 100%;
   align-items: center;
-  gap: 1rem;
-  padding-right: max(env(safe-area-inset-right), 1.5rem);
-  padding-left: max(env(safe-area-inset-left), 1.5rem);
+  gap: 24px;
   margin: 0 auto;
 }
 
 .brand {
   display: flex;
   min-width: 0;
-  align-items: center;
+  align-items: baseline;
   margin-right: auto;
   color: var(--ink-strong);
   text-decoration: none;
   transition: opacity 150ms ease;
 }
 
-.brand:hover {
-  opacity: 0.75;
+.brand-home {
+  display: inline-flex;
+  color: var(--header-ink);
+  font: 700 20px/1 "IBM Plex Sans", system-ui, sans-serif;
+  letter-spacing: -0.04em;
+  text-decoration: none;
 }
 
-.brand strong {
+.brand-cpp {
+  color: #2563eb;
+}
+
+.brand-product {
+  display: inline-flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 5px;
+  margin-left: 7px;
+  color: var(--header-accent);
+  font: 700 14.4px/1 "IBM Plex Mono", monospace;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+}
+
+.brand-mark {
+  color: #00599c;
+  letter-spacing: -0.13em;
+}
+
+.brand-title {
   overflow: hidden;
-  font-size: 1rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .desktop-search {
-  width: 16rem;
+  width: min(420px, 40%);
+  flex-shrink: 0;
+}
+
+:root[data-theme="dark"] .topbar {
+  --header-ink: #f1f5f9;
+  --header-muted: #a3a3a3;
+  --header-accent: #93c5fd;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border-color: var(--border);
+}
+
+.brand-home:hover,
+.brand-product:hover {
+  color: var(--header-accent);
 }
 
 .mobile-search,
@@ -142,8 +196,8 @@ body[data-has-sidebar] .sidebar {
 
 @media (max-width: 47.999rem) {
   .topbar-frame {
-    padding-right: max(env(safe-area-inset-right), 1.5rem);
-    padding-left: max(env(safe-area-inset-left), 1.5rem);
+    width: calc(100% - 32px);
+    gap: 12px;
   }
 
   .desktop-search {
