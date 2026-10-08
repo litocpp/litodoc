@@ -35,7 +35,7 @@ visibility = "private"
 
 [external-dependencies.cmake.clang]
 package = "Clang"
+adapter = "cmake/clang.cmake"
 targets = [
-  { name = "clang-cpp", visibility = "private" },
-  { name = "LLVM", visibility = "private" },
+  { name = "Litodoc::Clang", visibility = "private" },
 ]
