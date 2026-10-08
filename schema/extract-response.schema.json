@@ -149,6 +149,7 @@
         "name": { "$ref": "#/$defs/nonEmptyString" },
         "qualified_name": { "$ref": "#/$defs/nonEmptyString" },
         "namespace": { "type": "string" },
+        "alias_target": { "type": ["string", "null"] },
         "signature": { "$ref": "#/$defs/nonEmptyString" },
         "is_definition": { "type": "boolean" },
         "exported": { "type": "boolean" },

@@ -338,6 +338,14 @@ auto record_member_value(const Dataset &dataset,
   item.insert("id"_str, template_text(symbol.anchor->as_str()));
   item.insert("name"_str, template_text(symbol.name.as_str()));
   item.insert("signature"_str, template_text(symbol.scope_signature.as_str()));
+  item.insert("has_alias_target"_str,
+              TemplateValue::boolean_value(symbol.alias_target.is_some()));
+  item.insert("missing_alias_target"_str,
+              TemplateValue::boolean_value(symbol.alias_target.is_none()));
+  item.insert("alias_target"_str,
+              template_text(symbol.alias_target.is_some()
+                                ? symbol.alias_target->as_str()
+                                : ""_str));
   item.insert("signature_fragments"_str,
               declaration_fragments(dataset, targets, package,
                                     symbol.scope_signature, layout));
@@ -835,11 +843,22 @@ auto symbol_context(const Dataset &dataset, const Package &package,
           break;
         case DeclarationKind::Record:
         case DeclarationKind::Enum:
-        case DeclarationKind::Alias:
-        case DeclarationKind::Concept:
-          member_types.array.push(declaration_link_value(candidate, "../"_str));
+        case DeclarationKind::Concept: {
+          auto member = declaration_link_value(candidate, "../"_str);
+          member.insert("inline"_str, TemplateValue::boolean_value(false));
+          member_types.array.push(rstd::move(member));
+        }
           ++member_type_count;
           break;
+        case DeclarationKind::Alias: {
+          auto member =
+              record_member_value(dataset, targets, package, candidate, layout);
+          member.insert("inline"_str, TemplateValue::boolean_value(true));
+          member.insert("href"_str, template_text(""_str));
+          member_types.array.push(rstd::move(member));
+          ++member_type_count;
+          break;
+        }
         case DeclarationKind::Field:
           fields.array.push(record_member_value(dataset, targets, package,
                                                 candidate, layout));

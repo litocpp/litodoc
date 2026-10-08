@@ -149,6 +149,11 @@
   font-size: 0.75rem;
 }
 
+.api-list li.member-type {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
 .namespace-label {
   overflow-wrap: anywhere;
   text-align: right;

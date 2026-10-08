@@ -12,7 +12,11 @@
 {{#if symbol.has_member_types}}
 <section class="api-section" id="member-types">
   <div class="section-heading"><span>Member Types</span><span>{{symbol.member_type_count}}</span></div>
-  <ul class="api-list declaration-list">{{#each member_types}}<li><a href="{{href}}"><code>{{name}}</code></a></li>{{/each}}</ul>
+  <ul class="api-list declaration-list">{{#each member_types}}<li{{#if inline}} class="member-type" id="{{id}}"{{/if}}>
+    {{#if href}}<a href="{{href}}"><code>{{name}}</code></a>{{/if}}
+    {{#if inline}}<code>{{#if has_alias_target}}{{name}} → {{alias_target}}{{/if}}{{#if missing_alias_target}}{{signature}}{{/if}}</code>
+    {{#if has_documentation}}<lito-doc-prose><div class="member-documentation prose">{{{documentation}}}</div></lito-doc-prose>{{/if}}{{/if}}
+  </li>{{/each}}</ul>
 </section>
 {{/if}}
 {{#if symbol.has_fields}}

@@ -81,15 +81,22 @@ auto clone_optional_text(const Option<DocumentationComment> &comment)
   return comment.is_some() ? Some(comment->text.clone()) : Option<String>{};
 }
 
+auto clone_optional_text(const Option<String> &text) -> Option<String> {
+  return text.is_some() ? Some(text->clone()) : Option<String>{};
+}
+
 auto symbol_page(DeclarationKind kind, ref<str> key) -> String {
   return rstd::format("symbol/{}-{}.html", declaration_kind_slug(kind),
                       identity_hash("lito-doc-symbol-v1"_str, key).as_str());
 }
 
 auto member_anchor(DeclarationKind kind, ref<str> key) -> Option<String> {
-  if (kind != DeclarationKind::Function && kind != DeclarationKind::Field)
+  if (kind != DeclarationKind::Function && kind != DeclarationKind::Field &&
+      kind != DeclarationKind::Alias)
     return Option<String>{};
-  auto prefix = kind == DeclarationKind::Function ? "method"_str : "field"_str;
+  auto prefix = kind == DeclarationKind::Function ? "method"_str
+                : kind == DeclarationKind::Alias  ? "type"_str
+                                                  : "field"_str;
   return Some(rstd::format(
       "{}-{}", prefix,
       identity_hash("lito-doc-record-member-v1"_str, key).as_str()));
@@ -236,7 +243,8 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
             record_member =
                 parent_declaration.kind == DeclarationKind::Record &&
                 (declaration.kind == DeclarationKind::Function ||
-                 declaration.kind == DeclarationKind::Field);
+                 declaration.kind == DeclarationKind::Field ||
+                 declaration.kind == DeclarationKind::Alias);
             if (record_member && !symbols.contains_key(parent->as_str())) {
               record_member = false;
               parent = None();
@@ -291,6 +299,8 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
             });
           }
           if (prefer_incoming) {
+            (**existing).alias_target =
+                clone_optional_text(declaration.alias_target);
             (**existing).signature = declaration.signature.clone();
             (**existing).scope_signature = declaration.scope_signature.clone();
             (**existing).record_keyword =
@@ -329,6 +339,7 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
         symbols.insert(
             key.clone(),
             Symbol{
+                .alias_target = clone_optional_text(declaration.alias_target),
                 .key = rstd::move(key),
                 .semantic_identity = declaration.semantic_identity.clone(),
                 .page = rstd::move(page),

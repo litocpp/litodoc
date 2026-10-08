@@ -505,6 +505,15 @@ auto record_keyword(const clang::NamedDecl &declaration) -> Option<String> {
                            : Some(as_rstd(record->getKindName()));
 }
 
+auto alias_target(const clang::NamedDecl &declaration,
+                  const clang::ASTContext &context) -> Option<String> {
+  const auto *alias = llvm::dyn_cast<clang::TypedefNameDecl>(&declaration);
+  if (alias == nullptr)
+    return None();
+  return Some(as_rstd(
+      alias->getUnderlyingType().getAsString(context.getPrintingPolicy())));
+}
+
 auto record_header(const clang::NamedDecl &declaration,
                    const clang::ASTContext &context) -> Option<String> {
   if (!llvm::isa<clang::RecordDecl>(declaration))
@@ -845,6 +854,7 @@ private:
     if (source_scope.is_some())
       scope_signature = rstd::move(*source_scope);
     unit_->declarations.push(DeclarationOutline{
+        .alias_target = alias_target(declaration, *context_),
         .semantic_identity = semantic_identity(declaration, *manager_),
         .kind = *kind,
         .name = name.clone(),
@@ -1083,6 +1093,8 @@ auto encode_response(const ExtractionRequest &request,
       object["record_keyword"] = as_std(declaration.record_keyword->as_str());
     else
       object["record_keyword"] = nullptr;
+    if (declaration.alias_target.is_some())
+      object["alias_target"] = as_std(declaration.alias_target->as_str());
     if (declaration.record_header.is_some())
       object["record_header"] = as_std(declaration.record_header->as_str());
     else
@@ -1319,6 +1331,8 @@ auto decode_unit(ref<rstd::path::Path> response_path, ref<str> expected_digest)
       });
     }
     unit.declarations.push(DeclarationOutline{
+        .alias_target = rstd_try(optional_string(
+            *object, "alias_target", "extract response declaration"_str)),
         .semantic_identity = rstd_try(required_string(
             *object, "semantic_identity", "extract response declaration"_str)),
         .kind = *kind,

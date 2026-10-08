@@ -225,6 +225,10 @@ auto encode_package(const Package &package) -> Json {
                   encode_declaration_text(symbol.signature));
     object.insert(String::make("scope-declaration"_str),
                   encode_declaration_text(symbol.scope_signature));
+    object.insert(String::make("alias-target"_str),
+                  symbol.alias_target.is_some()
+                      ? json_string(symbol.alias_target->as_str())
+                      : Json::Null());
     object.insert(String::make("record-keyword"_str),
                   symbol.record_keyword.is_some()
                       ? json_string(symbol.record_keyword->as_str())
@@ -784,7 +788,16 @@ auto decode_package(const Json &document, Option<ref<rstd::path::Path>> root,
       return Err(rstd::move(source_end_line).unwrap_err());
     if (source_end_column.is_err())
       return Err(rstd::move(source_end_column).unwrap_err());
+    auto alias_target = Option<String>{};
+    if (value.get("alias-target"_str).is_some()) {
+      auto decoded =
+          optional_string(value, "alias-target"_str, "doc symbol"_str);
+      if (decoded.is_err())
+        return Err(rstd::move(decoded).unwrap_err());
+      alias_target = rstd::move(decoded).unwrap();
+    }
     package.symbols.push(Symbol{
+        .alias_target = rstd::move(alias_target),
         .key = rstd::move(key).unwrap(),
         .semantic_identity = rstd::move(semantic_identity).unwrap(),
         .page = rstd::move(page).unwrap(),

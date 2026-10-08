@@ -253,6 +253,21 @@ auto record_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
       .spelling_span = source_span(source, usize(18)),
       .expansion_span = source_span(source, usize(18)),
   });
+  unit.declarations.push(lito::doc::DeclarationOutline{
+      .alias_target = Some(String::make("T"_str)),
+      .semantic_identity = String::make("records::Box::value_type"_str),
+      .kind = lito::doc::DeclarationKind::Alias,
+      .name = String::make("value_type"_str),
+      .qualified_name = String::make("Box::value_type"_str),
+      .signature = String::make("using value_type = T;"_str),
+      .scope_signature = String::make("using value_type = T;"_str),
+      .is_scope_declaration = true,
+      .exported = true,
+      .parent = Some(usize(0)),
+      .comment = comment(source, usize(19), "The stored type."_str),
+      .spelling_span = source_span(source, usize(19)),
+      .expansion_span = source_span(source, usize(19)),
+  });
   auto definition = lito::doc::DocumentationUnit{
       .source = child(root, "src/box.cpp"_str),
       .source_contents =
@@ -576,6 +591,8 @@ TEST(DocPublication, InlinesRecordFunctionsAndFieldsOnTheRecordPage) {
 
   auto generated = lito::doc::generate(rstd::move(input),
                                        Some(rstd::move(frontend).unwrap()));
+  if (generated.is_err())
+    rstd::io::eprintln("{}", generated.unwrap_err());
   ASSERT_TRUE(generated.is_ok());
   ASSERT_TRUE(generated->publication_set.is_some());
   const auto &publication = generated->publication_set->packages[usize(0)];
@@ -596,6 +613,9 @@ TEST(DocPublication, InlinesRecordFunctionsAndFieldsOnTheRecordPage) {
   EXPECT_EQ(symbol_pages, usize(4));
   ASSERT_TRUE(!record_html.is_empty());
   EXPECT_TRUE(record_html.as_str().contains("Stored value."_str));
+  EXPECT_TRUE(record_html.as_str().contains("value_type → T"_str));
+  EXPECT_TRUE(record_html.as_str().contains("The stored type."_str));
+  EXPECT_EQ(occurrences(record_html.as_str(), "id=\"type-"_str), usize(1));
   EXPECT_TRUE(record_html.as_str().contains("Returns the value."_str));
   EXPECT_TRUE(record_html.as_str().contains("Definition docs."_str));
   EXPECT_TRUE(record_html.as_str().contains("public:"_str));
@@ -627,6 +647,7 @@ TEST(DocPublication, InlinesRecordFunctionsAndFieldsOnTheRecordPage) {
   ASSERT_TRUE(search.is_ok());
   EXPECT_EQ(occurrences(search->as_str(), "#method-"_str), usize(2));
   EXPECT_EQ(occurrences(search->as_str(), "#field-"_str), usize(2));
+  EXPECT_EQ(occurrences(search->as_str(), "#type-"_str), usize(1));
 }
 
 TEST(DocPublication, OmitsNamespaceItemsAndShowsDeclarationNamespace) {

@@ -106,6 +106,7 @@ struct DeclarationText {
 };
 
 struct DeclarationOutline {
+  Option<String> alias_target;
   String semantic_identity;
   DeclarationKind kind{DeclarationKind::Variable};
   String name;
@@ -193,6 +194,7 @@ struct Source {
 };
 
 struct Symbol {
+  Option<String> alias_target;
   String key;
   String semantic_identity;
   String page;
