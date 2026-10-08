@@ -27,20 +27,20 @@
     <h2><a href="#{{id}}"><code>{{name}}</code></a></h2>
     <pre class="signature member-signature"><code>{{signature}}</code></pre>
     {{#if has_documentation}}<lito-doc-prose><div class="member-documentation prose">{{{documentation}}}</div></lito-doc-prose>{{/if}}
-    <footer class="member-source"><span>Declared in</span><a href="{{source_href}}"><code>{{source_path}}:{{source_line}}</code></a></footer>
   </article>{{/each}}</div>
 </section>
 {{/if}}
 {{#if symbol.has_methods}}
 <section class="api-section" id="methods">
   <div class="section-heading"><span>Methods</span><span>{{symbol.method_count}}</span></div>
-  <div class="record-members method-details">{{#each methods}}<details class="record-member method-detail" id="{{id}}" open>
+  <div class="record-members method-details">{{#each methods}}{{#if has_documentation}}<details class="record-member method-detail" id="{{id}}" open>
     <summary class="member-summary"><code>{{#each signature_fragments}}{{#if has_href}}<a class="declaration-reference" href="{{href}}">{{text}}</a>{{/if}}{{#if plain}}{{text}}{{/if}}{{/each}}</code></summary>
     <div class="member-body">
       {{#if has_documentation}}<lito-doc-prose><div class="member-documentation prose">{{{documentation}}}</div></lito-doc-prose>{{/if}}
-      <footer class="member-source"><span>Declared in</span><a href="{{source_href}}"><code>{{source_path}}:{{source_line}}</code></a></footer>
     </div>
-  </details>{{/each}}</div>
+  </details>{{/if}}{{#if missing_documentation}}<article class="record-member method-detail" id="{{id}}">
+    <div class="member-summary member-summary-static"><code>{{#each signature_fragments}}{{#if has_href}}<a class="declaration-reference" href="{{href}}">{{text}}</a>{{/if}}{{#if plain}}{{text}}{{/if}}{{/each}}</code></div>
+  </article>{{/if}}{{/each}}</div>
 </section>
 {{/if}}
 {{#if symbol.has_member_values}}
@@ -49,8 +49,4 @@
   <ul class="api-list declaration-list">{{#each member_values}}<li><a href="{{href}}"><code>{{name}}</code></a></li>{{/each}}</ul>
 </section>
 {{/if}}
-<footer class="source-reference">
-  <span>Declared in</span>
-  <a href="{{symbol.source_href}}"><code>{{symbol.source_path}}:{{symbol.source_line}}</code></a>
-</footer>
 {{> templates/partials/foot.html}}

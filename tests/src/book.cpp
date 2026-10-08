@@ -386,7 +386,7 @@ TEST(Frontend, LoadsEmbeddedDefaultBundle) {
   ASSERT_TRUE(frontend.is_ok());
   EXPECT_TRUE(frontend->supports_api);
   EXPECT_TRUE(frontend->supports_book);
-  EXPECT_EQ(frontend->assets.len(), usize(5));
+  EXPECT_EQ(frontend->assets.len(), usize(6));
   EXPECT_FALSE(frontend->digest.is_empty());
   auto bootstrap_gates_document = false;
   auto application_reveals_document = false;

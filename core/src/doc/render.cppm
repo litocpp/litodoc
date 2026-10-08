@@ -351,16 +351,13 @@ auto record_member_value(const Dataset &dataset,
                                     symbol.scope_signature, layout));
   item.insert("has_documentation"_str,
               TemplateValue::boolean_value(symbol.comment.is_some()));
+  item.insert("missing_documentation"_str,
+              TemplateValue::boolean_value(symbol.comment.is_none()));
   item.insert("documentation"_str,
               TemplateValue::trusted_html(
                   symbol.comment.is_some()
                       ? render_markdown(symbol.comment->as_str())
                       : String::make()));
-  item.insert("source_path"_str, template_text(symbol.source_path.as_str()));
-  item.insert("source_line"_str, template_number(symbol.source_line));
-  item.insert("source_href"_str,
-              TemplateValue::text_value(rstd::format(
-                  "../{}#L{}", symbol.source_page, symbol.source_line)));
   return item;
 }
 
@@ -796,12 +793,6 @@ auto symbol_context(const Dataset &dataset, const Package &package,
                           symbol.comment.is_some()
                               ? render_markdown(symbol.comment->as_str())
                               : String::make()));
-  symbol_value.insert("source_path"_str,
-                      template_text(symbol.source_path.as_str()));
-  symbol_value.insert("source_line"_str, template_number(symbol.source_line));
-  symbol_value.insert("source_href"_str, TemplateValue::text_value(rstd::format(
-                                             "../{}#L{}", symbol.source_page,
-                                             symbol.source_line)));
   const Symbol *parent = nullptr;
   if (symbol.parent_key.is_some()) {
     auto position = index.symbols.get(symbol.parent_key->as_str());
@@ -930,50 +921,6 @@ auto symbol_context(const Dataset &dataset, const Package &package,
   return context;
 }
 
-auto source_lines(ref<str> contents) -> TemplateValue {
-  auto result = TemplateValue::array_value();
-  auto begin = usize{};
-  auto line = usize(1);
-  auto bytes = contents.as_bytes();
-  while (begin <= bytes.len()) {
-    auto end = begin;
-    while (end < bytes.len() && bytes[end] != u8('\n') &&
-           bytes[end] != u8('\r'))
-      ++end;
-    auto item = TemplateValue::object_value();
-    item.insert("id"_str, TemplateValue::text_value(rstd::format("L{}", line)));
-    item.insert("number"_str, template_number(line));
-    item.insert("text"_str, template_text(contents.get(begin, end).unwrap()));
-    result.array.push(rstd::move(item));
-    ++line;
-    if (end == bytes.len())
-      break;
-    if (bytes[end] == u8('\r') && end + usize(1) < bytes.len() &&
-        bytes[end + usize(1)] == u8('\n'))
-      ++end;
-    begin = end + usize(1);
-  }
-  return result;
-}
-
-auto source_context(const Dataset &dataset, const Package &package,
-                    const Source &source,
-                    RenderLayout layout = RenderLayout::Workspace)
-    -> TemplateValue {
-  auto asset_prefix =
-      layout == RenderLayout::Package ? "../"_str : "../../../"_str;
-  auto context =
-      base_context(dataset, rstd::addressof(package), source.path.as_str(),
-                   "source"_str, asset_prefix, true, layout);
-  context.insert("package"_str,
-                 package_link_value(package, "../index.html"_str));
-  auto source_value = TemplateValue::object_value();
-  source_value.insert("path"_str, template_text(source.path.as_str()));
-  source_value.insert("lines"_str, source_lines(source.contents.as_str()));
-  context.insert("source"_str, rstd::move(source_value));
-  return context;
-}
-
 auto render_page(ref<rstd::path::Path> root, ref<str> relative,
                  const FrontendBundle &frontend, ref<str> template_path,
                  const TemplateValue &context,
@@ -1060,14 +1007,6 @@ auto render_package_site(ref<rstd::path::Path> root, const Dataset &dataset,
     if (written.is_err())
       return written;
   }
-  for (const auto &source : package.sources) {
-    auto context =
-        source_context(dataset, package, source, RenderLayout::Package);
-    written = render_page(root, source.page.as_str(), frontend,
-                          frontend.source_template.as_str(), context, &files);
-    if (written.is_err())
-      return written;
-  }
   auto manifest = site_manifest_json(frontend, data_digest);
   return write_doc_file(root, "site-manifest.json"_str, manifest.as_str(),
                         &files);
@@ -1134,15 +1073,6 @@ auto render_site(ref<rstd::path::Path> root, const Dataset &dataset,
           root,
           rstd::format("{}{}", prefix.as_str(), symbol.page.as_str()).as_str(),
           frontend, frontend.symbol_template.as_str(), context);
-      if (written.is_err())
-        return written;
-    }
-    for (const auto &source : package.sources) {
-      auto context = source_context(dataset, package, source);
-      written = render_page(
-          root,
-          rstd::format("{}{}", prefix.as_str(), source.page.as_str()).as_str(),
-          frontend, frontend.source_template.as_str(), context);
       if (written.is_err())
         return written;
     }

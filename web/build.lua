@@ -26,7 +26,6 @@ local frontend_sources = {
   "components/theme-picker/style.css",
   "styles/base.css",
   "styles/content.css",
-  "styles/source.css",
   "styles/style.css",
   "styles/tokens.css",
 }
@@ -46,7 +45,6 @@ local resources = {
   { path = "templates/partials/foot.html", media_type = "text/html", source = "src/templates/partials/foot.html" },
   { path = "templates/partials/head.html", media_type = "text/html", source = "src/templates/partials/head.html" },
   { path = "templates/root.html", media_type = "text/html", source = "src/templates/root.html" },
-  { path = "templates/source.html", media_type = "text/html", source = "src/templates/source.html" },
   { path = "templates/symbol.html", media_type = "text/html", source = "src/templates/symbol.html" },
 }
 

@@ -191,6 +191,19 @@ auto record_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
       .spelling_span = source_span(source, usize(11)),
       .expansion_span = source_span(source, usize(11)),
   });
+  unit.declarations.push(lito::doc::DeclarationOutline{
+      .semantic_identity = String::make("records::Box::clear"_str),
+      .kind = lito::doc::DeclarationKind::Function,
+      .name = String::make("clear"_str),
+      .qualified_name = String::make("Box::clear"_str),
+      .signature = String::make("void Box::clear();"_str),
+      .scope_signature = String::make("void clear();"_str),
+      .is_scope_declaration = true,
+      .exported = true,
+      .parent = Some(usize(0)),
+      .spelling_span = source_span(source, usize(12)),
+      .expansion_span = source_span(source, usize(12)),
+  });
   unit.declarations[usize(4)].scope_signature.references.push(
       lito::doc::DeclarationReference{
           .begin = usize(17),
@@ -478,6 +491,7 @@ TEST(DocPublication, PublishesRelocatablePackageSitesFromOneDataset) {
   const auto &alpha = generated->publication_set->packages[usize(0)];
   ASSERT_TRUE(!alpha.files.is_empty());
   for (const auto &file : alpha.files) {
+    EXPECT_FALSE(file.path.as_str().starts_with("source/"_str));
     auto path =
         child(root, rstd::format("publication/alpha/{}", file.path).as_str());
     auto contents = rstd::fs::read_to_string(path.as_path());
@@ -633,11 +647,17 @@ TEST(DocPublication, InlinesRecordFunctionsAndFieldsOnTheRecordPage) {
       "[[nodiscard]] constexpr auto get"_str));
   EXPECT_EQ(occurrences(record_html.as_str(), "class=\"member-summary\""_str),
             usize(2));
+  EXPECT_EQ(occurrences(record_html.as_str(), "<details "_str), usize(2));
+  EXPECT_EQ(occurrences(record_html.as_str(), " open>"_str), usize(2));
+  EXPECT_EQ(occurrences(record_html.as_str(), "member-summary-static"_str),
+            usize(1));
+  EXPECT_FALSE(record_html.as_str().contains("Declared in"_str));
+  EXPECT_FALSE(record_html.as_str().contains("../source/"_str));
   EXPECT_EQ(occurrences(record_html.as_str(),
                         "class=\"record-member method-detail\""_str),
-            usize(2));
+            usize(3));
   EXPECT_FALSE(record_html.as_str().contains("<h2><a href=\"#method-"_str));
-  EXPECT_EQ(occurrences(record_html.as_str(), "id=\"method-"_str), usize(2));
+  EXPECT_EQ(occurrences(record_html.as_str(), "id=\"method-"_str), usize(3));
   EXPECT_EQ(occurrences(record_html.as_str(), "id=\"field-"_str), usize(2));
   EXPECT_FALSE(record_html.as_str().contains("Box&lt;int&gt;::get"_str));
   EXPECT_FALSE(record_html.as_str().contains("box.cpp:1"_str));
@@ -645,9 +665,31 @@ TEST(DocPublication, InlinesRecordFunctionsAndFieldsOnTheRecordPage) {
   auto search = rstd::fs::read_to_string(
       child(root, "publication/records/search-index.json"_str).as_path());
   ASSERT_TRUE(search.is_ok());
-  EXPECT_EQ(occurrences(search->as_str(), "#method-"_str), usize(2));
+  EXPECT_EQ(occurrences(search->as_str(), "#method-"_str), usize(3));
   EXPECT_EQ(occurrences(search->as_str(), "#field-"_str), usize(2));
   EXPECT_EQ(occurrences(search->as_str(), "#type-"_str), usize(1));
+}
+
+TEST(DocPublication, OmitsSourcePagesFromWorkspaceSite) {
+  auto temporary = rstd::test::TempDir::make();
+  ASSERT_TRUE(temporary.is_ok());
+  auto root = temporary->path();
+  auto frontend = lito::doc::web::load_default_frontend();
+  ASSERT_TRUE(frontend.is_ok());
+  auto input = lito::doc::SiteInput{
+      .title = String::make("Records"_str),
+      .output = child(root, "site"_str),
+      .data_output = child(root, "data"_str),
+  };
+  input.packages.push(record_package(root));
+  ASSERT_TRUE(lito::doc::generate(rstd::move(input),
+                                  Some(rstd::move(frontend).unwrap()))
+                  .is_ok());
+  EXPECT_TRUE(
+      rstd::fs::exists(child(root, "site/index.html"_str).as_path()).unwrap());
+  EXPECT_FALSE(
+      rstd::fs::exists(child(root, "site/package/records/source"_str).as_path())
+          .unwrap());
 }
 
 TEST(DocPublication, OmitsNamespaceItemsAndShowsDeclarationNamespace) {

@@ -10,7 +10,6 @@
     "package": "templates/package.html",
     "module": "templates/module.html",
     "symbol": "templates/symbol.html",
-    "source": "templates/source.html",
     "book-root": "templates/book-root.html",
     "book-page": "templates/book-page.html"
   },

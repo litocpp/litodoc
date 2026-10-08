@@ -40,7 +40,6 @@ struct FrontendBundle {
   String package_template;
   String module_template;
   String symbol_template;
-  String source_template;
   String book_root_template;
   String book_page_template;
   TemplateSet templates;
@@ -208,9 +207,11 @@ auto frontend_manifest_paths(const FrontendManifest &manifest)
     appended = append_template(templates.symbol, "symbol"_str);
     if (appended.is_err())
       return Err(rstd::move(appended).unwrap_err());
-    appended = append_template(templates.source, "source"_str);
-    if (appended.is_err())
-      return Err(rstd::move(appended).unwrap_err());
+    if (templates.source.is_some()) {
+      appended = append_template(templates.source, "source"_str);
+      if (appended.is_err())
+        return Err(rstd::move(appended).unwrap_err());
+    }
   }
   if (book) {
     auto appended = append_template(templates.book_root, "book-root"_str);
@@ -273,7 +274,6 @@ auto make_frontend_bundle(
   auto package_template = String::make();
   auto module_template = String::make();
   auto symbol_template = String::make();
-  auto source_template = String::make();
   auto book_root_template = String::make();
   auto book_page_template = String::make();
   auto read_template = [](Option<String> &value,
@@ -289,7 +289,6 @@ auto make_frontend_bundle(
         rstd_try(read_template(templates.package, "package"_str));
     module_template = rstd_try(read_template(templates.module, "module"_str));
     symbol_template = rstd_try(read_template(templates.symbol, "symbol"_str));
-    source_template = rstd_try(read_template(templates.source, "source"_str));
   }
   if (supports_book) {
     book_root_template =
@@ -309,7 +308,6 @@ auto make_frontend_bundle(
     template_paths.push(package_template.clone());
     template_paths.push(module_template.clone());
     template_paths.push(symbol_template.clone());
-    template_paths.push(source_template.clone());
   }
   if (supports_book) {
     template_paths.push(book_root_template.clone());
@@ -356,7 +354,6 @@ auto make_frontend_bundle(
       .package_template = rstd::move(package_template),
       .module_template = rstd::move(module_template),
       .symbol_template = rstd::move(symbol_template),
-      .source_template = rstd::move(source_template),
       .book_root_template = rstd::move(book_root_template),
       .book_page_template = rstd::move(book_page_template),
       .templates = rstd::move(set),
