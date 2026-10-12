@@ -52,7 +52,7 @@ export class LitoDocShellElement extends HTMLElement {
     if (outline && layout && navigation) {
       const placeOutline = () => {
         if (compact.matches) {
-          if (outline.parentElement !== panel) panel.insertBefore(outline, navigation);
+          if (outline.parentElement !== navigation) navigation.prepend(outline);
         } else if (outline.parentElement !== layout) {
           layout.append(outline);
         }

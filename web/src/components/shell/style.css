@@ -192,26 +192,30 @@ body[data-has-sidebar] .sidebar {
     display: flex;
   }
 
-  .sidebar > .page-outline {
+  .sidebar-scroll > .page-outline {
     position: static;
     order: 0;
     width: 100%;
     min-height: 0;
-    max-height: 50%;
-    flex: 0 1 auto;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scrollbar-width: thin;
+    max-height: none;
+    overflow: visible;
+    margin-bottom: 1rem;
     border-bottom: 1px solid var(--border);
   }
 
-  .sidebar > .page-outline > lito-doc-navigation {
+  .sidebar-scroll > .page-outline > lito-doc-navigation {
     position: static;
     max-height: none;
   }
 
-  .sidebar > .page-outline nav {
+  .sidebar-scroll > .page-outline .sidebar-heading {
+    padding: 0;
+  }
+
+  .sidebar-scroll > .page-outline nav {
+    padding-inline: 0;
     overflow: visible;
+    scrollbar-gutter: auto;
   }
 }
 

@@ -1,40 +1,50 @@
 :root {
-  --syntax-keyword: #9b287b;
+  --syntax-keyword: #7c3e9d;
   --syntax-string: #17663e;
   --syntax-number: #915018;
   --syntax-comment: #647067;
-  --syntax-type: #076a7d;
+  --syntax-type: #805b16;
   --syntax-function: #2456a6;
-  --syntax-punctuation: #596273;
+  --syntax-builtin: #076a7d;
+  --syntax-variable: #a33b48;
+  --syntax-punctuation: #526889;
 }
 
 :root[data-theme="dark"] {
-  --syntax-keyword: #e5a0df;
-  --syntax-string: #a2d99a;
-  --syntax-number: #eeb778;
+  --syntax-keyword: #cba6f7;
+  --syntax-string: #a6da95;
+  --syntax-number: #f5a97f;
   --syntax-comment: #9fae9d;
-  --syntax-type: #82cbd9;
-  --syntax-function: #99bdff;
-  --syntax-punctuation: #bdc5d4;
+  --syntax-type: #eed49f;
+  --syntax-function: #8aadf4;
+  --syntax-builtin: #8bd5ca;
+  --syntax-variable: #ed8796;
+  --syntax-punctuation: #a5b9d9;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --syntax-keyword: #e5a0df;
-    --syntax-string: #a2d99a;
-    --syntax-number: #eeb778;
+    --syntax-keyword: #cba6f7;
+    --syntax-string: #a6da95;
+    --syntax-number: #f5a97f;
     --syntax-comment: #9fae9d;
-    --syntax-type: #82cbd9;
-    --syntax-function: #99bdff;
-    --syntax-punctuation: #bdc5d4;
+    --syntax-type: #eed49f;
+    --syntax-function: #8aadf4;
+    --syntax-builtin: #8bd5ca;
+    --syntax-variable: #ed8796;
+    --syntax-punctuation: #a5b9d9;
   }
 }
 
-code .syntax-keyword, code .syntax-literal, code .syntax-meta { color: var(--syntax-keyword); }
+code .syntax-keyword { color: var(--syntax-keyword); }
 code .syntax-string, code .syntax-char, code .syntax-regexp { color: var(--syntax-string); }
-code .syntax-number { color: var(--syntax-number); }
-code .syntax-comment { color: var(--syntax-comment); }
-code .syntax-type, code .syntax-built_in, code .syntax-title.class_ { color: var(--syntax-type); }
-code .syntax-title.function_ { color: var(--syntax-function); }
-code .syntax-punctuation, code .syntax-operator { color: var(--syntax-punctuation); }
-code .declaration-reference { color: var(--syntax-type); }
+code .syntax-number, code .syntax-literal { color: var(--syntax-number); }
+code .syntax-comment { color: var(--syntax-comment); font-style: italic; }
+code .syntax-type, code .syntax-title.class_, code .declaration-reference {
+  color: var(--syntax-type);
+  font-style: italic;
+}
+code .syntax-title.function_ { color: var(--syntax-function); font-style: italic; }
+code .syntax-built_in, code .syntax-meta, code .syntax-operator { color: var(--syntax-builtin); }
+code .syntax-variable, code .syntax-attr { color: var(--syntax-variable); font-style: italic; }
+code .syntax-punctuation { color: var(--syntax-punctuation); }
