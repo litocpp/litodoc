@@ -45,6 +45,21 @@ export class LitoDocShellElement extends HTMLElement {
       },
       { signal: events.signal },
     );
+    const compact = matchMedia("(max-width: 79.999rem)");
+    const outline = this.querySelector<HTMLElement>(".page-outline");
+    const layout = this.querySelector<HTMLElement>(".doc-shell");
+    const navigation = panel.querySelector<HTMLElement>(".sidebar-scroll");
+    if (outline && layout && navigation) {
+      const placeOutline = () => {
+        if (compact.matches) {
+          if (outline.parentElement !== panel) panel.insertBefore(outline, navigation);
+        } else if (outline.parentElement !== layout) {
+          layout.append(outline);
+        }
+      };
+      compact.addEventListener("change", placeOutline, { signal: events.signal });
+      placeOutline();
+    }
     this.#syncPanelAvailability();
     this.toggleAttribute("data-ready", true);
     void panel.offsetWidth;
