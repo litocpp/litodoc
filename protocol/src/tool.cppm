@@ -5,6 +5,7 @@ module;
 #include <clang/AST/Decl.h>
 #include <clang/AST/DeclCXX.h>
 #include <clang/AST/DeclTemplate.h>
+#include <clang/AST/ExprConcepts.h>
 #include <clang/AST/TypeLoc.h>
 #include <clang/Basic/Diagnostic.h>
 #include <clang/Basic/IdentifierTable.h>
@@ -480,6 +481,8 @@ auto printable_declaration(const clang::NamedDecl &declaration)
 auto template_parameter_lists(const clang::NamedDecl &declaration)
     -> llvm::SmallVector<const clang::TemplateParameterList *, 4> {
   auto result = llvm::SmallVector<const clang::TemplateParameterList *, 4>{};
+  if (const auto *constraint = llvm::dyn_cast<clang::ConceptDecl>(&declaration))
+    result.push_back(constraint->getTemplateParameters());
   if (const auto *partial =
           llvm::dyn_cast<clang::ClassTemplatePartialSpecializationDecl>(
               &declaration)) {
@@ -596,6 +599,7 @@ struct PendingDeclarationReference {
   size_t begin{};
   size_t end{};
   std::string semantic_identity;
+  DeclarationReferenceKind kind{DeclarationReferenceKind::Type};
 };
 
 class DeclarationReferenceWalker {
@@ -613,6 +617,9 @@ public:
       traverse(information->getTypeLoc());
     if (const auto *information = function.getNameInfo().getNamedTypeInfo())
       traverse(information->getTypeLoc());
+    for (const auto *parameters : template_parameter_lists(function))
+      traverse(parameters->getRequiresClause());
+    traverse(function.getTrailingRequiresClause().ConstraintExpr);
   }
 
   auto finish() -> Vec<DeclarationReference> {
@@ -639,6 +646,7 @@ public:
           .begin = usize(reference.begin),
           .end = usize(reference.end),
           .semantic_identity = as_rstd(reference.semantic_identity),
+          .kind = reference.kind,
       });
       previous = &reference;
     }
@@ -646,6 +654,17 @@ public:
   }
 
 private:
+  auto traverse(const clang::Stmt *statement) -> void {
+    if (statement == nullptr)
+      return;
+    if (const auto *expression =
+            llvm::dyn_cast<clang::ConceptSpecializationExpr>(statement))
+      record(*expression->getNamedConcept(), expression->getConceptNameLoc(),
+             DeclarationReferenceKind::Concept);
+    for (const auto *child : statement->children())
+      traverse(child);
+  }
+
   auto traverse(clang::TypeLoc location) -> void {
     if (location.isNull())
       return;
@@ -693,7 +712,9 @@ private:
   }
 
   auto record(const clang::NamedDecl &declaration,
-              clang::SourceLocation location) -> void {
+              clang::SourceLocation location,
+              DeclarationReferenceKind kind = DeclarationReferenceKind::Type)
+      -> void {
     if (location.isInvalid() || location.isMacroID())
       return;
     auto spelling = manager_->getSpellingLoc(location);
@@ -720,6 +741,7 @@ private:
         .begin = begin,
         .end = end,
         .semantic_identity = std::string(usr.data(), usr.size()),
+        .kind = kind,
     });
   }
 
@@ -729,6 +751,95 @@ private:
   size_t declaration_size_{};
   std::vector<PendingDeclarationReference> references_;
 };
+
+class ConstraintReferencePrinter final : public clang::PrinterHelper {
+public:
+  ConstraintReferencePrinter(const clang::ASTContext &context,
+                             const clang::PrintingPolicy &policy)
+      : context_(context), policy_(policy) {}
+
+  bool handledStmt(clang::Stmt *statement, llvm::raw_ostream &output) override {
+    const auto *expression =
+        llvm::dyn_cast<clang::ConceptSpecializationExpr>(statement);
+    if (expression == nullptr)
+      return false;
+    llvm::SmallString<128> text;
+    llvm::raw_svector_ostream stream(text);
+    expression->printPretty(stream, nullptr, policy_, 0, "\n", &context_);
+    auto prefix = text.str().split('<').first.rtrim();
+    auto name = expression->getNamedConcept()->getName();
+    llvm::SmallVector<char, 128> usr;
+    if (prefix.ends_with(name) &&
+        !clang::index::generateUSRForDecl(expression->getNamedConcept(), usr)) {
+      auto end = static_cast<size_t>(output.tell()) + prefix.size();
+      references.push_back({end - name.size(), end,
+                            std::string(usr.data(), usr.size()),
+                            DeclarationReferenceKind::Concept});
+    }
+    output << text;
+    return true;
+  }
+
+  std::vector<PendingDeclarationReference> references;
+
+private:
+  const clang::ASTContext &context_;
+  const clang::PrintingPolicy &policy_;
+};
+
+auto printed_declaration_text(const clang::NamedDecl &declaration,
+                              const clang::ASTContext &context,
+                              bool suppress_scope) -> DeclarationText {
+  auto result = DeclarationText{
+      declaration_signature(declaration, context, suppress_scope)};
+  auto policy = context.getPrintingPolicy();
+  policy.SuppressScope = suppress_scope;
+  policy.TerseOutput = true;
+  policy.PolishForDeclaration = false;
+  policy.Indentation = 0;
+  auto text = as_std(result.as_str());
+  auto references = std::vector<PendingDeclarationReference>{};
+  auto append = [&](const clang::Expr *expression) {
+    if (expression == nullptr)
+      return;
+    auto printer = ConstraintReferencePrinter(context, policy);
+    llvm::SmallString<128> constraint;
+    llvm::raw_svector_ostream stream(constraint);
+    expression->printPretty(stream, &printer, policy, 0, "\n", &context);
+    if (constraint.empty() || printer.references.empty())
+      return;
+    auto spelling = constraint.str().str();
+    auto offset = text.find(spelling);
+    // Decl::print has no expression callback. Only map a unique, complete
+    // Clang-printed constraint, never a name match in the declaration.
+    if (offset == std::string::npos ||
+        text.find(spelling, offset + 1) != std::string::npos)
+      return;
+    for (auto reference : printer.references) {
+      reference.begin += offset;
+      reference.end += offset;
+      references.push_back(std::move(reference));
+    }
+  };
+  for (const auto *parameters : template_parameter_lists(declaration))
+    append(parameters->getRequiresClause());
+  if (const auto *function = llvm::dyn_cast<clang::FunctionDecl>(&declaration))
+    append(function->getTrailingRequiresClause().ConstraintExpr);
+  std::sort(references.begin(), references.end(),
+            [](const auto &left, const auto &right) {
+              return left.begin < right.begin;
+            });
+  size_t previous_end = 0;
+  for (const auto &reference : references) {
+    if (reference.begin < previous_end)
+      continue;
+    result.references.push({usize(reference.begin), usize(reference.end),
+                            as_rstd(reference.semantic_identity),
+                            reference.kind});
+    previous_end = reference.end;
+  }
+  return result;
+}
 
 auto scope_declaration_text(const clang::NamedDecl &declaration,
                             const clang::ASTContext &context)
@@ -850,6 +961,10 @@ private:
       return;
     if (auto *imported = llvm::dyn_cast<clang::ImportDecl>(declaration))
       visit(*imported);
+    if (auto *constraint = llvm::dyn_cast<clang::ConceptDecl>(declaration)) {
+      visit(*constraint);
+      return;
+    }
     if (auto *template_declaration =
             llvm::dyn_cast<clang::TemplateDecl>(declaration)) {
       traverse(template_declaration->getTemplatedDecl());
@@ -905,10 +1020,9 @@ private:
     }
 
     auto index = unit_->declarations.len();
-    auto signature =
-        DeclarationText{declaration_signature(declaration, *context_, false)};
+    auto signature = printed_declaration_text(declaration, *context_, false);
     auto scope_signature =
-        DeclarationText{declaration_signature(declaration, *context_, true)};
+        printed_declaration_text(declaration, *context_, true);
     auto source_scope = scope_declaration_text(declaration, *context_);
     if (source_scope.is_some())
       scope_signature = rstd::move(*source_scope);
@@ -1102,7 +1216,8 @@ auto encode_declaration_references(const DeclarationText &declaration)
         {"begin", static_cast<int64_t>(reference.begin.to_primitive())},
         {"end", static_cast<int64_t>(reference.end.to_primitive())},
         {"semantic_identity", as_std(reference.semantic_identity.as_str())},
-        {"kind", "type"},
+        {"kind", reference.kind == DeclarationReferenceKind::Concept ? "concept"
+                                                                     : "type"},
     });
   }
   return result;
@@ -1305,13 +1420,16 @@ auto decode_declaration_text(const llvm::json::Object &object,
     auto identity =
         rstd_try(required_string(*reference, "semantic_identity", context));
     auto kind = rstd_try(required_string(*reference, "kind", context));
-    if (kind.as_str() != "type"_str)
+    if (kind.as_str() != "type"_str && kind.as_str() != "concept"_str)
       return failure<DeclarationText>(rstd::format(
           "{} has unsupported reference kind '{}'", context, kind.as_str()));
     result.references.push(DeclarationReference{
         .begin = begin,
         .end = end,
         .semantic_identity = rstd::move(identity),
+        .kind = kind.as_str() == "concept"_str
+                    ? DeclarationReferenceKind::Concept
+                    : DeclarationReferenceKind::Type,
     });
   }
   auto valid = result.validate(context);

@@ -72,7 +72,10 @@ auto encode_declaration_text(const DeclarationText &declaration) -> Json {
     item.insert(String::make("end"_str), json_usize(reference.end));
     item.insert(String::make("semantic-identity"_str),
                 json_string(reference.semantic_identity.as_str()));
-    item.insert(String::make("kind"_str), json_string("type"_str));
+    item.insert(String::make("kind"_str),
+                json_string(reference.kind == DeclarationReferenceKind::Concept
+                                ? "concept"_str
+                                : "type"_str));
     references.push(Json::Object(rstd::move(item)));
   }
   object.insert(String::make("references"_str),
@@ -426,13 +429,16 @@ auto decode_declaration_text(const Json &value, ref<str> context)
       return Err(rstd::move(identity).unwrap_err());
     if (kind.is_err())
       return Err(rstd::move(kind).unwrap_err());
-    if (kind->as_str() != "type"_str)
+    if (kind->as_str() != "type"_str && kind->as_str() != "concept"_str)
       return Err(rstd::format("{} has unsupported reference kind '{}'", context,
                               kind->as_str()));
     result.references.push(DeclarationReference{
         .begin = *begin,
         .end = *end,
         .semantic_identity = rstd::move(identity).unwrap(),
+        .kind = kind->as_str() == "concept"_str
+                    ? DeclarationReferenceKind::Concept
+                    : DeclarationReferenceKind::Type,
     });
   }
   auto valid = result.validate(context);

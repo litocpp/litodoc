@@ -692,6 +692,61 @@ TEST(DocPublication, OmitsSourcePagesFromWorkspaceSite) {
           .unwrap());
 }
 
+TEST(DocPublication, LinksConceptReferencesAcrossPackagesAndDatasetReload) {
+  auto temporary = rstd::test::TempDir::make();
+  ASSERT_TRUE(temporary.is_ok());
+  auto root = temporary->path();
+  auto owner = publication_package(root, "owner"_str, "owner"_str);
+  auto target = publication_package(root, "target"_str, "target"_str);
+  auto &concept_symbol = target.units[usize{}].declarations[usize{}];
+  concept_symbol.name = String::make("Impled"_str);
+  concept_symbol.qualified_name = String::make("rstd::Impled"_str);
+  concept_symbol.kind = lito::doc::DeclarationKind::Concept;
+  concept_symbol.semantic_identity = String::make("concept:Impl"_str);
+  concept_symbol.signature =
+      String::make("template <typename T> concept Impled = true;"_str);
+  concept_symbol.scope_signature = concept_symbol.signature.clone();
+  auto &function = owner.units[usize{}].declarations[usize{}];
+  auto prefix = "template <typename T> requires rstd::"_str;
+  function.signature =
+      rstd::format("{}Impled<T>\nauto value() -> int;", prefix);
+  function.signature.references.push(
+      {prefix.len(), prefix.len() + usize(6), String::make("concept:Impl"_str),
+       lito::doc::DeclarationReferenceKind::Concept});
+  auto input = lito::doc::SiteInput{
+      .title = String::make("Concept links"_str),
+      .output = child(root, "site"_str),
+      .data_output = child(root, "data"_str),
+  };
+  input.packages.push(rstd::move(owner));
+  input.packages.push(rstd::move(target));
+  auto frontend = lito::doc::web::load_default_frontend();
+  ASSERT_TRUE(frontend.is_ok());
+  auto generated = lito::doc::generate(rstd::move(input),
+                                       Some(rstd::move(frontend).unwrap()));
+  ASSERT_TRUE(generated.is_ok());
+  auto page =
+      symbol_page_containing(generated->packages[usize{}].directory.as_path(),
+                             "<h1 class=\"page-title\">owner::value</h1>"_str);
+  ASSERT_TRUE(page.is_ok());
+  EXPECT_TRUE(page->as_str().contains(
+      "rstd::<a class=\"declaration-reference\" href=\"../../target/symbol/"_str));
+  EXPECT_TRUE(page->as_str().contains(">Impled</a>&lt;T&gt;"_str));
+  ASSERT_TRUE(
+      lito::doc::validate_data(child(root, "data"_str).as_path()).is_ok());
+  frontend = lito::doc::web::load_default_frontend();
+  ASSERT_TRUE(frontend.is_ok());
+  auto rendered = lito::doc::render(
+      {.data = child(root, "data"_str), .output = child(root, "reloaded"_str)},
+      Some(rstd::move(frontend).unwrap()));
+  ASSERT_TRUE(rendered.is_ok());
+  auto reloaded =
+      symbol_page_containing(rendered->packages[usize{}].directory.as_path(),
+                             "<h1 class=\"page-title\">owner::value</h1>"_str);
+  ASSERT_TRUE(reloaded.is_ok());
+  EXPECT_EQ(page->as_str(), reloaded->as_str());
+}
+
 TEST(DocPublication, ComposesSyntaxWithLinksAndPreservesExampleLanguages) {
   struct Highlighter final : lito::doc::DeclarationHighlighter {
     bool invalid{false};

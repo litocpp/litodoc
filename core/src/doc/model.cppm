@@ -37,6 +37,7 @@ enum class SymbolPlacement {
 
 enum class DeclarationReferenceKind {
   Type,
+  Concept,
 };
 
 enum class DocumentationSeverity {

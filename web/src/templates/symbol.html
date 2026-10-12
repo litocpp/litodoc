@@ -6,7 +6,7 @@
 </lito-doc-module-identity>
 <section class="symbol-identity">
   <h1 class="page-title">{{symbol.qualified_name}}</h1>
-  <pre class="signature"><code>{{{symbol.signature_html}}}</code></pre>
+  <pre class="signature"><code>{{#each symbol.signature_fragments}}{{#if has_href}}<a class="declaration-reference" href="{{href}}">{{{html}}}</a>{{/if}}{{#if plain}}{{{html}}}{{/if}}{{/each}}</code></pre>
 </section>
 {{#if symbol.has_documentation}}<lito-doc-prose><section class="documentation prose" id="documentation">{{{symbol.documentation}}}</section></lito-doc-prose>{{/if}}
 {{#if symbol.has_member_types}}

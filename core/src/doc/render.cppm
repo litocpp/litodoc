@@ -868,9 +868,15 @@ auto symbol_context(const Dataset &dataset, const Package &package,
                       template_text(symbol.namespace_name.as_str()));
   symbol_value.insert("signature"_str,
                       template_text(symbol.signature.as_str()));
-  symbol_value.insert(
-      "signature_html"_str,
-      highlighted_value(symbol.signature.as_str(), highlighter));
+  auto signature_tokens = syntax_tokens(symbol.signature.as_str(), highlighter);
+  symbol_value.insert("signature_html"_str,
+                      TemplateValue::trusted_html(syntax_html(
+                          symbol.signature.as_str(), signature_tokens, usize{},
+                          symbol.signature.as_str().len())));
+  symbol_value.insert("signature_fragments"_str,
+                      declaration_fragments(dataset, targets, package,
+                                            symbol.signature, layout,
+                                            signature_tokens));
   symbol_value.insert("has_documentation"_str,
                       TemplateValue::boolean_value(symbol.comment.is_some()));
   symbol_value.insert("documentation"_str,
