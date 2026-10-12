@@ -17,6 +17,10 @@ local frontend_sources = {
   "components/page-navigation/element.ts",
   "components/page-navigation/style.css",
   "components/prose/element.ts",
+  "components/prose/highlight.ts",
+  "vendor/highlight.js/core.cjs",
+  "vendor/highlight.js/cpp.cjs",
+  "styles/syntax.css",
   "components/prose/style.css",
   "components/search/element.ts",
   "components/search/style.css",
@@ -31,6 +35,7 @@ local frontend_sources = {
 }
 
 local resources = {
+  { path = "static/highlight-LICENSE.txt", media_type = "text/plain", source = "src/vendor/highlight.js/LICENSE" },
   { path = "static/fonts/LICENSE.txt", media_type = "text/plain", source = "src/static/fonts/LICENSE.txt" },
   { path = "frontend.json", media_type = "application/json", source = "frontend.json" },
   { path = "static/app.js", media_type = "text/javascript", entry = "app.ts", target = "es2020" },

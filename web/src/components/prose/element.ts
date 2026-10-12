@@ -1,3 +1,5 @@
+import { highlightCode } from "./highlight";
+
 export class LitoDocProseElement extends HTMLElement {
   #events?: AbortController;
 
@@ -36,6 +38,8 @@ export class LitoDocProseElement extends HTMLElement {
     const blocks = Array.from(this.querySelectorAll<HTMLPreElement>("pre"));
     for (const block of blocks) {
       if (block.classList.contains("signature") || block.classList.contains("source-code")) continue;
+      const code = block.querySelector<HTMLElement>(":scope > code");
+      if (code) highlightCode(code);
       if (block.parentElement?.classList.contains("code-frame")) continue;
       const frame = document.createElement("div");
       frame.className = "code-frame";
@@ -71,7 +75,7 @@ export class LitoDocProseElement extends HTMLElement {
     if (!button) return;
     const code = button.closest(".code-frame")?.querySelector("code");
     if (!(code instanceof HTMLElement)) return;
-    const copied = await this.#copy(code.innerText);
+    const copied = await this.#copy(code.textContent ?? "");
     button.textContent = copied ? "Copied" : "Copy";
     button.toggleAttribute("data-copied", copied);
     window.setTimeout(() => {
@@ -86,7 +90,7 @@ export class LitoDocProseElement extends HTMLElement {
       return true;
     } catch {
       const selection = window.getSelection();
-      const code = Array.from(this.querySelectorAll("code")).find((item) => item.innerText === value);
+      const code = Array.from(this.querySelectorAll("code")).find((item) => item.textContent === value);
       if (!selection || !code) return false;
       const range = document.createRange();
       range.selectNodeContents(code);

@@ -19,6 +19,10 @@
   ],
   "assets": [
     {
+      "path": "static/highlight-LICENSE.txt",
+      "media-type": "text/plain"
+    },
+    {
       "path": "static/fonts/LICENSE.txt",
       "media-type": "text/plain"
     },

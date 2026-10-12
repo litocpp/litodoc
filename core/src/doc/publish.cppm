@@ -191,13 +191,14 @@ auto summary_for(ref<rstd::path::Path> output, const Dataset &dataset,
 }
 
 auto publish_site(ref<rstd::path::Path> output, const Dataset &dataset,
-                  const FrontendBundle &frontend, const DataSummary &data)
+                  const FrontendBundle &frontend, const DataSummary &data,
+                  DeclarationHighlighter *highlighter)
     -> Result<Summary, String> {
   auto publication = begin_publication(output, "doc-site"_str);
   if (publication.is_err())
     return Err(rstd::move(publication).unwrap_err());
   auto rendered = render_site(publication->staging.as_path(), dataset, frontend,
-                              data.digest.as_str());
+                              data.digest.as_str(), highlighter);
   if (rendered.is_err()) {
     (void)abort_publication(*publication);
     return Err(rstd::move(rendered).unwrap_err());
@@ -212,7 +213,9 @@ auto publish_site(ref<rstd::path::Path> output, const Dataset &dataset,
 
 auto publish_package_set(ref<rstd::path::Path> output, const Dataset &dataset,
                          const FrontendBundle &frontend,
-                         const DataSummary &data) -> Result<Summary, String> {
+                         const DataSummary &data,
+                         DeclarationHighlighter *highlighter)
+    -> Result<Summary, String> {
   auto publication = begin_publication(output, "doc-package-set"_str);
   if (publication.is_err())
     return Err(rstd::move(publication).unwrap_err());
@@ -234,7 +237,7 @@ auto publish_package_set(ref<rstd::path::Path> output, const Dataset &dataset,
     auto package_digest = data_digest(package_json(package).as_str());
     auto rendered =
         render_package_site(directory.as_path(), dataset, package, frontend,
-                            package_digest.as_str(), files);
+                            package_digest.as_str(), files, highlighter);
     if (rendered.is_err()) {
       (void)abort_publication(*publication);
       return Err(rstd::move(rendered).unwrap_err());

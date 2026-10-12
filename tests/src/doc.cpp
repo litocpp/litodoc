@@ -692,6 +692,65 @@ TEST(DocPublication, OmitsSourcePagesFromWorkspaceSite) {
           .unwrap());
 }
 
+TEST(DocPublication, ComposesSyntaxWithLinksAndPreservesExampleLanguages) {
+  struct Highlighter final : lito::doc::DeclarationHighlighter {
+    bool invalid{false};
+    auto highlight(ref<str> text) -> Vec<lito::doc::SyntaxToken> override {
+      auto tokens = Vec<lito::doc::SyntaxToken>::make();
+      if (!text.is_empty())
+        tokens.push({usize{}, text.len() + (invalid ? usize(1) : usize{}),
+                     lito::doc::SyntaxKind::Keyword});
+      return tokens;
+    }
+  } highlighter;
+  auto temporary = rstd::test::TempDir::make();
+  ASSERT_TRUE(temporary.is_ok());
+  auto root = temporary->path();
+  auto frontend = lito::doc::web::load_default_frontend();
+  ASSERT_TRUE(frontend.is_ok());
+  auto input = lito::doc::SiteInput{
+      .title = String::make("Syntax"_str),
+      .output = child(root, "site"_str),
+      .data_output = child(root, "data"_str),
+      .highlighter = &highlighter,
+  };
+  auto package = record_package(root);
+  package.units[usize{}].declarations[usize{}].comment = comment(
+      child(root, "src/box.cppm"_str), usize(1),
+      "```cpp\nauto s = \"<script>&\";\n```\n```unknown\n<unsafe>\n```"_str);
+  input.packages.push(rstd::move(package));
+  auto generated = lito::doc::generate(rstd::move(input),
+                                       Some(rstd::move(frontend).unwrap()));
+  ASSERT_TRUE(generated.is_ok());
+  auto page =
+      symbol_page_containing(generated->packages[usize{}].directory.as_path(),
+                             "<h1 class=\"page-title\">Box</h1>"_str);
+  ASSERT_TRUE(page.is_ok());
+  EXPECT_TRUE(page->as_str().contains(
+      "<span class=\"syntax-keyword\">template &lt;typename T&gt;"_str));
+  EXPECT_TRUE(page->as_str().contains(
+      "<span class=\"syntax-keyword\">Box</span></a>"_str));
+  EXPECT_TRUE(page->as_str().contains(
+      "<code class=\"language-cpp\">auto s = &quot;&lt;script&gt;&amp;&quot;;"_str));
+  EXPECT_TRUE(page->as_str().contains(
+      "<code class=\"language-unknown\">&lt;unsafe&gt;"_str));
+  EXPECT_FALSE(page->as_str().contains("<script>&"_str));
+
+  highlighter.invalid = true;
+  frontend = lito::doc::web::load_default_frontend();
+  ASSERT_TRUE(frontend.is_ok());
+  auto rendered = lito::doc::render({.data = child(root, "data"_str),
+                                     .output = child(root, "fallback"_str),
+                                     .highlighter = &highlighter},
+                                    Some(rstd::move(frontend).unwrap()));
+  ASSERT_TRUE(rendered.is_ok());
+  page = symbol_page_containing(rendered->packages[usize{}].directory.as_path(),
+                                "<h1 class=\"page-title\">Box</h1>"_str);
+  ASSERT_TRUE(page.is_ok());
+  EXPECT_FALSE(page->as_str().contains("syntax-keyword"_str));
+  EXPECT_TRUE(page->as_str().contains("\">Box</a>&lt;T&gt;;"_str));
+}
+
 TEST(DocPublication, OmitsNamespaceItemsAndShowsDeclarationNamespace) {
   auto temporary = rstd::test::TempDir::make();
   ASSERT_TRUE(temporary.is_ok());

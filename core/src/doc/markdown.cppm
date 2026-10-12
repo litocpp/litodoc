@@ -95,7 +95,21 @@ auto render_markdown(ref<str> value) -> String {
         output.push_str("</ul>"_str);
         list = false;
       }
-      output.push_str(code ? "</code></pre>"_str : "<pre><code>"_str);
+      if (code) {
+        output.push_str("</code></pre>"_str);
+      } else {
+        auto language = line.get(usize(3), line.len()).unwrap().trim_ascii();
+        auto space = find_byte(language, usize{}, u8(' '));
+        if (space.is_some())
+          language = language.get(usize{}, *space).unwrap();
+        output.push_str("<pre><code"_str);
+        if (!language.is_empty()) {
+          output.push_str(" class=\"language-"_str);
+          output.push_str(escape_html(language).as_str());
+          output.push_ascii('"');
+        }
+        output.push_ascii('>');
+      }
       code = !code;
     } else if (code) {
       output.push_str(escape_html(line).as_str());

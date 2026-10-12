@@ -7,6 +7,7 @@ module;
 #include <clang/AST/DeclTemplate.h>
 #include <clang/AST/TypeLoc.h>
 #include <clang/Basic/Diagnostic.h>
+#include <clang/Basic/IdentifierTable.h>
 #include <clang/Basic/Module.h>
 #include <clang/Basic/SourceManager.h>
 #include <clang/Basic/Version.h>
@@ -20,8 +21,10 @@ module;
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/JSON.h>
+#include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/VirtualFileSystem.h>
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/TargetParser/Triple.h>
 #include <rstd/macro.hpp>
 
 #include <algorithm>
@@ -56,6 +59,62 @@ auto as_std(ref<str> value) -> std::string {
   return std::string(reinterpret_cast<const char *>(value->data()),
                      value.len().to_primitive());
 }
+
+class ClangDeclarationHighlighter final : public DeclarationHighlighter {
+  clang::LangOptions options_;
+  std::unique_ptr<clang::IdentifierTable> identifiers_;
+
+public:
+  ClangDeclarationHighlighter() {
+    std::vector<std::string> includes;
+    clang::LangOptions::setLangDefaults(
+        options_, clang::Language::CXX, llvm::Triple("unknown-unknown-unknown"),
+        includes, clang::LangStandard::lang_cxx23);
+    identifiers_ = std::make_unique<clang::IdentifierTable>(options_);
+  }
+
+  auto highlight(ref<str> text) -> Vec<SyntaxToken> override {
+    auto result = Vec<SyntaxToken>::make();
+    auto buffer = llvm::MemoryBuffer::getMemBufferCopy(as_std(text));
+    auto start = clang::SourceLocation::getFromRawEncoding(1);
+    clang::Lexer lexer(start, options_, buffer->getBufferStart(),
+                       buffer->getBufferStart(), buffer->getBufferEnd());
+    lexer.SetCommentRetentionState(true);
+    while (true) {
+      clang::Token token;
+      lexer.LexFromRawLexer(token);
+      if (token.is(clang::tok::eof))
+        break;
+      auto offset =
+          token.getLocation().getRawEncoding() - start.getRawEncoding();
+      auto kind = token.getKind();
+      if (kind == clang::tok::raw_identifier)
+        kind = identifiers_
+                   ->get(buffer->getBuffer().substr(offset, token.getLength()))
+                   .getTokenID();
+      auto syntax = Option<SyntaxKind>{};
+      if (clang::tok::getKeywordSpelling(kind) != nullptr)
+        syntax = Some(SyntaxKind::Keyword);
+      else if (kind == clang::tok::comment)
+        syntax = Some(SyntaxKind::Comment);
+      else if (kind == clang::tok::numeric_constant)
+        syntax = Some(SyntaxKind::Number);
+      else if (clang::tok::isStringLiteral(kind) ||
+               kind == clang::tok::char_constant ||
+               kind == clang::tok::wide_char_constant ||
+               kind == clang::tok::utf8_char_constant ||
+               kind == clang::tok::utf16_char_constant ||
+               kind == clang::tok::utf32_char_constant)
+        syntax = Some(SyntaxKind::String);
+      else if (clang::tok::getPunctuatorSpelling(kind) != nullptr)
+        syntax = Some(SyntaxKind::Punctuation);
+      if (syntax.is_some())
+        result.push(SyntaxToken{usize(offset),
+                                usize(offset + token.getLength()), *syntax});
+    }
+    return result;
+  }
+};
 
 auto json_text(llvm::json::Value value) -> String {
   auto text = llvm::formatv("{0:2}\n", rstd::move(value)).str();
@@ -1487,6 +1546,8 @@ auto execute_generate(ref<rstd::path::Path> manifest_path)
     }
     input.packages.push(rstd::move(package_input));
   }
+  auto highlighter = ClangDeclarationHighlighter{};
+  input.highlighter = &highlighter;
   return generate(rstd::move(input), rstd::move(default_frontend));
 }
 

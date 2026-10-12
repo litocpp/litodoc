@@ -1,0 +1,4 @@
+highlight.js 11.12.0
+https://www.npmjs.com/package/highlight.js/v/11.12.0
+Unmodified lib/core.js and lib/languages/cpp.js, renamed to .cjs.
+Only core and the C++ grammar are bundled. License is published with the frontend.

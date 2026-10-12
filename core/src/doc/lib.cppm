@@ -67,9 +67,10 @@ auto generate(SiteInput input, Option<FrontendBundle> default_frontend = {})
     return Err(rstd::move(loaded_frontend).unwrap_err());
   if (publication == PublicationKind::PackageSet) {
     return publish_package_set(output.as_path(), dataset, *loaded_frontend,
-                               *data);
+                               *data, input.highlighter);
   }
-  return publish_site(output.as_path(), dataset, *loaded_frontend, *data);
+  return publish_site(output.as_path(), dataset, *loaded_frontend, *data,
+                      input.highlighter);
 }
 
 auto render(RenderInput input, Option<FrontendBundle> default_frontend = {})
@@ -82,7 +83,8 @@ auto render(RenderInput input, Option<FrontendBundle> default_frontend = {})
       selected_frontend(input.frontend, rstd::move(default_frontend));
   if (frontend.is_err())
     return Err(rstd::move(frontend).unwrap_err());
-  return publish_site(input.output.as_path(), *dataset, *frontend, data);
+  return publish_site(input.output.as_path(), *dataset, *frontend, data,
+                      input.highlighter);
 }
 
 auto validate_json(ref<str> contents) -> Result<empty, String> {

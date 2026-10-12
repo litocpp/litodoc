@@ -240,17 +240,85 @@ auto declaration_target_href(const Dataset &dataset, const Package &package,
                            symbol_href(target_symbol)));
 }
 
+auto syntax_class(SyntaxKind kind) -> ref<str> {
+  switch (kind) {
+  case SyntaxKind::Keyword:
+    return "syntax-keyword"_str;
+  case SyntaxKind::String:
+    return "syntax-string"_str;
+  case SyntaxKind::Number:
+    return "syntax-number"_str;
+  case SyntaxKind::Comment:
+    return "syntax-comment"_str;
+  case SyntaxKind::Punctuation:
+    return "syntax-punctuation"_str;
+  }
+  return ""_str;
+}
+
+auto syntax_tokens(ref<str> text, DeclarationHighlighter *highlighter)
+    -> Vec<SyntaxToken> {
+  if (highlighter == nullptr)
+    return {};
+  auto tokens = highlighter->highlight(text);
+  auto end = usize{};
+  for (const auto &token : tokens) {
+    if (token.begin < end || token.begin >= token.end ||
+        token.end > text.len() || !text.is_char_boundary(token.begin) ||
+        !text.is_char_boundary(token.end))
+      return {};
+    end = token.end;
+  }
+  return tokens;
+}
+
+auto syntax_html(ref<str> text, const Vec<SyntaxToken> &tokens, usize begin,
+                 usize end) -> String {
+  auto html = String::make();
+  auto position = begin;
+  for (const auto &token : tokens) {
+    if (token.end <= begin)
+      continue;
+    if (token.begin >= end)
+      break;
+    auto left = token.begin < begin ? begin : token.begin;
+    auto right = token.end > end ? end : token.end;
+    html.push_str(escape_html(text.get(position, left).unwrap()).as_str());
+    html.push_str("<span class=\""_str);
+    html.push_str(syntax_class(token.kind));
+    html.push_str("\">"_str);
+    html.push_str(escape_html(text.get(left, right).unwrap()).as_str());
+    html.push_str("</span>"_str);
+    position = right;
+  }
+  html.push_str(escape_html(text.get(position, end).unwrap()).as_str());
+  return html;
+}
+
+auto highlighted_value(ref<str> text, DeclarationHighlighter *highlighter)
+    -> TemplateValue {
+  auto tokens = syntax_tokens(text, highlighter);
+  return TemplateValue::trusted_html(
+      syntax_html(text, tokens, usize{}, text.len()));
+}
+
 auto declaration_fragments(const Dataset &dataset,
                            const DeclarationTargetIndex &index,
                            const Package &package,
                            const DeclarationText &declaration,
-                           RenderLayout layout) -> TemplateValue {
+                           RenderLayout layout, const Vec<SyntaxToken> &tokens)
+    -> TemplateValue {
   auto result = TemplateValue::array_value();
-  auto append = [&result](ref<str> text, Option<String> href) {
+  auto offset = usize{};
+  auto append = [&](ref<str> text, Option<String> href) {
     if (text.is_empty())
       return;
     auto item = TemplateValue::object_value();
     item.insert("text"_str, template_text(text));
+    item.insert("html"_str, TemplateValue::trusted_html(
+                                syntax_html(declaration.as_str(), tokens,
+                                            offset, offset + text.len())));
+    offset += text.len();
     item.insert("has_href"_str, TemplateValue::boolean_value(href.is_some()));
     item.insert("plain"_str, TemplateValue::boolean_value(href.is_none()));
     item.insert("href"_str,
@@ -333,11 +401,23 @@ auto declaration_link_value(const Symbol &symbol, ref<str> href_prefix)
 auto record_member_value(const Dataset &dataset,
                          const DeclarationTargetIndex &targets,
                          const Package &package, const Symbol &symbol,
-                         RenderLayout layout) -> TemplateValue {
+                         RenderLayout layout,
+                         DeclarationHighlighter *highlighter) -> TemplateValue {
   auto item = TemplateValue::object_value();
   item.insert("id"_str, template_text(symbol.anchor->as_str()));
   item.insert("name"_str, template_text(symbol.name.as_str()));
   item.insert("signature"_str, template_text(symbol.scope_signature.as_str()));
+  auto signature_tokens =
+      syntax_tokens(symbol.scope_signature.as_str(), highlighter);
+  item.insert("signature_html"_str,
+              TemplateValue::trusted_html(
+                  syntax_html(symbol.scope_signature.as_str(), signature_tokens,
+                              usize{}, symbol.scope_signature.as_str().len())));
+  item.insert("alias_target_html"_str,
+              highlighted_value(symbol.alias_target.is_some()
+                                    ? symbol.alias_target->as_str()
+                                    : ""_str,
+                                highlighter));
   item.insert("has_alias_target"_str,
               TemplateValue::boolean_value(symbol.alias_target.is_some()));
   item.insert("missing_alias_target"_str,
@@ -348,7 +428,8 @@ auto record_member_value(const Dataset &dataset,
                                 : ""_str));
   item.insert("signature_fragments"_str,
               declaration_fragments(dataset, targets, package,
-                                    symbol.scope_signature, layout));
+                                    symbol.scope_signature, layout,
+                                    signature_tokens));
   item.insert("has_documentation"_str,
               TemplateValue::boolean_value(symbol.comment.is_some()));
   item.insert("missing_documentation"_str,
@@ -750,6 +831,7 @@ auto module_context(const Dataset &dataset, const Package &package,
 auto symbol_context(const Dataset &dataset, const Package &package,
                     const PackageRenderIndex &index,
                     const DeclarationTargetIndex &targets, const Symbol &symbol,
+                    DeclarationHighlighter *highlighter,
                     RenderLayout layout = RenderLayout::Workspace)
     -> TemplateValue {
   auto asset_prefix =
@@ -786,6 +868,9 @@ auto symbol_context(const Dataset &dataset, const Package &package,
                       template_text(symbol.namespace_name.as_str()));
   symbol_value.insert("signature"_str,
                       template_text(symbol.signature.as_str()));
+  symbol_value.insert(
+      "signature_html"_str,
+      highlighted_value(symbol.signature.as_str(), highlighter));
   symbol_value.insert("has_documentation"_str,
                       TemplateValue::boolean_value(symbol.comment.is_some()));
   symbol_value.insert("documentation"_str,
@@ -828,8 +913,8 @@ auto symbol_context(const Dataset &dataset, const Package &package,
         const auto &candidate = package.symbols[**position];
         switch (candidate.kind) {
         case DeclarationKind::Function:
-          methods.array.push(record_member_value(dataset, targets, package,
-                                                 candidate, layout));
+          methods.array.push(record_member_value(
+              dataset, targets, package, candidate, layout, highlighter));
           ++method_count;
           break;
         case DeclarationKind::Record:
@@ -842,8 +927,8 @@ auto symbol_context(const Dataset &dataset, const Package &package,
           ++member_type_count;
           break;
         case DeclarationKind::Alias: {
-          auto member =
-              record_member_value(dataset, targets, package, candidate, layout);
+          auto member = record_member_value(dataset, targets, package,
+                                            candidate, layout, highlighter);
           member.insert("inline"_str, TemplateValue::boolean_value(true));
           member.insert("href"_str, template_text(""_str));
           member_types.array.push(rstd::move(member));
@@ -851,8 +936,8 @@ auto symbol_context(const Dataset &dataset, const Package &package,
           break;
         }
         case DeclarationKind::Field:
-          fields.array.push(record_member_value(dataset, targets, package,
-                                                candidate, layout));
+          fields.array.push(record_member_value(
+              dataset, targets, package, candidate, layout, highlighter));
           field_declarations.push_str(symbol.record_keyword.is_some() &&
                                               symbol.record_keyword->as_str() ==
                                                   "class"_str
@@ -895,6 +980,8 @@ auto symbol_context(const Dataset &dataset, const Package &package,
     synopsis.push_str("};"_str);
   }
   symbol_value.insert("field_synopsis"_str, template_text(synopsis.as_str()));
+  symbol_value.insert("field_synopsis_html"_str,
+                      highlighted_value(synopsis.as_str(), highlighter));
   symbol_value.insert(
       "has_member_values"_str,
       TemplateValue::boolean_value(member_value_count != usize{}));
@@ -956,7 +1043,8 @@ auto site_manifest_json(const FrontendBundle &frontend, ref<str> data_digest)
 
 auto render_package_site(ref<rstd::path::Path> root, const Dataset &dataset,
                          const Package &package, const FrontendBundle &frontend,
-                         ref<str> data_digest, Vec<PublicationFile> &files)
+                         ref<str> data_digest, Vec<PublicationFile> &files,
+                         DeclarationHighlighter *highlighter)
     -> Result<empty, String> {
   for (const auto &asset : frontend.assets) {
     auto written = write_doc_file(root, asset.path.as_str(),
@@ -1001,7 +1089,7 @@ auto render_package_site(ref<rstd::path::Path> root, const Dataset &dataset,
         symbol.placement != SymbolPlacement::Standalone)
       continue;
     auto context = symbol_context(dataset, package, render_index, target_index,
-                                  symbol, RenderLayout::Package);
+                                  symbol, highlighter, RenderLayout::Package);
     written = render_page(root, symbol.page.as_str(), frontend,
                           frontend.symbol_template.as_str(), context, &files);
     if (written.is_err())
@@ -1013,8 +1101,8 @@ auto render_package_site(ref<rstd::path::Path> root, const Dataset &dataset,
 }
 
 auto render_site(ref<rstd::path::Path> root, const Dataset &dataset,
-                 const FrontendBundle &frontend, ref<str> data_digest)
-    -> Result<empty, String> {
+                 const FrontendBundle &frontend, ref<str> data_digest,
+                 DeclarationHighlighter *highlighter) -> Result<empty, String> {
   for (const auto &asset : frontend.assets) {
     auto written =
         write_doc_file(root, asset.path.as_str(), asset.contents.as_str());
@@ -1067,8 +1155,8 @@ auto render_site(ref<rstd::path::Path> root, const Dataset &dataset,
       if (!is_published_symbol_kind(symbol.kind) ||
           symbol.placement != SymbolPlacement::Standalone)
         continue;
-      auto context =
-          symbol_context(dataset, package, render_index, target_index, symbol);
+      auto context = symbol_context(dataset, package, render_index,
+                                    target_index, symbol, highlighter);
       written = render_page(
           root,
           rstd::format("{}{}", prefix.as_str(), symbol.page.as_str()).as_str(),

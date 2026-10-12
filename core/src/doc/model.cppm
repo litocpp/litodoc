@@ -171,6 +171,20 @@ enum class PublicationKind {
   PackageSet,
 };
 
+enum class SyntaxKind { Keyword, String, Number, Comment, Punctuation };
+
+struct SyntaxToken {
+  usize begin;
+  usize end;
+  SyntaxKind kind;
+};
+
+struct DeclarationHighlighter {
+  virtual ~DeclarationHighlighter() = default;
+  // Ordered, non-overlapping UTF-8 byte ranges in the supplied text.
+  virtual auto highlight(ref<str> text) -> Vec<SyntaxToken> = 0;
+};
+
 struct SiteInput {
   String title;
   rstd::path::PathBuf output;
@@ -179,12 +193,15 @@ struct SiteInput {
   bool data_only{false};
   PublicationKind publication{PublicationKind::Site};
   Vec<PackageInput> packages;
+  // Borrowed for the synchronous generate call; never retained in the dataset.
+  DeclarationHighlighter *highlighter{nullptr};
 };
 
 struct RenderInput {
   rstd::path::PathBuf data;
   rstd::path::PathBuf output;
   Option<rstd::path::PathBuf> frontend;
+  DeclarationHighlighter *highlighter{nullptr};
 };
 
 struct Source {
