@@ -1,6 +1,7 @@
 export module lito.doc;
 
 export import :model;
+export import :public_api;
 
 import rstd;
 import :database;

@@ -106,9 +106,72 @@ struct DeclarationText {
   }
 };
 
+enum class DocumentationUnitKind {
+  Ordinary,
+  PrimaryInterface,
+  InterfacePartition,
+  Implementation,
+  ImplementationPartition,
+};
+
+enum class DeclarationOrigin {
+  Ordinary,
+  Interface,
+  Implementation,
+  GlobalFragment,
+  PrivateFragment
+};
+
+struct DeclarationOwner {
+  String semantic_identity;
+  String named_module;
+  DeclarationKind kind{DeclarationKind::Namespace};
+  DeclarationAccess access{DeclarationAccess::Public};
+  bool anonymous_record{false};
+
+  auto clone() const -> DeclarationOwner {
+    return {semantic_identity.clone(), named_module.clone(), kind, access,
+            anonymous_record};
+  }
+};
+
+auto documentation_unit_kind_name(DocumentationUnitKind kind) -> ref<str> {
+  switch (kind) {
+  case DocumentationUnitKind::Ordinary:
+    return "ordinary"_str;
+  case DocumentationUnitKind::PrimaryInterface:
+    return "primary-interface"_str;
+  case DocumentationUnitKind::InterfacePartition:
+    return "interface-partition"_str;
+  case DocumentationUnitKind::Implementation:
+    return "implementation"_str;
+  case DocumentationUnitKind::ImplementationPartition:
+    return "implementation-partition"_str;
+  }
+  __builtin_unreachable();
+}
+
+auto declaration_origin_name(DeclarationOrigin origin) -> ref<str> {
+  switch (origin) {
+  case DeclarationOrigin::Ordinary:
+    return "ordinary"_str;
+  case DeclarationOrigin::Interface:
+    return "interface"_str;
+  case DeclarationOrigin::Implementation:
+    return "implementation"_str;
+  case DeclarationOrigin::GlobalFragment:
+    return "global-fragment"_str;
+  case DeclarationOrigin::PrivateFragment:
+    return "private-fragment"_str;
+  }
+  __builtin_unreachable();
+}
+
 struct DeclarationOutline {
   Option<String> alias_target;
   String semantic_identity;
+  String publication_identity;
+  String named_module;
   DeclarationKind kind{DeclarationKind::Variable};
   String name;
   String qualified_name;
@@ -119,9 +182,13 @@ struct DeclarationOutline {
   Option<String> record_header;
   bool is_definition{false};
   bool is_scope_declaration{false};
-  bool exported{false};
+  DeclarationOrigin origin{DeclarationOrigin::Ordinary};
+  bool lexical_export{false};
+  bool exported_redeclaration{false};
   DeclarationAccess access{DeclarationAccess::Public};
   Option<usize> parent;
+  Option<DeclarationOwner> owner;
+  Vec<DeclarationOwner> record_ancestors;
   Option<String> group;
   Option<DocumentationComment> comment;
   DocumentationSpan spelling_span;
@@ -130,6 +197,8 @@ struct DeclarationOutline {
 
 struct DocumentationReexport {
   String logical_module;
+  String named_module;
+  bool is_partition{false};
   DocumentationSpan span;
 };
 
@@ -144,7 +213,8 @@ struct DocumentationUnit {
   rstd::path::PathBuf source;
   String source_contents;
   String logical_module;
-  bool is_interface{false};
+  String named_module;
+  DocumentationUnitKind kind{DocumentationUnitKind::Ordinary};
   Vec<DeclarationOutline> declarations;
   Vec<DocumentationReexport> reexports;
   Option<DocumentationComment> module_comment;
@@ -263,6 +333,11 @@ struct Diagnostic {
   usize line{};
 };
 
+struct PublicApiCount {
+  String reason;
+  usize declarations{};
+};
+
 struct Package {
   String name;
   String version;
@@ -279,6 +354,8 @@ struct Package {
   usize documented{};
   usize undocumented{};
   usize unsupported{};
+  // Fresh-generation audit; not part of the serialized public dataset.
+  Vec<PublicApiCount> public_api_counts;
 };
 
 struct PublishedSymbolStatistics {
@@ -320,6 +397,7 @@ struct PackageSummary {
   usize unsupported{};
   usize diagnostics{};
   Vec<Diagnostic> diagnostic_details;
+  Vec<PublicApiCount> public_api_counts;
 };
 
 struct PublicationFile {

@@ -45,6 +45,23 @@ auto comment(const PathBuf &source, usize line, ref<str> text)
   });
 }
 
+auto prepare_unit(lito::doc::DocumentationUnit &unit, ref<str> module) -> void {
+  unit.named_module = String::make(module);
+  for (auto &declaration : unit.declarations) {
+    declaration.named_module = String::make(module);
+    auto interface =
+        unit.kind == lito::doc::DocumentationUnitKind::PrimaryInterface ||
+        unit.kind == lito::doc::DocumentationUnitKind::InterfacePartition;
+    declaration.origin =
+        interface ? lito::doc::DeclarationOrigin::Interface
+                  : lito::doc::DeclarationOrigin::Implementation;
+    if (!interface) {
+      declaration.exported_redeclaration = declaration.lexical_export;
+      declaration.lexical_export = false;
+    }
+  }
+}
+
 auto publication_package(ref<rstd::path::Path> root, ref<str> name,
                          ref<str> module) -> lito::doc::PackageInput {
   auto source = child(root, rstd::format("src/{}.cppm", name).as_str());
@@ -53,7 +70,7 @@ auto publication_package(ref<rstd::path::Path> root, ref<str> name,
       .source_contents = rstd::format(
           "export module {};\n\nexport auto value() -> int;\n", module),
       .logical_module = String::make(module),
-      .is_interface = true,
+      .kind = lito::doc::DocumentationUnitKind::PrimaryInterface,
       .module_comment = Some(lito::doc::DocumentationComment{
           .text = String::make("Package documentation."_str),
       }),
@@ -67,7 +84,7 @@ auto publication_package(ref<rstd::path::Path> root, ref<str> name,
       .signature = String::make("auto value() -> int;"_str),
       .scope_signature = String::make("auto value() -> int;"_str),
       .is_definition = false,
-      .exported = true,
+      .lexical_export = true,
       .spelling_span = source_span(source),
       .expansion_span = source_span(source),
   });
@@ -84,6 +101,8 @@ auto publication_package(ref<rstd::path::Path> root, ref<str> name,
       .language_standard = String::make("c++20"_str),
   };
   package.units.push(rstd::move(unit));
+  for (auto &unit : package.units)
+    prepare_unit(unit, package.root_module.as_str());
   return package;
 }
 
@@ -93,11 +112,17 @@ auto append_module(lito::doc::PackageInput &package, ref<rstd::path::Path> root,
       .source = child(root, "src/child.cppm"_str),
       .source_contents = rstd::format("export module {};\n", module),
       .logical_module = String::make(module),
-      .is_interface = true,
+      .kind = lito::doc::DocumentationUnitKind::InterfacePartition,
       .module_comment = Some(lito::doc::DocumentationComment{
           .text = String::make("Child module documentation."_str),
       }),
   });
+  prepare_unit(package.units[package.units.len() - usize(1)],
+               package.root_module.as_str());
+  package.units[usize{}].reexports.push(
+      {.logical_module = String::make(module),
+       .named_module = package.root_module.clone(),
+       .is_partition = true});
 }
 
 auto record_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
@@ -108,7 +133,7 @@ auto record_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
           String::make("export module records;\n\n"
                        "export template <typename T> class Box;\n"_str),
       .logical_module = String::make("records"_str),
-      .is_interface = true,
+      .kind = lito::doc::DocumentationUnitKind::PrimaryInterface,
   };
   unit.declarations.push(lito::doc::DeclarationOutline{
       .semantic_identity = String::make("records::Box"_str),
@@ -122,7 +147,7 @@ auto record_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
       .record_header =
           Some(String::make("template <typename T>\nclass Box"_str)),
       .is_definition = true,
-      .exported = true,
+      .lexical_export = true,
       .comment = comment(source, usize(3), "Stores a value."_str),
       .spelling_span = source_span(source, usize(3)),
       .expansion_span = source_span(source, usize(3)),
@@ -136,7 +161,7 @@ auto record_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
       .scope_signature = String::make("T value{};"_str),
       .is_definition = true,
       .is_scope_declaration = true,
-      .exported = true,
+      .lexical_export = true,
       .parent = Some(usize(0)),
       .comment = comment(source, usize(5), "Stored value."_str),
       .spelling_span = source_span(source, usize(5)),
@@ -151,7 +176,7 @@ auto record_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
       .scope_signature = String::make("unsigned int flags : 3 = 1;"_str),
       .is_definition = true,
       .is_scope_declaration = true,
-      .exported = true,
+      .lexical_export = true,
       .parent = Some(usize(0)),
       .spelling_span = source_span(source, usize(7)),
       .expansion_span = source_span(source, usize(7)),
@@ -172,7 +197,7 @@ auto record_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
           "[[nodiscard]] constexpr auto get(U fallback = U{}) const & noexcept "
           "-> T;"_str),
       .is_scope_declaration = true,
-      .exported = true,
+      .lexical_export = true,
       .parent = Some(usize(0)),
       .comment = comment(source, usize(9), "Returns the value."_str),
       .spelling_span = source_span(source, usize(9)),
@@ -186,7 +211,7 @@ auto record_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
       .signature = String::make("auto Box::get() && -> Box<T>;"_str),
       .scope_signature = String::make("auto get() && -> Box<T>;"_str),
       .is_scope_declaration = true,
-      .exported = true,
+      .lexical_export = true,
       .parent = Some(usize(0)),
       .spelling_span = source_span(source, usize(11)),
       .expansion_span = source_span(source, usize(11)),
@@ -199,7 +224,7 @@ auto record_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
       .signature = String::make("void Box::clear();"_str),
       .scope_signature = String::make("void clear();"_str),
       .is_scope_declaration = true,
-      .exported = true,
+      .lexical_export = true,
       .parent = Some(usize(0)),
       .spelling_span = source_span(source, usize(12)),
       .expansion_span = source_span(source, usize(12)),
@@ -221,7 +246,7 @@ auto record_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
       .record_header = Some(String::make("struct Nested"_str)),
       .is_definition = true,
       .is_scope_declaration = true,
-      .exported = true,
+      .lexical_export = true,
       .parent = Some(usize(0)),
       .spelling_span = source_span(source, usize(13)),
       .expansion_span = source_span(source, usize(13)),
@@ -233,7 +258,7 @@ auto record_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
       .qualified_name = String::make("make_box"_str),
       .signature = String::make("auto make_box() -> Box<int>;"_str),
       .scope_signature = String::make("auto make_box() -> Box<int>;"_str),
-      .exported = true,
+      .lexical_export = true,
       .spelling_span = source_span(source, usize(15)),
       .expansion_span = source_span(source, usize(15)),
   });
@@ -247,7 +272,7 @@ auto record_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
       .record_keyword = Some(String::make("struct"_str)),
       .record_header = Some(String::make("struct Hidden"_str)),
       .is_definition = true,
-      .exported = true,
+      .lexical_export = true,
       .access = lito::doc::DeclarationAccess::Private,
       .spelling_span = source_span(source, usize(17)),
       .expansion_span = source_span(source, usize(17)),
@@ -261,8 +286,8 @@ auto record_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
       .scope_signature = String::make("int legacy;"_str),
       .is_definition = true,
       .is_scope_declaration = true,
-      .exported = true,
-      .parent = Some(usize(7)),
+      .lexical_export = true,
+      .parent = Some(usize(8)),
       .spelling_span = source_span(source, usize(18)),
       .expansion_span = source_span(source, usize(18)),
   });
@@ -275,7 +300,7 @@ auto record_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
       .signature = String::make("using value_type = T;"_str),
       .scope_signature = String::make("using value_type = T;"_str),
       .is_scope_declaration = true,
-      .exported = true,
+      .lexical_export = true,
       .parent = Some(usize(0)),
       .comment = comment(source, usize(19), "The stored type."_str),
       .spelling_span = source_span(source, usize(19)),
@@ -286,6 +311,7 @@ auto record_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
       .source_contents =
           String::make("auto Box<int>::get() && -> int {}\n"_str),
       .logical_module = String::make("records"_str),
+      .kind = lito::doc::DocumentationUnitKind::Implementation,
   };
   definition.declarations.push(lito::doc::DeclarationOutline{
       .semantic_identity = String::make("records::Box::get#rvalue"_str),
@@ -295,7 +321,7 @@ auto record_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
       .signature = String::make("auto Box<int>::get() && -> int;"_str),
       .scope_signature = String::make("auto get() && -> int;"_str),
       .is_definition = true,
-      .exported = true,
+      .lexical_export = true,
       .comment = comment(definition.source, usize(1), "Definition docs."_str),
       .spelling_span = source_span(definition.source, usize(1)),
       .expansion_span = source_span(definition.source, usize(1)),
@@ -313,6 +339,8 @@ auto record_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
   };
   package.units.push(rstd::move(unit));
   package.units.push(rstd::move(definition));
+  for (auto &unit : package.units)
+    prepare_unit(unit, package.root_module.as_str());
   return package;
 }
 
@@ -326,9 +354,9 @@ auto namespace_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
                        "struct Widget { auto get() const -> int; };\n"
                        "auto make_widget() -> Widget;\n"
                        "}\n"
-                       "auto global_helper() -> int;\n"_str),
+                       "export auto global_helper() -> int;\n"_str),
       .logical_module = String::make("namespaced"_str),
-      .is_interface = true,
+      .kind = lito::doc::DocumentationUnitKind::PrimaryInterface,
   };
   unit.declarations.push(lito::doc::DeclarationOutline{
       .semantic_identity = String::make("namespaced::alpha"_str),
@@ -338,7 +366,7 @@ auto namespace_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
       .signature = String::make("namespace alpha;"_str),
       .scope_signature = String::make("namespace alpha;"_str),
       .is_definition = true,
-      .exported = true,
+      .lexical_export = true,
       .comment = comment(source, usize(3), "Namespace documentation."_str),
       .spelling_span = source_span(source, usize(3)),
       .expansion_span = source_span(source, usize(3)),
@@ -354,7 +382,7 @@ auto namespace_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
       .record_keyword = Some(String::make("struct"_str)),
       .record_header = Some(String::make("struct Widget"_str)),
       .is_definition = true,
-      .exported = true,
+      .lexical_export = true,
       .parent = Some(usize(0)),
       .comment = comment(source, usize(4), "Widget documentation."_str),
       .spelling_span = source_span(source, usize(4)),
@@ -369,7 +397,7 @@ auto namespace_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
       .signature = String::make("auto alpha::Widget::get() const -> int;"_str),
       .scope_signature = String::make("auto get() const -> int;"_str),
       .is_scope_declaration = true,
-      .exported = true,
+      .lexical_export = true,
       .parent = Some(usize(1)),
       .comment = comment(source, usize(4), "Method documentation."_str),
       .spelling_span = source_span(source, usize(4)),
@@ -383,7 +411,7 @@ auto namespace_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
       .namespace_name = String::make("alpha"_str),
       .signature = String::make("auto alpha::make_widget() -> Widget;"_str),
       .scope_signature = String::make("auto make_widget() -> Widget;"_str),
-      .exported = true,
+      .lexical_export = true,
       .parent = Some(usize(0)),
       .comment = comment(source, usize(5), "Function documentation."_str),
       .spelling_span = source_span(source, usize(5)),
@@ -396,7 +424,7 @@ auto namespace_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
       .qualified_name = String::make("global_helper"_str),
       .signature = String::make("auto global_helper() -> int;"_str),
       .scope_signature = String::make("auto global_helper() -> int;"_str),
-      .exported = true,
+      .lexical_export = true,
       .comment = comment(source, usize(7), "Global helper documentation."_str),
       .spelling_span = source_span(source, usize(7)),
       .expansion_span = source_span(source, usize(7)),
@@ -413,6 +441,8 @@ auto namespace_package(ref<rstd::path::Path> root) -> lito::doc::PackageInput {
       .language_standard = String::make("c++20"_str),
   };
   package.units.push(rstd::move(unit));
+  for (auto &unit : package.units)
+    prepare_unit(unit, package.root_module.as_str());
   return package;
 }
 
@@ -624,7 +654,7 @@ TEST(DocPublication, InlinesRecordFunctionsAndFieldsOnTheRecordPage) {
     if (contents->as_str().contains("<h1 class=\"page-title\">Box</h1>"_str))
       record_html = rstd::move(contents).unwrap();
   }
-  EXPECT_EQ(symbol_pages, usize(4));
+  EXPECT_EQ(symbol_pages, usize(3));
   ASSERT_TRUE(!record_html.is_empty());
   EXPECT_TRUE(record_html.as_str().contains("Stored value."_str));
   EXPECT_TRUE(record_html.as_str().contains("value_type → T"_str));
@@ -929,12 +959,16 @@ TEST(DocPublication, ResolvesOnlyAvailableUnambiguousTypePages) {
     holder.record_header =
         Some(String::make("template <typename T>\nclass Holder"_str));
     append_module(package, root, "records:child"_str);
+    for (auto &unit : package.units)
+      prepare_unit(unit, package.root_module.as_str());
     return package;
   };
   auto target_package = [root](ref<str> name) mutable {
     auto package = record_package(root);
     package.name = String::make(name);
     package.source_identity = rstd::format("path+{}", name);
+    for (auto &unit : package.units)
+      prepare_unit(unit, package.root_module.as_str());
     return package;
   };
 

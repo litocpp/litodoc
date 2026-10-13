@@ -1,7 +1,7 @@
 {
   "format": "litodoc-extract-result",
-  "version": 1,
-  "request_id": "fixture-basic-response-v1",
+  "version": 2,
+  "request_id": "fixture-basic-response-v2",
   "producer": {
     "litodoc": "0.2.0",
     "clang": "fixture"
@@ -13,7 +13,6 @@
   "source": "tests/fixtures/basic.cpp",
   "source_contents": "/// Adds two values.\nint add(int left, int right) {\n    return left + right;\n}\n\nstruct Point {\n    /// Horizontal coordinate.\n    int x;\n};\n",
   "logical_module": "",
-  "is_interface": false,
   "declarations": [
     {
       "semantic_identity": "fixture:add",
@@ -27,7 +26,6 @@
       "record_header": null,
       "is_definition": true,
       "is_scope_declaration": false,
-      "exported": true,
       "access": "public",
       "spelling_span": {
         "path": "tests/fixtures/basic.cpp",
@@ -54,7 +52,16 @@
           "end_line": 1,
           "end_column": 20
         }
-      }
+      },
+      "publication_identity": "fixture:add",
+      "named_module": "",
+      "origin": "ordinary",
+      "lexical_export": false,
+      "exported_redeclaration": false,
+      "owner": null,
+      "record_ancestors": [],
+      "signature_references": [],
+      "scope_signature_references": []
     },
     {
       "semantic_identity": "fixture:Point",
@@ -68,7 +75,6 @@
       "record_header": "struct Point",
       "is_definition": true,
       "is_scope_declaration": false,
-      "exported": true,
       "access": "public",
       "spelling_span": {
         "path": "tests/fixtures/basic.cpp",
@@ -85,7 +91,16 @@
         "end_column": 1
       },
       "parent": null,
-      "comment": null
+      "comment": null,
+      "publication_identity": "fixture:Point",
+      "named_module": "",
+      "origin": "ordinary",
+      "lexical_export": false,
+      "exported_redeclaration": false,
+      "owner": null,
+      "record_ancestors": [],
+      "signature_references": [],
+      "scope_signature_references": []
     },
     {
       "semantic_identity": "fixture:Point:x",
@@ -99,7 +114,6 @@
       "record_header": null,
       "is_definition": true,
       "is_scope_declaration": true,
-      "exported": true,
       "access": "public",
       "spelling_span": {
         "path": "tests/fixtures/basic.cpp",
@@ -126,12 +140,37 @@
           "end_line": 7,
           "end_column": 30
         }
-      }
+      },
+      "publication_identity": "fixture:Point:x",
+      "named_module": "",
+      "origin": "ordinary",
+      "lexical_export": false,
+      "exported_redeclaration": false,
+      "owner": {
+        "semantic_identity": "fixture:Point",
+        "named_module": "",
+        "kind": "record",
+        "access": "public",
+        "anonymous_record": false
+      },
+      "record_ancestors": [
+        {
+          "semantic_identity": "fixture:Point",
+          "named_module": "",
+          "kind": "record",
+          "access": "public",
+          "anonymous_record": false
+        }
+      ],
+      "signature_references": [],
+      "scope_signature_references": []
     }
   ],
   "reexports": [],
   "diagnostics": [],
   "documented": 2,
   "undocumented": 1,
-  "unsupported": 0
+  "unsupported": 0,
+  "named_module": "",
+  "unit_kind": "ordinary"
 }

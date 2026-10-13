@@ -185,6 +185,9 @@ auto summary_for(ref<rstd::path::Path> output, const Dataset &dataset,
           .line = diagnostic.line,
       });
     }
+    for (const auto &count : package.public_api_counts)
+      package_summary.public_api_counts.push(
+          {count.reason.clone(), usize(count.declarations.to_primitive())});
     summary.packages.push(rstd::move(package_summary));
   }
   return summary;

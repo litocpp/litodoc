@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/litocpp/litodoc/main/schema/extract-response.schema.json",
-  "title": "litodoc extraction response v1",
+  "title": "litodoc extraction response v2",
   "type": "object",
   "required": [
     "format",
@@ -15,47 +15,92 @@
     "source",
     "source_contents",
     "logical_module",
-    "is_interface",
     "declarations",
     "reexports",
     "diagnostics",
     "documented",
     "undocumented",
-    "unsupported"
+    "unsupported",
+    "named_module",
+    "unit_kind"
   ],
   "properties": {
-    "format": { "const": "litodoc-extract-result" },
-    "version": { "const": 1 },
-    "request_id": { "$ref": "#/$defs/nonEmptyString" },
+    "format": {
+      "const": "litodoc-extract-result"
+    },
+    "version": {
+      "const": 2
+    },
+    "request_id": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
     "producer": {
       "type": "object",
-      "required": ["litodoc", "clang"],
+      "required": [
+        "litodoc",
+        "clang"
+      ],
       "properties": {
-        "litodoc": { "$ref": "#/$defs/nonEmptyString" },
-        "clang": { "$ref": "#/$defs/nonEmptyString" }
+        "litodoc": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "clang": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
       },
       "additionalProperties": false
     },
-    "package": { "$ref": "#/$defs/nonEmptyString" },
-    "package_identity": { "$ref": "#/$defs/nonEmptyString" },
-    "target": { "$ref": "#/$defs/nonEmptyString" },
-    "unit_identity": { "$ref": "#/$defs/nonEmptyString" },
-    "source": { "$ref": "#/$defs/path" },
-    "source_contents": { "type": "string" },
-    "logical_module": { "type": "string" },
-    "is_interface": { "type": "boolean" },
+    "package": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "package_identity": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "target": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "unit_identity": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "source": {
+      "$ref": "#/$defs/path"
+    },
+    "source_contents": {
+      "type": "string"
+    },
+    "logical_module": {
+      "type": "string"
+    },
     "declarations": {
       "type": "array",
-      "items": { "$ref": "#/$defs/declaration" }
+      "items": {
+        "$ref": "#/$defs/declaration"
+      }
     },
     "reexports": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["module", "span"],
+        "required": [
+          "module",
+          "span",
+          "named_module",
+          "is_partition"
+        ],
         "properties": {
-          "module": { "$ref": "#/$defs/nonEmptyString" },
-          "span": { "$ref": "#/$defs/span" }
+          "module": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "span": {
+            "$ref": "#/$defs/span"
+          },
+          "named_module": {
+            "type": "string",
+            "minLength": 1
+          },
+          "is_partition": {
+            "type": "boolean"
+          }
         },
         "additionalProperties": false
       }
@@ -64,19 +109,53 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["severity", "code", "message", "span"],
+        "required": [
+          "severity",
+          "code",
+          "message",
+          "span"
+        ],
         "properties": {
-          "severity": { "enum": ["warning", "error"] },
-          "code": { "type": "string" },
-          "message": { "$ref": "#/$defs/nonEmptyString" },
-          "span": { "$ref": "#/$defs/span" }
+          "severity": {
+            "enum": [
+              "warning",
+              "error"
+            ]
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "span": {
+            "$ref": "#/$defs/span"
+          }
         },
         "additionalProperties": false
       }
     },
-    "documented": { "$ref": "#/$defs/count" },
-    "undocumented": { "$ref": "#/$defs/count" },
-    "unsupported": { "$ref": "#/$defs/count" }
+    "documented": {
+      "$ref": "#/$defs/count"
+    },
+    "undocumented": {
+      "$ref": "#/$defs/count"
+    },
+    "unsupported": {
+      "$ref": "#/$defs/count"
+    },
+    "named_module": {
+      "type": "string"
+    },
+    "unit_kind": {
+      "enum": [
+        "ordinary",
+        "primary-interface",
+        "interface-partition",
+        "implementation",
+        "implementation-partition"
+      ]
+    }
   },
   "additionalProperties": false,
   "$defs": {
@@ -94,23 +173,52 @@
     },
     "span": {
       "type": "object",
-      "required": ["path", "begin_line", "begin_column", "end_line", "end_column"],
+      "required": [
+        "path",
+        "begin_line",
+        "begin_column",
+        "end_line",
+        "end_column"
+      ],
       "properties": {
-        "path": { "type": "string" },
-        "begin_line": { "$ref": "#/$defs/count" },
-        "begin_column": { "$ref": "#/$defs/count" },
-        "end_line": { "$ref": "#/$defs/count" },
-        "end_column": { "$ref": "#/$defs/count" }
+        "path": {
+          "type": "string"
+        },
+        "begin_line": {
+          "$ref": "#/$defs/count"
+        },
+        "begin_column": {
+          "$ref": "#/$defs/count"
+        },
+        "end_line": {
+          "$ref": "#/$defs/count"
+        },
+        "end_column": {
+          "$ref": "#/$defs/count"
+        }
       },
       "additionalProperties": false
     },
     "comment": {
       "type": "object",
-      "required": ["kind", "text", "span"],
+      "required": [
+        "kind",
+        "text",
+        "span"
+      ],
       "properties": {
-        "kind": { "enum": ["outer", "inner"] },
-        "text": { "type": "string" },
-        "span": { "$ref": "#/$defs/span" }
+        "kind": {
+          "enum": [
+            "outer",
+            "inner"
+          ]
+        },
+        "text": {
+          "type": "string"
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        }
       },
       "additionalProperties": false
     },
@@ -124,15 +232,29 @@
         "namespace",
         "signature",
         "is_definition",
-        "exported",
         "access",
         "spelling_span",
         "expansion_span",
         "parent",
-        "comment"
+        "comment",
+        "publication_identity",
+        "named_module",
+        "origin",
+        "lexical_export",
+        "exported_redeclaration",
+        "owner",
+        "record_ancestors",
+        "scope_signature",
+        "signature_references",
+        "scope_signature_references",
+        "is_scope_declaration",
+        "record_keyword",
+        "record_header"
       ],
       "properties": {
-        "semantic_identity": { "$ref": "#/$defs/nonEmptyString" },
+        "semantic_identity": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
         "kind": {
           "enum": [
             "module",
@@ -146,26 +268,205 @@
             "field"
           ]
         },
-        "name": { "$ref": "#/$defs/nonEmptyString" },
-        "qualified_name": { "$ref": "#/$defs/nonEmptyString" },
-        "namespace": { "type": "string" },
-        "alias_target": { "type": ["string", "null"] },
-        "signature": { "$ref": "#/$defs/nonEmptyString" },
-        "is_definition": { "type": "boolean" },
-        "exported": { "type": "boolean" },
-        "access": { "enum": ["public", "protected", "private"] },
-        "spelling_span": { "$ref": "#/$defs/span" },
-        "expansion_span": { "$ref": "#/$defs/span" },
+        "name": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "qualified_name": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "alias_target": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "signature": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "is_definition": {
+          "type": "boolean"
+        },
+        "access": {
+          "enum": [
+            "public",
+            "protected",
+            "private"
+          ]
+        },
+        "spelling_span": {
+          "$ref": "#/$defs/span"
+        },
+        "expansion_span": {
+          "$ref": "#/$defs/span"
+        },
         "parent": {
           "oneOf": [
-            { "$ref": "#/$defs/count" },
-            { "type": "null" }
+            {
+              "$ref": "#/$defs/count"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "comment": {
           "oneOf": [
-            { "$ref": "#/$defs/comment" },
-            { "type": "null" }
+            {
+              "$ref": "#/$defs/comment"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "publication_identity": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "named_module": {
+          "type": "string"
+        },
+        "origin": {
+          "enum": [
+            "ordinary",
+            "interface",
+            "implementation",
+            "global-fragment",
+            "private-fragment"
+          ]
+        },
+        "lexical_export": {
+          "type": "boolean"
+        },
+        "exported_redeclaration": {
+          "type": "boolean"
+        },
+        "owner": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/owner"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "record_ancestors": {
+          "type": "array",
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/owner"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "record"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "scope_signature": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "is_scope_declaration": {
+          "type": "boolean"
+        },
+        "signature_references": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/reference"
+          }
+        },
+        "scope_signature_references": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/reference"
+          }
+        },
+        "record_keyword": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "record_header": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "owner": {
+      "type": "object",
+      "required": [
+        "semantic_identity",
+        "named_module",
+        "kind",
+        "access",
+        "anonymous_record"
+      ],
+      "properties": {
+        "semantic_identity": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "named_module": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "module",
+            "namespace",
+            "record",
+            "enum",
+            "concept",
+            "alias",
+            "function",
+            "variable",
+            "field"
+          ]
+        },
+        "access": {
+          "enum": [
+            "public",
+            "protected",
+            "private"
+          ]
+        },
+        "anonymous_record": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "reference": {
+      "type": "object",
+      "required": [
+        "begin",
+        "end",
+        "semantic_identity",
+        "kind"
+      ],
+      "properties": {
+        "begin": {
+          "$ref": "#/$defs/count"
+        },
+        "end": {
+          "$ref": "#/$defs/count"
+        },
+        "semantic_identity": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "kind": {
+          "enum": [
+            "type",
+            "concept"
           ]
         }
       },

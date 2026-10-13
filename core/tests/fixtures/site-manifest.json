@@ -6,7 +6,7 @@
   "data_output": "build/site-data",
   "frontend": null,
   "data_only": false,
-  "data_api": 3,
+  "data_api": 4,
   "template_api": 1,
   "packages": [
     {
@@ -21,7 +21,7 @@
       "responses": [
         {
           "path": "tests/fixtures/basic-response.json",
-          "digest": "b4fe6a3097d194b67e42e534817094bf0ac31f8b007fdeb09fa9ae5c080f7ce4"
+          "digest": "55cee340cd86e86b6e875ef425f62e09d06d40c7b5b0b3c74cc36b13c8c34a7d"
         }
       ]
     }

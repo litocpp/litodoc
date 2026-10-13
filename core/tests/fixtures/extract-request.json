@@ -1,7 +1,7 @@
 {
   "format": "litodoc-extract",
-  "version": 1,
-  "request_id": "fixture-basic-v1",
+  "version": 2,
+  "request_id": "fixture-basic-v2",
   "package": {
     "name": "litodoc-fixture",
     "identity": "litodoc-fixture@0.1.0"

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/litocpp/litodoc/main/schema/extract-request.schema.json",
-  "title": "litodoc extraction request v1",
+  "title": "litodoc extraction request v2",
   "type": "object",
   "required": [
     "format",
@@ -17,11 +17,11 @@
   ],
   "properties": {
     "format": { "const": "litodoc-extract" },
-    "version": { "const": 1 },
+    "version": { "const": 2 },
     "request_id": { "$ref": "#/$defs/nonEmptyString" },
     "package": {
       "type": "object",
-      "required": ["name", "version", "identity"],
+      "required": ["name", "identity"],
       "properties": {
         "name": { "$ref": "#/$defs/nonEmptyString" },
         "version": { "type": "string" },
@@ -34,7 +34,7 @@
       "required": ["name", "kind"],
       "properties": {
         "name": { "$ref": "#/$defs/nonEmptyString" },
-        "kind": { "const": "library" }
+        "kind": { "$ref": "#/$defs/nonEmptyString" }
       },
       "additionalProperties": false
     },
@@ -45,6 +45,7 @@
         "identity": { "$ref": "#/$defs/nonEmptyString" },
         "kind": {
           "enum": [
+            "source",
             "translation-unit",
             "module-interface",
             "module-partition",

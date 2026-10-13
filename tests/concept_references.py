@@ -23,7 +23,7 @@ template<class T> requires (first::Impled<T> && second::Impled<T>)
 void global_function();
 ''')
     request = {
-        "format": "litodoc-extract", "version": 1, "request_id": "concepts",
+        "format": "litodoc-extract", "version": 2, "request_id": "concepts",
         "package": {"name": "concepts", "identity": "path+concepts"},
         "package_root": str(root),
         "target": {"name": "concepts", "kind": "lib"},

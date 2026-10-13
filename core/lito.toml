@@ -16,6 +16,7 @@ sources = [
   "src/site/publication.cppm",
   "src/site/lib.cppm",
   "src/doc/model.cppm",
+  "src/doc/public_api.cppm",
   "src/doc/database.cppm",
   "src/doc/data/mod.cppm",
   "src/doc/markdown.cppm",
