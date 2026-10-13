@@ -50,2047 +50,1843 @@ using namespace rstd::argparse;
 using PathBuf = rstd::path::PathBuf;
 using rstd::ffi::OsString;
 
-namespace lito::doc::tool {
+namespace lito::doc::tool
+{
 
 auto as_rstd(llvm::StringRef value) -> String {
-  return String::make(ref<str>::from_raw_parts_unchecked(
-      reinterpret_cast<const byte *>(value.data()), usize(value.size())));
+    return String::make(ref<str>::from_raw_parts_unchecked(
+        reinterpret_cast<const byte*>(value.data()), usize(value.size())));
 }
 
 auto as_std(ref<str> value) -> std::string {
-  return std::string(reinterpret_cast<const char *>(value->data()),
-                     value.len().to_primitive());
+    return std::string(reinterpret_cast<const char*>(value->data()), value.len().to_primitive());
 }
 
 class ClangDeclarationHighlighter final : public DeclarationHighlighter {
-  clang::LangOptions options_;
-  std::unique_ptr<clang::IdentifierTable> identifiers_;
+    clang::LangOptions                      options_;
+    std::unique_ptr<clang::IdentifierTable> identifiers_;
 
 public:
-  ClangDeclarationHighlighter() {
-    std::vector<std::string> includes;
-    clang::LangOptions::setLangDefaults(
-        options_, clang::Language::CXX, llvm::Triple("unknown-unknown-unknown"),
-        includes, clang::LangStandard::lang_cxx23);
-    identifiers_ = std::make_unique<clang::IdentifierTable>(options_);
-  }
-
-  auto highlight(ref<str> text) -> Vec<SyntaxToken> override {
-    auto result = Vec<SyntaxToken>::make();
-    auto buffer = llvm::MemoryBuffer::getMemBufferCopy(as_std(text));
-    auto start = clang::SourceLocation::getFromRawEncoding(1);
-    clang::Lexer lexer(start, options_, buffer->getBufferStart(),
-                       buffer->getBufferStart(), buffer->getBufferEnd());
-    lexer.SetCommentRetentionState(true);
-    while (true) {
-      clang::Token token;
-      lexer.LexFromRawLexer(token);
-      if (token.is(clang::tok::eof))
-        break;
-      auto offset =
-          token.getLocation().getRawEncoding() - start.getRawEncoding();
-      auto kind = token.getKind();
-      if (kind == clang::tok::raw_identifier)
-        kind = identifiers_
-                   ->get(buffer->getBuffer().substr(offset, token.getLength()))
-                   .getTokenID();
-      auto syntax = Option<SyntaxKind>{};
-      if (clang::tok::getKeywordSpelling(kind) != nullptr)
-        syntax = Some(SyntaxKind::Keyword);
-      else if (kind == clang::tok::comment)
-        syntax = Some(SyntaxKind::Comment);
-      else if (kind == clang::tok::numeric_constant)
-        syntax = Some(SyntaxKind::Number);
-      else if (clang::tok::isStringLiteral(kind) ||
-               kind == clang::tok::char_constant ||
-               kind == clang::tok::wide_char_constant ||
-               kind == clang::tok::utf8_char_constant ||
-               kind == clang::tok::utf16_char_constant ||
-               kind == clang::tok::utf32_char_constant)
-        syntax = Some(SyntaxKind::String);
-      else if (clang::tok::getPunctuatorSpelling(kind) != nullptr)
-        syntax = Some(SyntaxKind::Punctuation);
-      if (syntax.is_some())
-        result.push(SyntaxToken{usize(offset),
-                                usize(offset + token.getLength()), *syntax});
+    ClangDeclarationHighlighter() {
+        std::vector<std::string> includes;
+        clang::LangOptions::setLangDefaults(options_,
+                                            clang::Language::CXX,
+                                            llvm::Triple("unknown-unknown-unknown"),
+                                            includes,
+                                            clang::LangStandard::lang_cxx23);
+        identifiers_ = std::make_unique<clang::IdentifierTable>(options_);
     }
-    return result;
-  }
+
+    auto highlight(ref<str> text) -> Vec<SyntaxToken> override {
+        auto         result = Vec<SyntaxToken>::make();
+        auto         buffer = llvm::MemoryBuffer::getMemBufferCopy(as_std(text));
+        auto         start  = clang::SourceLocation::getFromRawEncoding(1);
+        clang::Lexer lexer(start,
+                           options_,
+                           buffer->getBufferStart(),
+                           buffer->getBufferStart(),
+                           buffer->getBufferEnd());
+        lexer.SetCommentRetentionState(true);
+        while (true) {
+            clang::Token token;
+            lexer.LexFromRawLexer(token);
+            if (token.is(clang::tok::eof)) break;
+            auto offset = token.getLocation().getRawEncoding() - start.getRawEncoding();
+            auto kind   = token.getKind();
+            if (kind == clang::tok::raw_identifier)
+                kind = identifiers_->get(buffer->getBuffer().substr(offset, token.getLength()))
+                           .getTokenID();
+            auto syntax = Option<SyntaxKind> {};
+            if (clang::tok::getKeywordSpelling(kind) != nullptr)
+                syntax = Some(SyntaxKind::Keyword);
+            else if (kind == clang::tok::comment)
+                syntax = Some(SyntaxKind::Comment);
+            else if (kind == clang::tok::numeric_constant)
+                syntax = Some(SyntaxKind::Number);
+            else if (clang::tok::isStringLiteral(kind) || kind == clang::tok::char_constant ||
+                     kind == clang::tok::wide_char_constant ||
+                     kind == clang::tok::utf8_char_constant ||
+                     kind == clang::tok::utf16_char_constant ||
+                     kind == clang::tok::utf32_char_constant)
+                syntax = Some(SyntaxKind::String);
+            else if (clang::tok::getPunctuatorSpelling(kind) != nullptr)
+                syntax = Some(SyntaxKind::Punctuation);
+            if (syntax.is_some())
+                result.push(
+                    SyntaxToken { usize(offset), usize(offset + token.getLength()), *syntax });
+        }
+        return result;
+    }
 };
 
 auto json_text(llvm::json::Value value) -> String {
-  auto text = llvm::formatv("{0:2}\n", rstd::move(value)).str();
-  return as_rstd(text);
+    auto text = llvm::formatv("{0:2}\n", rstd::move(value)).str();
+    return as_rstd(text);
 }
 
-template <typename T> auto failure(String message) -> Result<T, String> {
-  return Err(rstd::move(message));
+template<typename T>
+auto failure(String message) -> Result<T, String> {
+    return Err(rstd::move(message));
 }
 
-template <typename T> auto failure(ref<str> message) -> Result<T, String> {
-  return Err(String::make(message));
+template<typename T>
+auto failure(ref<str> message) -> Result<T, String> {
+    return Err(String::make(message));
 }
 
 auto parse_json(ref<str> contents, ref<rstd::path::Path> path, ref<str> context)
     -> Result<llvm::json::Value, String> {
-  auto text = as_std(contents);
-  auto parsed = llvm::json::parse(text);
-  if (!parsed) {
-    return failure<llvm::json::Value>(
-        rstd::format("invalid {} JSON '{}': {}", context, path,
-                     as_rstd(llvm::toString(parsed.takeError()))));
-  }
-  return Ok(rstd::move(*parsed));
+    auto text   = as_std(contents);
+    auto parsed = llvm::json::parse(text);
+    if (! parsed) {
+        return failure<llvm::json::Value>(
+            rstd::format("invalid {} JSON '{}': {}",
+                         context,
+                         path,
+                         as_rstd(llvm::toString(parsed.takeError()))));
+    }
+    return Ok(rstd::move(*parsed));
 }
 
-auto read_json(ref<rstd::path::Path> path, ref<str> context)
+auto read_json(ref<rstd::path::Path> path, ref<str> context) -> Result<llvm::json::Value, String> {
+    auto contents = rstd::fs::read_to_string(path);
+    if (contents.is_err()) {
+        return failure<llvm::json::Value>(rstd::format(
+            "cannot read {} '{}': {}", context, path, rstd::move(contents).unwrap_err()));
+    }
+    return parse_json(contents->as_str(), path, context);
+}
+
+auto read_json(ref<rstd::path::Path> path, ref<str> expected_digest, ref<str> context)
     -> Result<llvm::json::Value, String> {
-  auto contents = rstd::fs::read_to_string(path);
-  if (contents.is_err()) {
-    return failure<llvm::json::Value>(
-        rstd::format("cannot read {} '{}': {}", context, path,
-                     rstd::move(contents).unwrap_err()));
-  }
-  return parse_json(contents->as_str(), path, context);
+    auto contents = rstd::fs::read_to_string(path);
+    if (contents.is_err()) {
+        return failure<llvm::json::Value>(rstd::format(
+            "cannot read {} '{}': {}", context, path, rstd::move(contents).unwrap_err()));
+    }
+    auto digest = licrypto::sha256_hex(contents->as_str());
+    if (digest.as_str() != expected_digest) {
+        return failure<llvm::json::Value>(rstd::format(
+            "{} '{}' has digest '{}', expected '{}'", context, path, digest, expected_digest));
+    }
+    return parse_json(contents->as_str(), path, context);
 }
 
-auto read_json(ref<rstd::path::Path> path, ref<str> expected_digest,
-               ref<str> context) -> Result<llvm::json::Value, String> {
-  auto contents = rstd::fs::read_to_string(path);
-  if (contents.is_err()) {
-    return failure<llvm::json::Value>(
-        rstd::format("cannot read {} '{}': {}", context, path,
-                     rstd::move(contents).unwrap_err()));
-  }
-  auto digest = licrypto::sha256_hex(contents->as_str());
-  if (digest.as_str() != expected_digest) {
-    return failure<llvm::json::Value>(
-        rstd::format("{} '{}' has digest '{}', expected '{}'", context, path,
-                     digest, expected_digest));
-  }
-  return parse_json(contents->as_str(), path, context);
+auto json_object(const llvm::json::Value& value, ref<str> context)
+    -> Result<const llvm::json::Object*, String> {
+    auto object = value.getAsObject();
+    if (object == nullptr)
+        return failure<const llvm::json::Object*>(rstd::format("{} must be an object", context));
+    return Ok(object);
 }
 
-auto json_object(const llvm::json::Value &value, ref<str> context)
-    -> Result<const llvm::json::Object *, String> {
-  auto object = value.getAsObject();
-  if (object == nullptr)
-    return failure<const llvm::json::Object *>(
-        rstd::format("{} must be an object", context));
-  return Ok(object);
+auto required_string(const llvm::json::Object& object,
+                     llvm::StringRef           name,
+                     ref<str>                  context,
+                     bool                      allow_empty = false) -> Result<String, String> {
+    auto value = object.getString(name);
+    if (! value || (! allow_empty && value->empty())) {
+        return failure<String>(rstd::format("{}.{} must be {}string",
+                                            context,
+                                            as_rstd(name),
+                                            allow_empty ? "a "_str : "a non-empty "_str));
+    }
+    return Ok(as_rstd(*value));
 }
 
-auto required_string(const llvm::json::Object &object, llvm::StringRef name,
-                     ref<str> context, bool allow_empty = false)
-    -> Result<String, String> {
-  auto value = object.getString(name);
-  if (!value || (!allow_empty && value->empty())) {
-    return failure<String>(
-        rstd::format("{}.{} must be {}string", context, as_rstd(name),
-                     allow_empty ? "a "_str : "a non-empty "_str));
-  }
-  return Ok(as_rstd(*value));
+auto optional_string(const llvm::json::Object& object, llvm::StringRef name, ref<str> context)
+    -> Result<Option<String>, String> {
+    auto member = object.get(name);
+    if (member == nullptr || member->getAsNull().has_value()) return Ok(None());
+    auto value = member->getAsString();
+    if (! value) {
+        return failure<Option<String>>(
+            rstd::format("{}.{} must be a string or null", context, as_rstd(name)));
+    }
+    return Ok(Some(as_rstd(*value)));
 }
 
-auto optional_string(const llvm::json::Object &object, llvm::StringRef name,
-                     ref<str> context) -> Result<Option<String>, String> {
-  auto member = object.get(name);
-  if (member == nullptr || member->getAsNull().has_value())
-    return Ok(None());
-  auto value = member->getAsString();
-  if (!value) {
-    return failure<Option<String>>(
-        rstd::format("{}.{} must be a string or null", context, as_rstd(name)));
-  }
-  return Ok(Some(as_rstd(*value)));
+auto required_integer(const llvm::json::Object& object, llvm::StringRef name, ref<str> context)
+    -> Result<usize, String> {
+    auto value = object.getInteger(name);
+    if (! value || *value < 0) {
+        return failure<usize>(
+            rstd::format("{}.{} must be an unsigned integer", context, as_rstd(name)));
+    }
+    return Ok(usize(static_cast<size_t>(*value)));
 }
 
-auto required_integer(const llvm::json::Object &object, llvm::StringRef name,
-                      ref<str> context) -> Result<usize, String> {
-  auto value = object.getInteger(name);
-  if (!value || *value < 0) {
-    return failure<usize>(rstd::format("{}.{} must be an unsigned integer",
-                                       context, as_rstd(name)));
-  }
-  return Ok(usize(static_cast<size_t>(*value)));
+auto required_bool(const llvm::json::Object& object, llvm::StringRef name, ref<str> context)
+    -> Result<bool, String> {
+    auto value = object.getBoolean(name);
+    if (! value) {
+        return failure<bool>(rstd::format("{}.{} must be a boolean", context, as_rstd(name)));
+    }
+    return Ok(*value);
 }
 
-auto required_bool(const llvm::json::Object &object, llvm::StringRef name,
-                   ref<str> context) -> Result<bool, String> {
-  auto value = object.getBoolean(name);
-  if (!value) {
-    return failure<bool>(
-        rstd::format("{}.{} must be a boolean", context, as_rstd(name)));
-  }
-  return Ok(*value);
+auto required_object(const llvm::json::Object& object, llvm::StringRef name, ref<str> context)
+    -> Result<const llvm::json::Object*, String> {
+    auto value = object.getObject(name);
+    if (value == nullptr) {
+        return failure<const llvm::json::Object*>(
+            rstd::format("{}.{} must be an object", context, as_rstd(name)));
+    }
+    return Ok(value);
 }
 
-auto required_object(const llvm::json::Object &object, llvm::StringRef name,
-                     ref<str> context)
-    -> Result<const llvm::json::Object *, String> {
-  auto value = object.getObject(name);
-  if (value == nullptr) {
-    return failure<const llvm::json::Object *>(
-        rstd::format("{}.{} must be an object", context, as_rstd(name)));
-  }
-  return Ok(value);
+auto required_array(const llvm::json::Object& object, llvm::StringRef name, ref<str> context)
+    -> Result<const llvm::json::Array*, String> {
+    auto value = object.getArray(name);
+    if (value == nullptr) {
+        return failure<const llvm::json::Array*>(
+            rstd::format("{}.{} must be an array", context, as_rstd(name)));
+    }
+    return Ok(value);
 }
 
-auto required_array(const llvm::json::Object &object, llvm::StringRef name,
-                    ref<str> context)
-    -> Result<const llvm::json::Array *, String> {
-  auto value = object.getArray(name);
-  if (value == nullptr) {
-    return failure<const llvm::json::Array *>(
-        rstd::format("{}.{} must be an array", context, as_rstd(name)));
-  }
-  return Ok(value);
-}
-
-auto validate_header(const llvm::json::Object &object, llvm::StringRef format,
-                     int64_t version, ref<str> context)
-    -> Result<empty, String> {
-  auto actual_format = object.getString("format");
-  auto actual_version = object.getInteger("version");
-  if (!actual_format || *actual_format != format) {
-    return failure<empty>(rstd::format("{} has unsupported format", context));
-  }
-  if (!actual_version || *actual_version != version) {
-    return failure<empty>(rstd::format("{} has unsupported version", context));
-  }
-  return Ok(empty{});
+auto validate_header(const llvm::json::Object& object,
+                     llvm::StringRef           format,
+                     int64_t                   version,
+                     ref<str>                  context) -> Result<empty, String> {
+    auto actual_format  = object.getString("format");
+    auto actual_version = object.getInteger("version");
+    if (! actual_format || *actual_format != format) {
+        return failure<empty>(rstd::format("{} has unsupported format", context));
+    }
+    if (! actual_version || *actual_version != version) {
+        return failure<empty>(rstd::format("{} has unsupported version", context));
+    }
+    return Ok(empty {});
 }
 
 struct ExtractionRequest {
-  struct ImportedArtifact {
-    String logical_module;
-    PathBuf path;
-    String identity;
-  };
+    struct ImportedArtifact {
+        String  logical_module;
+        PathBuf path;
+        String  identity;
+    };
 
-  String request_id;
-  String package_name;
-  String package_identity;
-  PathBuf package_root;
-  String target_name;
-  String target_kind;
-  String unit_identity;
-  String unit_kind;
-  bool is_interface{false};
-  PathBuf source;
-  String logical_module;
-  PathBuf working_directory;
-  std::vector<std::string> arguments;
-  String compiler_identity;
-  String compiler_target;
-  std::vector<ImportedArtifact> imported_artifacts;
+    String                        request_id;
+    String                        package_name;
+    String                        package_identity;
+    PathBuf                       package_root;
+    String                        target_name;
+    String                        target_kind;
+    String                        unit_identity;
+    String                        unit_kind;
+    bool                          is_interface { false };
+    PathBuf                       source;
+    String                        logical_module;
+    PathBuf                       working_directory;
+    std::vector<std::string>      arguments;
+    String                        compiler_identity;
+    String                        compiler_target;
+    std::vector<ImportedArtifact> imported_artifacts;
 };
 
-auto decode_extraction_request(const llvm::json::Value &value)
+auto decode_extraction_request(const llvm::json::Value& value)
     -> Result<ExtractionRequest, String> {
-  auto root = rstd_try(json_object(value, "extract request"_str));
-  rstd_try(validate_header(*root, "litodoc-extract", 2, "extract request"_str));
-  auto package =
-      rstd_try(required_object(*root, "package", "extract request"_str));
-  auto target =
-      rstd_try(required_object(*root, "target", "extract request"_str));
-  auto unit = rstd_try(required_object(*root, "unit", "extract request"_str));
-  auto invocation =
-      rstd_try(required_object(*root, "invocation", "extract request"_str));
-  auto compiler =
-      rstd_try(required_object(*root, "compiler", "extract request"_str));
-  auto arguments = rstd_try(required_array(*invocation, "arguments",
-                                           "extract request.invocation"_str));
-  auto imported = rstd_try(
-      required_array(*root, "imported_artifacts", "extract request"_str));
-  auto result = ExtractionRequest{
-      .request_id =
-          rstd_try(required_string(*root, "request_id", "extract request"_str)),
-      .package_name = rstd_try(
-          required_string(*package, "name", "extract request.package"_str)),
-      .package_identity = rstd_try(
-          required_string(*package, "identity", "extract request.package"_str)),
-      .package_root = PathBuf::from(rstd_try(
-          required_string(*root, "package_root", "extract request"_str))),
-      .target_name = rstd_try(
-          required_string(*target, "name", "extract request.target"_str)),
-      .target_kind = rstd_try(
-          required_string(*target, "kind", "extract request.target"_str)),
-      .unit_identity = rstd_try(
-          required_string(*unit, "identity", "extract request.unit"_str)),
-      .unit_kind =
-          rstd_try(required_string(*unit, "kind", "extract request.unit"_str)),
-      .is_interface = rstd_try(
-          required_bool(*unit, "is_interface", "extract request.unit"_str)),
-      .source = PathBuf::from(rstd_try(
-          required_string(*unit, "source", "extract request.unit"_str))),
-      .logical_module =
-          rstd_try(optional_string(*unit, "module", "extract request.unit"_str))
-              .unwrap_or(String::make()),
-      .working_directory = PathBuf::from(rstd_try(required_string(
-          *invocation, "cwd", "extract request.invocation"_str))),
-      .compiler_identity = rstd_try(required_string(
-          *compiler, "identity", "extract request.compiler"_str)),
-      .compiler_target = rstd_try(
-          required_string(*compiler, "target", "extract request.compiler"_str)),
-  };
-  for (const auto &argument : *arguments) {
-    auto text = argument.getAsString();
-    if (!text) {
-      return failure<ExtractionRequest>(
-          "extract request invocation arguments must be strings"_str);
+    auto root = rstd_try(json_object(value, "extract request"_str));
+    rstd_try(validate_header(*root, "litodoc-extract", 2, "extract request"_str));
+    auto package    = rstd_try(required_object(*root, "package", "extract request"_str));
+    auto target     = rstd_try(required_object(*root, "target", "extract request"_str));
+    auto unit       = rstd_try(required_object(*root, "unit", "extract request"_str));
+    auto invocation = rstd_try(required_object(*root, "invocation", "extract request"_str));
+    auto compiler   = rstd_try(required_object(*root, "compiler", "extract request"_str));
+    auto arguments =
+        rstd_try(required_array(*invocation, "arguments", "extract request.invocation"_str));
+    auto imported = rstd_try(required_array(*root, "imported_artifacts", "extract request"_str));
+    auto result   = ExtractionRequest {
+        .request_id   = rstd_try(required_string(*root, "request_id", "extract request"_str)),
+        .package_name = rstd_try(required_string(*package, "name", "extract request.package"_str)),
+        .package_identity =
+            rstd_try(required_string(*package, "identity", "extract request.package"_str)),
+        .package_root =
+            PathBuf::from(rstd_try(required_string(*root, "package_root", "extract request"_str))),
+        .target_name   = rstd_try(required_string(*target, "name", "extract request.target"_str)),
+        .target_kind   = rstd_try(required_string(*target, "kind", "extract request.target"_str)),
+        .unit_identity = rstd_try(required_string(*unit, "identity", "extract request.unit"_str)),
+        .unit_kind     = rstd_try(required_string(*unit, "kind", "extract request.unit"_str)),
+        .is_interface  = rstd_try(required_bool(*unit, "is_interface", "extract request.unit"_str)),
+        .source =
+            PathBuf::from(rstd_try(required_string(*unit, "source", "extract request.unit"_str))),
+        .logical_module    = rstd_try(optional_string(*unit, "module", "extract request.unit"_str))
+                                 .unwrap_or(String::make()),
+        .working_directory = PathBuf::from(
+            rstd_try(required_string(*invocation, "cwd", "extract request.invocation"_str))),
+        .compiler_identity =
+            rstd_try(required_string(*compiler, "identity", "extract request.compiler"_str)),
+        .compiler_target =
+            rstd_try(required_string(*compiler, "target", "extract request.compiler"_str)),
+    };
+    for (const auto& argument : *arguments) {
+        auto text = argument.getAsString();
+        if (! text) {
+            return failure<ExtractionRequest>(
+                "extract request invocation arguments must be strings"_str);
+        }
+        result.arguments.emplace_back(text->str());
     }
-    result.arguments.emplace_back(text->str());
-  }
-  if (result.arguments.empty()) {
-    return failure<ExtractionRequest>(
-        "extract request invocation arguments must not be empty"_str);
-  }
-  for (const auto &value : *imported) {
-    auto artifact =
-        rstd_try(json_object(value, "extract request imported artifact"_str));
-    result.imported_artifacts.push_back(ExtractionRequest::ImportedArtifact{
-        .logical_module = rstd_try(required_string(
-            *artifact, "module", "extract request imported artifact"_str)),
-        .path = PathBuf::from(rstd_try(required_string(
-            *artifact, "path", "extract request imported artifact"_str))),
-        .identity = rstd_try(required_string(
-            *artifact, "identity", "extract request imported artifact"_str)),
-    });
-  }
-  return Ok(rstd::move(result));
-}
-
-auto span_for(const clang::SourceManager &manager, clang::SourceRange range,
-              bool expansion = false) -> DocumentationSpan {
-  auto begin = expansion ? manager.getExpansionLoc(range.getBegin())
-                         : manager.getSpellingLoc(range.getBegin());
-  auto end = expansion ? manager.getExpansionLoc(range.getEnd())
-                       : manager.getSpellingLoc(range.getEnd());
-  auto first = manager.getPresumedLoc(begin);
-  auto last = manager.getPresumedLoc(end);
-  auto path = first.isValid() ? as_rstd(first.getFilename()) : String::make();
-  return DocumentationSpan{
-      .path = PathBuf::from(path.as_str()),
-      .begin_line = first.isValid() ? usize(first.getLine()) : usize{},
-      .begin_column = first.isValid() ? usize(first.getColumn()) : usize{},
-      .end_line = last.isValid() ? usize(last.getLine()) : usize{},
-      .end_column = last.isValid() ? usize(last.getColumn()) : usize{},
-  };
-}
-
-auto declaration_kind(const clang::NamedDecl &declaration)
-    -> Option<DeclarationKind> {
-  if (llvm::isa<clang::NamespaceDecl>(declaration))
-    return Some(DeclarationKind::Namespace);
-  if (llvm::isa<clang::RecordDecl>(declaration))
-    return Some(DeclarationKind::Record);
-  if (llvm::isa<clang::EnumDecl>(declaration))
-    return Some(DeclarationKind::Enum);
-  if (llvm::isa<clang::ConceptDecl>(declaration))
-    return Some(DeclarationKind::Concept);
-  if (llvm::isa<clang::TypedefNameDecl>(declaration))
-    return Some(DeclarationKind::Alias);
-  if (llvm::isa<clang::FunctionDecl>(declaration))
-    return Some(DeclarationKind::Function);
-  if (llvm::isa<clang::FieldDecl>(declaration))
-    return Some(DeclarationKind::Field);
-  if (llvm::isa<clang::VarDecl>(declaration))
-    return Some(DeclarationKind::Variable);
-  return None();
-}
-
-auto declaration_access(const clang::NamedDecl &declaration)
-    -> DeclarationAccess {
-  switch (declaration.getAccess()) {
-  case clang::AS_protected:
-    return DeclarationAccess::Protected;
-  case clang::AS_private:
-    return DeclarationAccess::Private;
-  default:
-    return DeclarationAccess::Public;
-  }
-}
-
-auto declaration_definition(const clang::NamedDecl &declaration) -> bool {
-  if (const auto *function = llvm::dyn_cast<clang::FunctionDecl>(&declaration))
-    return function->isThisDeclarationADefinition();
-  if (const auto *tag = llvm::dyn_cast<clang::TagDecl>(&declaration))
-    return tag->isThisDeclarationADefinition();
-  if (const auto *variable = llvm::dyn_cast<clang::VarDecl>(&declaration))
-    return variable->isThisDeclarationADefinition();
-  return true;
-}
-
-auto publication_identity(const clang::NamedDecl &declaration,
-                          const clang::SourceManager &manager) -> String {
-  llvm::SmallVector<char, 128> usr;
-  if (!clang::index::generateUSRForDecl(&declaration, usr)) {
-    return as_rstd(llvm::StringRef(usr.data(), usr.size()));
-  }
-  auto location =
-      manager.getPresumedLoc(manager.getSpellingLoc(declaration.getLocation()));
-  return rstd::format("fallback:{}:{}:{}:{}", declaration.getDeclKindName(),
-                      location.isValid() ? location.getFilename() : "",
-                      location.isValid() ? location.getLine() : 0,
-                      location.isValid() ? location.getColumn() : 0);
-}
-
-auto semantic_identity(const clang::NamedDecl &declaration,
-                       const clang::SourceManager &manager) -> String {
-  auto identity = publication_identity(declaration, manager);
-  const auto *canonical =
-      llvm::cast<clang::NamedDecl>(declaration.getCanonicalDecl());
-  for (auto *context = canonical->getDeclContext(); context != nullptr;
-       context = context->getParent()) {
-    if (const auto *scope = llvm::dyn_cast<clang::NamespaceDecl>(context)) {
-      // Clang 22 USRs stop at ExportDecl, omitting its enclosing namespace.
-      auto name = scope->getQualifiedNameAsString();
-      return rstd::format("scope:{}:{}{}", usize(name.size()), as_rstd(name),
-                          identity);
+    if (result.arguments.empty()) {
+        return failure<ExtractionRequest>(
+            "extract request invocation arguments must not be empty"_str);
     }
-  }
-  return identity;
-}
-
-auto named_module(const clang::NamedDecl &declaration) -> String {
-  const auto *module = declaration.getTopLevelOwningNamedModule();
-  return module == nullptr ? String::make()
-                           : as_rstd(module->getPrimaryModuleInterfaceName());
-}
-
-auto declaration_origin(const clang::NamedDecl &declaration,
-                        const clang::ASTContext &context) -> DeclarationOrigin {
-  if (const auto *owner = declaration.getOwningModule()) {
-    if (owner->Kind == clang::Module::ExplicitGlobalModuleFragment)
-      return DeclarationOrigin::GlobalFragment;
-    if (owner->Kind == clang::Module::PrivateModuleFragment)
-      return DeclarationOrigin::PrivateFragment;
-  }
-  const auto *module = context.getCurrentNamedModule();
-  if (module == nullptr)
-    return DeclarationOrigin::Ordinary;
-  return module->isModuleInterfaceUnit() ? DeclarationOrigin::Interface
-                                         : DeclarationOrigin::Implementation;
-}
-
-auto has_exported_redeclaration(const clang::NamedDecl &declaration) -> bool {
-  for (const auto *redeclaration : declaration.redecls())
-    if (redeclaration->isInExportDeclContext())
-      return true;
-  return false;
-}
-
-auto described_template(const clang::NamedDecl &declaration)
-    -> const clang::TemplateDecl * {
-  if (const auto *function =
-          llvm::dyn_cast<clang::FunctionDecl>(&declaration)) {
-    if (const auto *owner = function->getDescribedFunctionTemplate())
-      return owner;
-  }
-  if (const auto *record = llvm::dyn_cast<clang::CXXRecordDecl>(&declaration)) {
-    if (const auto *owner = record->getDescribedClassTemplate())
-      return owner;
-  }
-  if (const auto *variable = llvm::dyn_cast<clang::VarDecl>(&declaration)) {
-    if (const auto *owner = variable->getDescribedVarTemplate())
-      return owner;
-  }
-  if (const auto *alias = llvm::dyn_cast<clang::TypeAliasDecl>(&declaration)) {
-    if (const auto *owner = alias->getDescribedAliasTemplate())
-      return owner;
-  }
-  return nullptr;
-}
-
-auto printable_declaration(const clang::NamedDecl &declaration)
-    -> const clang::Decl & {
-  if (const auto *owner = described_template(declaration))
-    return *owner;
-  return declaration;
-}
-
-auto template_parameter_lists(const clang::NamedDecl &declaration)
-    -> llvm::SmallVector<const clang::TemplateParameterList *, 4> {
-  auto result = llvm::SmallVector<const clang::TemplateParameterList *, 4>{};
-  if (const auto *constraint = llvm::dyn_cast<clang::ConceptDecl>(&declaration))
-    result.push_back(constraint->getTemplateParameters());
-  if (const auto *partial =
-          llvm::dyn_cast<clang::ClassTemplatePartialSpecializationDecl>(
-              &declaration)) {
-    result.push_back(partial->getTemplateParameters());
-  } else if (const auto *partial =
-                 llvm::dyn_cast<clang::VarTemplatePartialSpecializationDecl>(
-                     &declaration)) {
-    result.push_back(partial->getTemplateParameters());
-  }
-  if (const auto *function =
-          llvm::dyn_cast<clang::FunctionDecl>(&declaration)) {
-    for (unsigned index = 0; index < function->getNumTemplateParameterLists();
-         ++index)
-      result.push_back(function->getTemplateParameterList(index));
-  }
-  if (const auto *owner = described_template(declaration))
-    result.push_back(owner->getTemplateParameters());
-  return result;
-}
-
-auto split_template_declaration(
-    llvm::StringRef declaration,
-    llvm::ArrayRef<const clang::TemplateParameterList *> parameter_lists,
-    const clang::ASTContext &context, const clang::PrintingPolicy &policy)
-    -> String {
-  auto formatted = llvm::SmallString<256>{};
-  auto remaining = declaration;
-  for (const auto *parameters : parameter_lists) {
-    auto storage = llvm::SmallString<128>{};
-    auto stream = llvm::raw_svector_ostream(storage);
-    parameters->print(stream, context, policy);
-    auto prefix = storage.str();
-    if (!prefix.ends_with(" ") || !remaining.starts_with(prefix))
-      return as_rstd(declaration);
-    auto template_prefix = prefix.drop_back();
-    auto requires_clause = llvm::SmallString<128>{};
-    if (const auto *clause = parameters->getRequiresClause()) {
-      requires_clause.append(" requires ");
-      auto requires_stream = llvm::raw_svector_ostream(requires_clause);
-      clause->printPretty(requires_stream, nullptr, policy, 0, "\n", &context);
-      if (!template_prefix.ends_with(requires_clause.str()))
-        return as_rstd(declaration);
-      template_prefix = template_prefix.drop_back(requires_clause.size());
+    for (const auto& value : *imported) {
+        auto artifact = rstd_try(json_object(value, "extract request imported artifact"_str));
+        result.imported_artifacts.push_back(ExtractionRequest::ImportedArtifact {
+            .logical_module = rstd_try(
+                required_string(*artifact, "module", "extract request imported artifact"_str)),
+            .path     = PathBuf::from(rstd_try(
+                required_string(*artifact, "path", "extract request imported artifact"_str))),
+            .identity = rstd_try(
+                required_string(*artifact, "identity", "extract request imported artifact"_str)),
+        });
     }
-    formatted.append(template_prefix);
-    formatted.push_back('\n');
-    if (!requires_clause.empty()) {
-      formatted.append("    ");
-      formatted.append(requires_clause.str().drop_front());
-      formatted.push_back('\n');
-    }
-    remaining = remaining.drop_front(prefix.size());
-  }
-  formatted.append(remaining);
-  return as_rstd(formatted.str());
+    return Ok(rstd::move(result));
 }
 
-auto declaration_signature(const clang::NamedDecl &declaration,
-                           const clang::ASTContext &context,
-                           bool suppress_scope) -> String {
-  auto policy = context.getPrintingPolicy();
-  policy.SuppressScope = suppress_scope;
-  policy.TerseOutput = true;
-  policy.PolishForDeclaration = false;
-  policy.Indentation = 0;
-  llvm::SmallString<256> printed;
-  llvm::raw_svector_ostream stream(printed);
-  printable_declaration(declaration)
-      .print(stream, policy, /*Indentation=*/0, /*PrintInstantiation=*/false);
-  auto result = split_template_declaration(
-      printed.str(), template_parameter_lists(declaration), context, policy);
-  if (!llvm::isa<clang::NamespaceDecl>(declaration) &&
-      !result.as_str().trim_ascii().ends_with(";"_str)) {
-    result.push_ascii(';');
-  }
-  return result;
+auto span_for(const clang::SourceManager& manager, clang::SourceRange range, bool expansion = false)
+    -> DocumentationSpan {
+    auto begin = expansion ? manager.getExpansionLoc(range.getBegin())
+                           : manager.getSpellingLoc(range.getBegin());
+    auto end   = expansion ? manager.getExpansionLoc(range.getEnd())
+                           : manager.getSpellingLoc(range.getEnd());
+    auto first = manager.getPresumedLoc(begin);
+    auto last  = manager.getPresumedLoc(end);
+    auto path  = first.isValid() ? as_rstd(first.getFilename()) : String::make();
+    return DocumentationSpan {
+        .path         = PathBuf::from(path.as_str()),
+        .begin_line   = first.isValid() ? usize(first.getLine()) : usize {},
+        .begin_column = first.isValid() ? usize(first.getColumn()) : usize {},
+        .end_line     = last.isValid() ? usize(last.getLine()) : usize {},
+        .end_column   = last.isValid() ? usize(last.getColumn()) : usize {},
+    };
 }
 
-auto record_keyword(const clang::NamedDecl &declaration) -> Option<String> {
-  const auto *record = llvm::dyn_cast<clang::RecordDecl>(&declaration);
-  return record == nullptr ? Option<String>{}
-                           : Some(as_rstd(record->getKindName()));
-}
-
-auto alias_target(const clang::NamedDecl &declaration,
-                  const clang::ASTContext &context) -> Option<String> {
-  const auto *alias = llvm::dyn_cast<clang::TypedefNameDecl>(&declaration);
-  if (alias == nullptr)
+auto declaration_kind(const clang::NamedDecl& declaration) -> Option<DeclarationKind> {
+    if (llvm::isa<clang::NamespaceDecl>(declaration)) return Some(DeclarationKind::Namespace);
+    if (llvm::isa<clang::RecordDecl>(declaration)) return Some(DeclarationKind::Record);
+    if (llvm::isa<clang::EnumDecl>(declaration)) return Some(DeclarationKind::Enum);
+    if (llvm::isa<clang::ConceptDecl>(declaration)) return Some(DeclarationKind::Concept);
+    if (llvm::isa<clang::TypedefNameDecl>(declaration)) return Some(DeclarationKind::Alias);
+    if (llvm::isa<clang::FunctionDecl>(declaration)) return Some(DeclarationKind::Function);
+    if (llvm::isa<clang::FieldDecl>(declaration)) return Some(DeclarationKind::Field);
+    if (llvm::isa<clang::VarDecl>(declaration)) return Some(DeclarationKind::Variable);
     return None();
-  return Some(as_rstd(
-      alias->getUnderlyingType().getAsString(context.getPrintingPolicy())));
 }
 
-auto record_header(const clang::NamedDecl &declaration,
-                   const clang::ASTContext &context) -> Option<String> {
-  if (!llvm::isa<clang::RecordDecl>(declaration))
-    return Option<String>{};
-  auto signature = declaration_signature(declaration, context, true);
-  auto text = signature.as_str().trim_ascii();
-  if (text.ends_with("{};"_str))
-    text = text.get(usize{}, text.len() - usize(3)).unwrap().trim_ascii();
-  else if (text.ends_with(";"_str))
-    text = text.get(usize{}, text.len() - usize(1)).unwrap().trim_ascii();
-  return Some(String::make(text));
+auto declaration_access(const clang::NamedDecl& declaration) -> DeclarationAccess {
+    switch (declaration.getAccess()) {
+    case clang::AS_protected: return DeclarationAccess::Protected;
+    case clang::AS_private: return DeclarationAccess::Private;
+    default: return DeclarationAccess::Public;
+    }
 }
 
-auto is_scope_declaration(const clang::NamedDecl &declaration) -> bool {
-  const auto *semantic =
-      llvm::dyn_cast<clang::RecordDecl>(declaration.getDeclContext());
-  return semantic != nullptr && declaration.getLexicalDeclContext() == semantic;
+auto declaration_definition(const clang::NamedDecl& declaration) -> bool {
+    if (const auto* function = llvm::dyn_cast<clang::FunctionDecl>(&declaration))
+        return function->isThisDeclarationADefinition();
+    if (const auto* tag = llvm::dyn_cast<clang::TagDecl>(&declaration))
+        return tag->isThisDeclarationADefinition();
+    if (const auto* variable = llvm::dyn_cast<clang::VarDecl>(&declaration))
+        return variable->isThisDeclarationADefinition();
+    return true;
+}
+
+auto publication_identity(const clang::NamedDecl& declaration, const clang::SourceManager& manager)
+    -> String {
+    llvm::SmallVector<char, 128> usr;
+    if (! clang::index::generateUSRForDecl(&declaration, usr)) {
+        return as_rstd(llvm::StringRef(usr.data(), usr.size()));
+    }
+    auto location = manager.getPresumedLoc(manager.getSpellingLoc(declaration.getLocation()));
+    return rstd::format("fallback:{}:{}:{}:{}",
+                        declaration.getDeclKindName(),
+                        location.isValid() ? location.getFilename() : "",
+                        location.isValid() ? location.getLine() : 0,
+                        location.isValid() ? location.getColumn() : 0);
+}
+
+auto semantic_identity(const clang::NamedDecl& declaration, const clang::SourceManager& manager)
+    -> String {
+    auto        identity  = publication_identity(declaration, manager);
+    const auto* canonical = llvm::cast<clang::NamedDecl>(declaration.getCanonicalDecl());
+    for (auto* context = canonical->getDeclContext(); context != nullptr;
+         context       = context->getParent()) {
+        if (const auto* scope = llvm::dyn_cast<clang::NamespaceDecl>(context)) {
+            // Clang 22 USRs stop at ExportDecl, omitting its enclosing namespace.
+            auto name = scope->getQualifiedNameAsString();
+            return rstd::format("scope:{}:{}{}", usize(name.size()), as_rstd(name), identity);
+        }
+    }
+    return identity;
+}
+
+auto named_module(const clang::NamedDecl& declaration) -> String {
+    const auto* module = declaration.getTopLevelOwningNamedModule();
+    return module == nullptr ? String::make() : as_rstd(module->getPrimaryModuleInterfaceName());
+}
+
+auto declaration_origin(const clang::NamedDecl& declaration, const clang::ASTContext& context)
+    -> DeclarationOrigin {
+    if (const auto* owner = declaration.getOwningModule()) {
+        if (owner->Kind == clang::Module::ExplicitGlobalModuleFragment)
+            return DeclarationOrigin::GlobalFragment;
+        if (owner->Kind == clang::Module::PrivateModuleFragment)
+            return DeclarationOrigin::PrivateFragment;
+    }
+    const auto* module = context.getCurrentNamedModule();
+    if (module == nullptr) return DeclarationOrigin::Ordinary;
+    return module->isModuleInterfaceUnit() ? DeclarationOrigin::Interface
+                                           : DeclarationOrigin::Implementation;
+}
+
+auto has_exported_redeclaration(const clang::NamedDecl& declaration) -> bool {
+    for (const auto* redeclaration : declaration.redecls())
+        if (redeclaration->isInExportDeclContext()) return true;
+    return false;
+}
+
+auto described_template(const clang::NamedDecl& declaration) -> const clang::TemplateDecl* {
+    if (const auto* function = llvm::dyn_cast<clang::FunctionDecl>(&declaration)) {
+        if (const auto* owner = function->getDescribedFunctionTemplate()) return owner;
+    }
+    if (const auto* record = llvm::dyn_cast<clang::CXXRecordDecl>(&declaration)) {
+        if (const auto* owner = record->getDescribedClassTemplate()) return owner;
+    }
+    if (const auto* variable = llvm::dyn_cast<clang::VarDecl>(&declaration)) {
+        if (const auto* owner = variable->getDescribedVarTemplate()) return owner;
+    }
+    if (const auto* alias = llvm::dyn_cast<clang::TypeAliasDecl>(&declaration)) {
+        if (const auto* owner = alias->getDescribedAliasTemplate()) return owner;
+    }
+    return nullptr;
+}
+
+auto printable_declaration(const clang::NamedDecl& declaration) -> const clang::Decl& {
+    if (const auto* owner = described_template(declaration)) return *owner;
+    return declaration;
+}
+
+auto template_parameter_lists(const clang::NamedDecl& declaration)
+    -> llvm::SmallVector<const clang::TemplateParameterList*, 4> {
+    auto result = llvm::SmallVector<const clang::TemplateParameterList*, 4> {};
+    if (const auto* constraint = llvm::dyn_cast<clang::ConceptDecl>(&declaration))
+        result.push_back(constraint->getTemplateParameters());
+    if (const auto* partial =
+            llvm::dyn_cast<clang::ClassTemplatePartialSpecializationDecl>(&declaration)) {
+        result.push_back(partial->getTemplateParameters());
+    } else if (const auto* partial =
+                   llvm::dyn_cast<clang::VarTemplatePartialSpecializationDecl>(&declaration)) {
+        result.push_back(partial->getTemplateParameters());
+    }
+    if (const auto* function = llvm::dyn_cast<clang::FunctionDecl>(&declaration)) {
+        for (unsigned index = 0; index < function->getNumTemplateParameterLists(); ++index)
+            result.push_back(function->getTemplateParameterList(index));
+    }
+    if (const auto* owner = described_template(declaration))
+        result.push_back(owner->getTemplateParameters());
+    return result;
+}
+
+auto split_template_declaration(llvm::StringRef                                     declaration,
+                                llvm::ArrayRef<const clang::TemplateParameterList*> parameter_lists,
+                                const clang::ASTContext&                            context,
+                                const clang::PrintingPolicy& policy) -> String {
+    auto formatted = llvm::SmallString<256> {};
+    auto remaining = declaration;
+    for (const auto* parameters : parameter_lists) {
+        auto storage = llvm::SmallString<128> {};
+        auto stream  = llvm::raw_svector_ostream(storage);
+        parameters->print(stream, context, policy);
+        auto prefix = storage.str();
+        if (! prefix.ends_with(" ") || ! remaining.starts_with(prefix)) return as_rstd(declaration);
+        auto template_prefix = prefix.drop_back();
+        auto requires_clause = llvm::SmallString<128> {};
+        if (const auto* clause = parameters->getRequiresClause()) {
+            requires_clause.append(" requires ");
+            auto requires_stream = llvm::raw_svector_ostream(requires_clause);
+            clause->printPretty(requires_stream, nullptr, policy, 0, "\n", &context);
+            if (! template_prefix.ends_with(requires_clause.str())) return as_rstd(declaration);
+            template_prefix = template_prefix.drop_back(requires_clause.size());
+        }
+        formatted.append(template_prefix);
+        formatted.push_back('\n');
+        if (! requires_clause.empty()) {
+            formatted.append("    ");
+            formatted.append(requires_clause.str().drop_front());
+            formatted.push_back('\n');
+        }
+        remaining = remaining.drop_front(prefix.size());
+    }
+    formatted.append(remaining);
+    return as_rstd(formatted.str());
+}
+
+auto declaration_signature(const clang::NamedDecl&  declaration,
+                           const clang::ASTContext& context,
+                           bool                     suppress_scope) -> String {
+    auto policy                 = context.getPrintingPolicy();
+    policy.SuppressScope        = suppress_scope;
+    policy.TerseOutput          = true;
+    policy.PolishForDeclaration = false;
+    policy.Indentation          = 0;
+    llvm::SmallString<256>    printed;
+    llvm::raw_svector_ostream stream(printed);
+    printable_declaration(declaration)
+        .print(stream, policy, /*Indentation=*/0, /*PrintInstantiation=*/false);
+    auto result = split_template_declaration(
+        printed.str(), template_parameter_lists(declaration), context, policy);
+    if (! llvm::isa<clang::NamespaceDecl>(declaration) &&
+        ! result.as_str().trim_ascii().ends_with(";"_str)) {
+        result.push_ascii(';');
+    }
+    return result;
+}
+
+auto record_keyword(const clang::NamedDecl& declaration) -> Option<String> {
+    const auto* record = llvm::dyn_cast<clang::RecordDecl>(&declaration);
+    return record == nullptr ? Option<String> {} : Some(as_rstd(record->getKindName()));
+}
+
+auto alias_target(const clang::NamedDecl& declaration, const clang::ASTContext& context)
+    -> Option<String> {
+    const auto* alias = llvm::dyn_cast<clang::TypedefNameDecl>(&declaration);
+    if (alias == nullptr) return None();
+    return Some(as_rstd(alias->getUnderlyingType().getAsString(context.getPrintingPolicy())));
+}
+
+auto record_header(const clang::NamedDecl& declaration, const clang::ASTContext& context)
+    -> Option<String> {
+    if (! llvm::isa<clang::RecordDecl>(declaration)) return Option<String> {};
+    auto signature = declaration_signature(declaration, context, true);
+    auto text      = signature.as_str().trim_ascii();
+    if (text.ends_with("{};"_str))
+        text = text.get(usize {}, text.len() - usize(3)).unwrap().trim_ascii();
+    else if (text.ends_with(";"_str))
+        text = text.get(usize {}, text.len() - usize(1)).unwrap().trim_ascii();
+    return Some(String::make(text));
+}
+
+auto is_scope_declaration(const clang::NamedDecl& declaration) -> bool {
+    const auto* semantic = llvm::dyn_cast<clang::RecordDecl>(declaration.getDeclContext());
+    return semantic != nullptr && declaration.getLexicalDeclContext() == semantic;
 }
 
 struct PendingDeclarationReference {
-  size_t begin{};
-  size_t end{};
-  std::string semantic_identity;
-  DeclarationReferenceKind kind{DeclarationReferenceKind::Type};
+    size_t                   begin {};
+    size_t                   end {};
+    std::string              semantic_identity;
+    DeclarationReferenceKind kind { DeclarationReferenceKind::Type };
 };
 
 class DeclarationReferenceWalker {
 public:
-  DeclarationReferenceWalker(const clang::SourceManager &manager,
-                             const clang::LangOptions &language,
-                             clang::SourceLocation declaration_begin,
-                             size_t declaration_size)
-      : manager_(&manager), language_(&language),
-        begin_(manager.getDecomposedSpellingLoc(declaration_begin)),
-        declaration_size_(declaration_size) {}
+    DeclarationReferenceWalker(const clang::SourceManager& manager,
+                               const clang::LangOptions&   language,
+                               clang::SourceLocation       declaration_begin,
+                               size_t                      declaration_size)
+        : manager_(&manager),
+          language_(&language),
+          begin_(manager.getDecomposedSpellingLoc(declaration_begin)),
+          declaration_size_(declaration_size) {}
 
-  auto traverse(const clang::FunctionDecl &function) -> void {
-    if (const auto *information = function.getTypeSourceInfo())
-      traverse(information->getTypeLoc());
-    if (const auto *information = function.getNameInfo().getNamedTypeInfo())
-      traverse(information->getTypeLoc());
-    for (const auto *parameters : template_parameter_lists(function))
-      traverse(parameters->getRequiresClause());
-    traverse(function.getTrailingRequiresClause().ConstraintExpr);
-  }
-
-  auto finish() -> Vec<DeclarationReference> {
-    std::sort(references_.begin(), references_.end(),
-              [](const auto &left, const auto &right) {
-                if (left.begin != right.begin)
-                  return left.begin < right.begin;
-                if (left.end != right.end)
-                  return left.end < right.end;
-                return left.semantic_identity < right.semantic_identity;
-              });
-    auto result =
-        Vec<DeclarationReference>::with_capacity(usize(references_.size()));
-    const PendingDeclarationReference *previous = nullptr;
-    for (const auto &reference : references_) {
-      if (previous != nullptr && previous->begin == reference.begin &&
-          previous->end == reference.end &&
-          previous->semantic_identity == reference.semantic_identity) {
-        continue;
-      }
-      if (previous != nullptr && reference.begin < previous->end)
-        continue;
-      result.push(DeclarationReference{
-          .begin = usize(reference.begin),
-          .end = usize(reference.end),
-          .semantic_identity = as_rstd(reference.semantic_identity),
-          .kind = reference.kind,
-      });
-      previous = &reference;
+    auto traverse(const clang::FunctionDecl& function) -> void {
+        if (const auto* information = function.getTypeSourceInfo())
+            traverse(information->getTypeLoc());
+        if (const auto* information = function.getNameInfo().getNamedTypeInfo())
+            traverse(information->getTypeLoc());
+        for (const auto* parameters : template_parameter_lists(function))
+            traverse(parameters->getRequiresClause());
+        traverse(function.getTrailingRequiresClause().ConstraintExpr);
     }
-    return result;
-  }
+
+    auto finish() -> Vec<DeclarationReference> {
+        std::sort(references_.begin(), references_.end(), [](const auto& left, const auto& right) {
+            if (left.begin != right.begin) return left.begin < right.begin;
+            if (left.end != right.end) return left.end < right.end;
+            return left.semantic_identity < right.semantic_identity;
+        });
+        auto result = Vec<DeclarationReference>::with_capacity(usize(references_.size()));
+        const PendingDeclarationReference* previous = nullptr;
+        for (const auto& reference : references_) {
+            if (previous != nullptr && previous->begin == reference.begin &&
+                previous->end == reference.end &&
+                previous->semantic_identity == reference.semantic_identity) {
+                continue;
+            }
+            if (previous != nullptr && reference.begin < previous->end) continue;
+            result.push(DeclarationReference {
+                .begin             = usize(reference.begin),
+                .end               = usize(reference.end),
+                .semantic_identity = as_rstd(reference.semantic_identity),
+                .kind              = reference.kind,
+            });
+            previous = &reference;
+        }
+        return result;
+    }
 
 private:
-  auto traverse(const clang::Stmt *statement) -> void {
-    if (statement == nullptr)
-      return;
-    if (const auto *expression =
-            llvm::dyn_cast<clang::ConceptSpecializationExpr>(statement))
-      record(*expression->getNamedConcept(), expression->getConceptNameLoc(),
-             DeclarationReferenceKind::Concept);
-    for (const auto *child : statement->children())
-      traverse(child);
-  }
+    auto traverse(const clang::Stmt* statement) -> void {
+        if (statement == nullptr) return;
+        if (const auto* expression = llvm::dyn_cast<clang::ConceptSpecializationExpr>(statement))
+            record(*expression->getNamedConcept(),
+                   expression->getConceptNameLoc(),
+                   DeclarationReferenceKind::Concept);
+        for (const auto* child : statement->children()) traverse(child);
+    }
 
-  auto traverse(clang::TypeLoc location) -> void {
-    if (location.isNull())
-      return;
-    if (auto value = location.getAs<clang::TagTypeLoc>())
-      record(*value.getDecl(), value.getNameLoc());
-    if (auto value = location.getAs<clang::TypedefTypeLoc>())
-      record(*value.getDecl(), value.getNameLoc());
-    if (auto value = location.getAs<clang::UsingTypeLoc>())
-      record(*value.getDecl(), value.getNameLoc());
-    if (auto value = location.getAs<clang::TemplateSpecializationTypeLoc>()) {
-      const auto *declaration =
-          value.getTypePtr()->getTemplateName().getAsTemplateDecl(
-              /*IgnoreDeduced=*/true);
-      if (declaration != nullptr &&
-          !llvm::isa<clang::TemplateTemplateParmDecl>(declaration)) {
-        record(*declaration, value.getTemplateNameLoc());
-      }
-      for (unsigned index = 0; index < value.getNumArgs(); ++index) {
-        auto argument = value.getArgLoc(index);
-        if (const auto *information = argument.getTypeSourceInfo())
-          traverse(information->getTypeLoc());
-      }
+    auto traverse(clang::TypeLoc location) -> void {
+        if (location.isNull()) return;
+        if (auto value = location.getAs<clang::TagTypeLoc>())
+            record(*value.getDecl(), value.getNameLoc());
+        if (auto value = location.getAs<clang::TypedefTypeLoc>())
+            record(*value.getDecl(), value.getNameLoc());
+        if (auto value = location.getAs<clang::UsingTypeLoc>())
+            record(*value.getDecl(), value.getNameLoc());
+        if (auto value = location.getAs<clang::TemplateSpecializationTypeLoc>()) {
+            const auto* declaration = value.getTypePtr()->getTemplateName().getAsTemplateDecl(
+                /*IgnoreDeduced=*/true);
+            if (declaration != nullptr &&
+                ! llvm::isa<clang::TemplateTemplateParmDecl>(declaration)) {
+                record(*declaration, value.getTemplateNameLoc());
+            }
+            for (unsigned index = 0; index < value.getNumArgs(); ++index) {
+                auto argument = value.getArgLoc(index);
+                if (const auto* information = argument.getTypeSourceInfo())
+                    traverse(information->getTypeLoc());
+            }
+        }
+        if (auto value = location.getAs<clang::DeducedTemplateSpecializationTypeLoc>()) {
+            const auto* declaration = value.getTypePtr()->getTemplateName().getAsTemplateDecl(
+                /*IgnoreDeduced=*/true);
+            if (declaration != nullptr &&
+                ! llvm::isa<clang::TemplateTemplateParmDecl>(declaration)) {
+                record(*declaration, value.getTemplateNameLoc());
+            }
+        }
+        if (auto function = location.getAs<clang::FunctionTypeLoc>()) {
+            traverse(function.getReturnLoc());
+            for (auto* parameter : function.getParams()) {
+                if (parameter != nullptr && parameter->getTypeSourceInfo() != nullptr)
+                    traverse(parameter->getTypeSourceInfo()->getTypeLoc());
+            }
+            return;
+        }
+        auto next = location.getNextTypeLoc();
+        if (! next.isNull()) traverse(next);
     }
-    if (auto value =
-            location.getAs<clang::DeducedTemplateSpecializationTypeLoc>()) {
-      const auto *declaration =
-          value.getTypePtr()->getTemplateName().getAsTemplateDecl(
-              /*IgnoreDeduced=*/true);
-      if (declaration != nullptr &&
-          !llvm::isa<clang::TemplateTemplateParmDecl>(declaration)) {
-        record(*declaration, value.getTemplateNameLoc());
-      }
-    }
-    if (auto function = location.getAs<clang::FunctionTypeLoc>()) {
-      traverse(function.getReturnLoc());
-      for (auto *parameter : function.getParams()) {
-        if (parameter != nullptr && parameter->getTypeSourceInfo() != nullptr)
-          traverse(parameter->getTypeSourceInfo()->getTypeLoc());
-      }
-      return;
-    }
-    auto next = location.getNextTypeLoc();
-    if (!next.isNull())
-      traverse(next);
-  }
 
-  auto record(const clang::NamedDecl &declaration,
-              clang::SourceLocation location,
-              DeclarationReferenceKind kind = DeclarationReferenceKind::Type)
-      -> void {
-    if (location.isInvalid() || location.isMacroID())
-      return;
-    auto spelling = manager_->getSpellingLoc(location);
-    if (spelling.isInvalid())
-      return;
-    auto decomposed = manager_->getDecomposedSpellingLoc(spelling);
-    if (decomposed.first != begin_.first || decomposed.second < begin_.second)
-      return;
-    clang::Token token;
-    if (clang::Lexer::getRawToken(spelling, token, *manager_, *language_,
-                                  /*IgnoreWhiteSpace=*/true) ||
-        (!token.is(clang::tok::identifier) &&
-         !token.is(clang::tok::raw_identifier))) {
-      return;
+    auto record(const clang::NamedDecl&  declaration,
+                clang::SourceLocation    location,
+                DeclarationReferenceKind kind = DeclarationReferenceKind::Type) -> void {
+        if (location.isInvalid() || location.isMacroID()) return;
+        auto spelling = manager_->getSpellingLoc(location);
+        if (spelling.isInvalid()) return;
+        auto decomposed = manager_->getDecomposedSpellingLoc(spelling);
+        if (decomposed.first != begin_.first || decomposed.second < begin_.second) return;
+        clang::Token token;
+        if (clang::Lexer::getRawToken(spelling,
+                                      token,
+                                      *manager_,
+                                      *language_,
+                                      /*IgnoreWhiteSpace=*/true) ||
+            (! token.is(clang::tok::identifier) && ! token.is(clang::tok::raw_identifier))) {
+            return;
+        }
+        auto begin = static_cast<size_t>(decomposed.second - begin_.second);
+        auto end   = begin + token.getLength();
+        if (begin >= end || end > declaration_size_) return;
+        auto identity = semantic_identity(declaration, *manager_);
+        references_.push_back(PendingDeclarationReference {
+            .begin             = begin,
+            .end               = end,
+            .semantic_identity = as_std(identity.as_str()),
+            .kind              = kind,
+        });
     }
-    auto begin = static_cast<size_t>(decomposed.second - begin_.second);
-    auto end = begin + token.getLength();
-    if (begin >= end || end > declaration_size_)
-      return;
-    auto identity = semantic_identity(declaration, *manager_);
-    references_.push_back(PendingDeclarationReference{
-        .begin = begin,
-        .end = end,
-        .semantic_identity = as_std(identity.as_str()),
-        .kind = kind,
-    });
-  }
 
-  const clang::SourceManager *manager_{};
-  const clang::LangOptions *language_{};
-  std::pair<clang::FileID, unsigned> begin_;
-  size_t declaration_size_{};
-  std::vector<PendingDeclarationReference> references_;
+    const clang::SourceManager*              manager_ {};
+    const clang::LangOptions*                language_ {};
+    std::pair<clang::FileID, unsigned>       begin_;
+    size_t                                   declaration_size_ {};
+    std::vector<PendingDeclarationReference> references_;
 };
 
 class ConstraintReferencePrinter final : public clang::PrinterHelper {
 public:
-  ConstraintReferencePrinter(const clang::ASTContext &context,
-                             const clang::PrintingPolicy &policy)
-      : context_(context), policy_(policy) {}
+    ConstraintReferencePrinter(const clang::ASTContext&     context,
+                               const clang::PrintingPolicy& policy)
+        : context_(context), policy_(policy) {}
 
-  bool handledStmt(clang::Stmt *statement, llvm::raw_ostream &output) override {
-    const auto *expression =
-        llvm::dyn_cast<clang::ConceptSpecializationExpr>(statement);
-    if (expression == nullptr)
-      return false;
-    llvm::SmallString<128> text;
-    llvm::raw_svector_ostream stream(text);
-    expression->printPretty(stream, nullptr, policy_, 0, "\n", &context_);
-    auto prefix = text.str().split('<').first.rtrim();
-    auto name = expression->getNamedConcept()->getName();
-    if (prefix.ends_with(name)) {
-      auto identity = semantic_identity(*expression->getNamedConcept(),
-                                        context_.getSourceManager());
-      auto end = static_cast<size_t>(output.tell()) + prefix.size();
-      references.push_back({end - name.size(), end, as_std(identity.as_str()),
-                            DeclarationReferenceKind::Concept});
+    bool handledStmt(clang::Stmt* statement, llvm::raw_ostream& output) override {
+        const auto* expression = llvm::dyn_cast<clang::ConceptSpecializationExpr>(statement);
+        if (expression == nullptr) return false;
+        llvm::SmallString<128>    text;
+        llvm::raw_svector_ostream stream(text);
+        expression->printPretty(stream, nullptr, policy_, 0, "\n", &context_);
+        auto prefix = text.str().split('<').first.rtrim();
+        auto name   = expression->getNamedConcept()->getName();
+        if (prefix.ends_with(name)) {
+            auto identity =
+                semantic_identity(*expression->getNamedConcept(), context_.getSourceManager());
+            auto end = static_cast<size_t>(output.tell()) + prefix.size();
+            references.push_back({ end - name.size(),
+                                   end,
+                                   as_std(identity.as_str()),
+                                   DeclarationReferenceKind::Concept });
+        }
+        output << text;
+        return true;
     }
-    output << text;
-    return true;
-  }
 
-  std::vector<PendingDeclarationReference> references;
+    std::vector<PendingDeclarationReference> references;
 
 private:
-  const clang::ASTContext &context_;
-  const clang::PrintingPolicy &policy_;
+    const clang::ASTContext&     context_;
+    const clang::PrintingPolicy& policy_;
 };
 
-auto printed_declaration_text(const clang::NamedDecl &declaration,
-                              const clang::ASTContext &context,
-                              bool suppress_scope) -> DeclarationText {
-  auto result = DeclarationText{
-      declaration_signature(declaration, context, suppress_scope)};
-  auto policy = context.getPrintingPolicy();
-  policy.SuppressScope = suppress_scope;
-  policy.TerseOutput = true;
-  policy.PolishForDeclaration = false;
-  policy.Indentation = 0;
-  auto text = as_std(result.as_str());
-  auto references = std::vector<PendingDeclarationReference>{};
-  auto append = [&](const clang::Expr *expression) {
-    if (expression == nullptr)
-      return;
-    auto printer = ConstraintReferencePrinter(context, policy);
-    llvm::SmallString<128> constraint;
-    llvm::raw_svector_ostream stream(constraint);
-    expression->printPretty(stream, &printer, policy, 0, "\n", &context);
-    if (constraint.empty() || printer.references.empty())
-      return;
-    auto spelling = constraint.str().str();
-    auto offset = text.find(spelling);
-    // Decl::print has no expression callback. Only map a unique, complete
-    // Clang-printed constraint, never a name match in the declaration.
-    if (offset == std::string::npos ||
-        text.find(spelling, offset + 1) != std::string::npos)
-      return;
-    for (auto reference : printer.references) {
-      reference.begin += offset;
-      reference.end += offset;
-      references.push_back(std::move(reference));
+auto printed_declaration_text(const clang::NamedDecl&  declaration,
+                              const clang::ASTContext& context,
+                              bool                     suppress_scope) -> DeclarationText {
+    auto result = DeclarationText { declaration_signature(declaration, context, suppress_scope) };
+    auto policy = context.getPrintingPolicy();
+    policy.SuppressScope        = suppress_scope;
+    policy.TerseOutput          = true;
+    policy.PolishForDeclaration = false;
+    policy.Indentation          = 0;
+    auto text                   = as_std(result.as_str());
+    auto references             = std::vector<PendingDeclarationReference> {};
+    auto append                 = [&](const clang::Expr* expression) {
+        if (expression == nullptr) return;
+        auto                      printer = ConstraintReferencePrinter(context, policy);
+        llvm::SmallString<128>    constraint;
+        llvm::raw_svector_ostream stream(constraint);
+        expression->printPretty(stream, &printer, policy, 0, "\n", &context);
+        if (constraint.empty() || printer.references.empty()) return;
+        auto spelling = constraint.str().str();
+        auto offset   = text.find(spelling);
+        // Decl::print has no expression callback. Only map a unique, complete
+        // Clang-printed constraint, never a name match in the declaration.
+        if (offset == std::string::npos || text.find(spelling, offset + 1) != std::string::npos)
+            return;
+        for (auto reference : printer.references) {
+            reference.begin += offset;
+            reference.end += offset;
+            references.push_back(std::move(reference));
+        }
+    };
+    for (const auto* parameters : template_parameter_lists(declaration))
+        append(parameters->getRequiresClause());
+    if (const auto* function = llvm::dyn_cast<clang::FunctionDecl>(&declaration))
+        append(function->getTrailingRequiresClause().ConstraintExpr);
+    std::sort(references.begin(), references.end(), [](const auto& left, const auto& right) {
+        return left.begin < right.begin;
+    });
+    size_t previous_end = 0;
+    for (const auto& reference : references) {
+        if (reference.begin < previous_end) continue;
+        result.references.push({ usize(reference.begin),
+                                 usize(reference.end),
+                                 as_rstd(reference.semantic_identity),
+                                 reference.kind });
+        previous_end = reference.end;
     }
-  };
-  for (const auto *parameters : template_parameter_lists(declaration))
-    append(parameters->getRequiresClause());
-  if (const auto *function = llvm::dyn_cast<clang::FunctionDecl>(&declaration))
-    append(function->getTrailingRequiresClause().ConstraintExpr);
-  std::sort(references.begin(), references.end(),
-            [](const auto &left, const auto &right) {
-              return left.begin < right.begin;
-            });
-  size_t previous_end = 0;
-  for (const auto &reference : references) {
-    if (reference.begin < previous_end)
-      continue;
-    result.references.push({usize(reference.begin), usize(reference.end),
-                            as_rstd(reference.semantic_identity),
-                            reference.kind});
-    previous_end = reference.end;
-  }
-  return result;
+    return result;
 }
 
-auto scope_declaration_text(const clang::NamedDecl &declaration,
-                            const clang::ASTContext &context)
+auto scope_declaration_text(const clang::NamedDecl& declaration, const clang::ASTContext& context)
     -> Option<DeclarationText> {
-  const auto *function = llvm::dyn_cast<clang::FunctionDecl>(&declaration);
-  if (function == nullptr || !is_scope_declaration(declaration))
-    return None();
-  const auto &manager = context.getSourceManager();
-  auto begin = printable_declaration(declaration).getBeginLoc();
-  auto end = printable_declaration(declaration).getEndLoc();
-  if (begin.isInvalid() || end.isInvalid() || begin.isMacroID() ||
-      end.isMacroID()) {
-    return None();
-  }
-  auto body_begin = clang::SourceLocation{};
-  if (function->doesThisDeclarationHaveABody()) {
-    if (!llvm::isa<clang::CXXConstructorDecl>(function)) {
-      const auto *body = function->getBody();
-      if (body == nullptr || body->getBeginLoc().isInvalid() ||
-          body->getBeginLoc().isMacroID()) {
+    const auto* function = llvm::dyn_cast<clang::FunctionDecl>(&declaration);
+    if (function == nullptr || ! is_scope_declaration(declaration)) return None();
+    const auto& manager = context.getSourceManager();
+    auto        begin   = printable_declaration(declaration).getBeginLoc();
+    auto        end     = printable_declaration(declaration).getEndLoc();
+    if (begin.isInvalid() || end.isInvalid() || begin.isMacroID() || end.isMacroID()) {
         return None();
-      }
-      body_begin = body->getBeginLoc();
     }
-    auto function_type = function->getFunctionTypeLoc();
-    if (function_type.isNull() ||
-        function_type.getLocalRangeEnd().isInvalid() ||
-        function_type.getLocalRangeEnd().isMacroID()) {
-      return None();
+    auto body_begin = clang::SourceLocation {};
+    if (function->doesThisDeclarationHaveABody()) {
+        if (! llvm::isa<clang::CXXConstructorDecl>(function)) {
+            const auto* body = function->getBody();
+            if (body == nullptr || body->getBeginLoc().isInvalid() ||
+                body->getBeginLoc().isMacroID()) {
+                return None();
+            }
+            body_begin = body->getBeginLoc();
+        }
+        auto function_type = function->getFunctionTypeLoc();
+        if (function_type.isNull() || function_type.getLocalRangeEnd().isInvalid() ||
+            function_type.getLocalRangeEnd().isMacroID()) {
+            return None();
+        }
+        end = function_type.getLocalRangeEnd();
+        if (const auto& constraint = function->getTrailingRequiresClause();
+            constraint && constraint.ConstraintExpr != nullptr) {
+            auto constraint_end = constraint.ConstraintExpr->getEndLoc();
+            if (constraint_end.isValid() && ! constraint_end.isMacroID() &&
+                manager.isBeforeInTranslationUnit(end, constraint_end)) {
+                end = constraint_end;
+            }
+        }
     }
-    end = function_type.getLocalRangeEnd();
-    if (const auto &constraint = function->getTrailingRequiresClause();
-        constraint && constraint.ConstraintExpr != nullptr) {
-      auto constraint_end = constraint.ConstraintExpr->getEndLoc();
-      if (constraint_end.isValid() && !constraint_end.isMacroID() &&
-          manager.isBeforeInTranslationUnit(end, constraint_end)) {
-        end = constraint_end;
-      }
+    begin               = manager.getSpellingLoc(begin);
+    end                 = manager.getSpellingLoc(end);
+    auto begin_location = manager.getDecomposedSpellingLoc(begin);
+    auto end_location   = manager.getDecomposedSpellingLoc(end);
+    if (begin_location.first != end_location.first || end_location.second < begin_location.second) {
+        return None();
     }
-  }
-  begin = manager.getSpellingLoc(begin);
-  end = manager.getSpellingLoc(end);
-  auto begin_location = manager.getDecomposedSpellingLoc(begin);
-  auto end_location = manager.getDecomposedSpellingLoc(end);
-  if (begin_location.first != end_location.first ||
-      end_location.second < begin_location.second) {
-    return None();
-  }
-  auto after_end = body_begin.isValid()
-                       ? manager.getSpellingLoc(body_begin)
-                       : clang::Lexer::getLocForEndOfToken(
-                             end, 0, manager, context.getLangOpts());
-  if (after_end.isInvalid())
-    return None();
-  auto source = clang::Lexer::getSourceText(
-      clang::CharSourceRange::getCharRange(begin, after_end), manager,
-      context.getLangOpts());
-  if (source.empty())
-    return None();
-  while (!source.empty() && (source.back() == ' ' || source.back() == '\t' ||
-                             source.back() == '\n' || source.back() == '\r')) {
-    source = source.drop_back();
-  }
-  auto text = as_rstd(source);
-  if (!text.as_str().ends_with(";"_str)) {
-    text.push_ascii(';');
-  }
-  auto walker = DeclarationReferenceWalker(manager, context.getLangOpts(),
-                                           begin, source.size());
-  walker.traverse(*function);
-  auto result = DeclarationText{rstd::move(text)};
-  result.references = walker.finish();
-  return Some(rstd::move(result));
+    auto after_end =
+        body_begin.isValid()
+            ? manager.getSpellingLoc(body_begin)
+            : clang::Lexer::getLocForEndOfToken(end, 0, manager, context.getLangOpts());
+    if (after_end.isInvalid()) return None();
+    auto source = clang::Lexer::getSourceText(
+        clang::CharSourceRange::getCharRange(begin, after_end), manager, context.getLangOpts());
+    if (source.empty()) return None();
+    while (! source.empty() && (source.back() == ' ' || source.back() == '\t' ||
+                                source.back() == '\n' || source.back() == '\r')) {
+        source = source.drop_back();
+    }
+    auto text = as_rstd(source);
+    if (! text.as_str().ends_with(";"_str)) {
+        text.push_ascii(';');
+    }
+    auto walker = DeclarationReferenceWalker(manager, context.getLangOpts(), begin, source.size());
+    walker.traverse(*function);
+    auto result       = DeclarationText { rstd::move(text) };
+    result.references = walker.finish();
+    return Some(rstd::move(result));
 }
 
-auto namespace_name(const clang::NamedDecl &declaration) -> String {
-  std::vector<std::string> names;
-  auto context = declaration.getDeclContext();
-  while (context != nullptr && !context->isTranslationUnit()) {
-    if (const auto *space = llvm::dyn_cast<clang::NamespaceDecl>(context)) {
-      if (!space->getName().empty())
-        names.push_back(space->getNameAsString());
+auto namespace_name(const clang::NamedDecl& declaration) -> String {
+    std::vector<std::string> names;
+    auto                     context = declaration.getDeclContext();
+    while (context != nullptr && ! context->isTranslationUnit()) {
+        if (const auto* space = llvm::dyn_cast<clang::NamespaceDecl>(context)) {
+            if (! space->getName().empty()) names.push_back(space->getNameAsString());
+        }
+        context = context->getParent();
     }
-    context = context->getParent();
-  }
-  std::string result;
-  for (auto item = names.rbegin(); item != names.rend(); ++item) {
-    if (!result.empty())
-      result.append("::");
-    result.append(*item);
-  }
-  return as_rstd(result);
+    std::string result;
+    for (auto item = names.rbegin(); item != names.rend(); ++item) {
+        if (! result.empty()) result.append("::");
+        result.append(*item);
+    }
+    return as_rstd(result);
 }
 
-auto declared_in_function(const clang::NamedDecl &declaration) -> bool {
-  auto context = declaration.getDeclContext();
-  while (context != nullptr && !context->isTranslationUnit()) {
-    if (context->isFunctionOrMethod())
-      return true;
-    context = context->getParent();
-  }
-  return false;
+auto declared_in_function(const clang::NamedDecl& declaration) -> bool {
+    auto context = declaration.getDeclContext();
+    while (context != nullptr && ! context->isTranslationUnit()) {
+        if (context->isFunctionOrMethod()) return true;
+        context = context->getParent();
+    }
+    return false;
 }
 
 class DocumentationVisitor {
 public:
-  DocumentationVisitor(clang::ASTContext &context, DocumentationUnit &unit)
-      : context_(&context), manager_(&context.getSourceManager()),
-        unit_(&unit) {}
+    DocumentationVisitor(clang::ASTContext& context, DocumentationUnit& unit)
+        : context_(&context), manager_(&context.getSourceManager()), unit_(&unit) {}
 
-  auto traverse(clang::DeclContext &context) -> void {
-    for (auto *declaration : context.decls())
-      traverse(declaration);
-  }
+    auto traverse(clang::DeclContext& context) -> void {
+        for (auto* declaration : context.decls()) traverse(declaration);
+    }
 
 private:
-  auto owner_facts(const clang::NamedDecl &declaration) -> DeclarationOwner {
-    auto found = owners_.find(&declaration);
-    if (found == owners_.end()) {
-      found = owners_
-                  .try_emplace(
-                      &declaration,
-                      DeclarationOwner{
-                          .semantic_identity =
-                              semantic_identity(declaration, *manager_),
-                          .named_module = named_module(declaration),
-                          .kind = declaration_kind(declaration)
-                                      .unwrap_or(DeclarationKind::Namespace),
-                          .access = declaration_access(declaration),
-                          .anonymous_record =
-                              llvm::isa<clang::RecordDecl>(declaration) &&
-                              llvm::cast<clang::RecordDecl>(declaration)
-                                  .isAnonymousStructOrUnion(),
-                      })
-                  .first;
-    }
-    return found->second.clone();
-  }
-
-  auto traverse(clang::Decl *declaration) -> void {
-    if (declaration == nullptr)
-      return;
-    if (auto *constraint = llvm::dyn_cast<clang::ConceptDecl>(declaration)) {
-      visit(*constraint);
-      return;
-    }
-    if (auto *template_declaration =
-            llvm::dyn_cast<clang::TemplateDecl>(declaration)) {
-      traverse(template_declaration->getTemplatedDecl());
-      return;
-    }
-    if (auto *named = llvm::dyn_cast<clang::NamedDecl>(declaration))
-      visit(*named);
-    if (auto *nested = llvm::dyn_cast<clang::DeclContext>(declaration))
-      traverse(*nested);
-  }
-
-  auto visit(clang::NamedDecl &declaration) -> void {
-    if (declaration.isImplicit() ||
-        llvm::isa<clang::ParmVarDecl>(declaration) ||
-        llvm::isa<clang::EnumConstantDecl>(declaration) ||
-        indices_.contains(&declaration)) {
-      return;
-    }
-    auto location = manager_->getExpansionLoc(declaration.getLocation());
-    if (location.isInvalid() || !manager_->isWrittenInMainFile(location))
-      return;
-    auto kind = declaration_kind(declaration);
-    if (kind.is_none() || declared_in_function(declaration))
-      return;
-    auto display_name = declaration.getNameAsString();
-    if (display_name.empty())
-      return;
-    auto name = as_rstd(display_name);
-    auto qualified_name = declaration.getQualifiedNameAsString();
-
-    auto parent = Option<usize>{};
-    auto owner = Option<DeclarationOwner>{};
-    auto record_ancestors = Vec<DeclarationOwner>::make();
-    const auto *parent_context = declaration.getDeclContext();
-    if (parent_context != nullptr) {
-      const auto *parent_decl =
-          llvm::dyn_cast<clang::NamedDecl>(parent_context);
-      if (parent_decl != nullptr) {
-        owner = Some(owner_facts(*parent_decl));
-        auto existing = indices_.find(parent_decl);
-        if (existing != indices_.end())
-          parent = Some(usize(existing->second));
-      }
-    }
-    for (auto *context = declaration.getDeclContext(); context != nullptr;
-         context = context->getParent()) {
-      if (const auto *record = llvm::dyn_cast<clang::RecordDecl>(context))
-        record_ancestors.push(owner_facts(*record));
+    auto owner_facts(const clang::NamedDecl& declaration) -> DeclarationOwner {
+        auto found = owners_.find(&declaration);
+        if (found == owners_.end()) {
+            found =
+                owners_
+                    .try_emplace(
+                        &declaration,
+                        DeclarationOwner {
+                            .semantic_identity = semantic_identity(declaration, *manager_),
+                            .named_module      = named_module(declaration),
+                            .kind =
+                                declaration_kind(declaration).unwrap_or(DeclarationKind::Namespace),
+                            .access           = declaration_access(declaration),
+                            .anonymous_record = llvm::isa<clang::RecordDecl>(declaration) &&
+                                                llvm::cast<clang::RecordDecl>(declaration)
+                                                    .isAnonymousStructOrUnion(),
+                        })
+                    .first;
+        }
+        return found->second.clone();
     }
 
-    auto comment = Option<DocumentationComment>{};
-    const auto *raw = context_->getRawCommentForAnyRedecl(&declaration);
-    if (raw != nullptr && raw->isDocumentation()) {
-      auto text = raw->getFormattedText(*manager_, context_->getDiagnostics());
-      comment = Some(DocumentationComment{
-          .kind = raw->isTrailingComment() ? DocumentationCommentKind::Inner
-                                           : DocumentationCommentKind::Outer,
-          .text = as_rstd(text),
-          .span = span_for(*manager_, raw->getSourceRange()),
-      });
+    auto traverse(clang::Decl* declaration) -> void {
+        if (declaration == nullptr) return;
+        if (auto* constraint = llvm::dyn_cast<clang::ConceptDecl>(declaration)) {
+            visit(*constraint);
+            return;
+        }
+        if (auto* template_declaration = llvm::dyn_cast<clang::TemplateDecl>(declaration)) {
+            traverse(template_declaration->getTemplatedDecl());
+            return;
+        }
+        if (auto* named = llvm::dyn_cast<clang::NamedDecl>(declaration)) visit(*named);
+        if (auto* nested = llvm::dyn_cast<clang::DeclContext>(declaration)) traverse(*nested);
     }
 
-    auto index = unit_->declarations.len();
-    auto signature = printed_declaration_text(declaration, *context_, false);
-    auto scope_signature =
-        printed_declaration_text(declaration, *context_, true);
-    auto source_scope = scope_declaration_text(declaration, *context_);
-    if (source_scope.is_some())
-      scope_signature = rstd::move(*source_scope);
-    unit_->declarations.push(DeclarationOutline{
-        .alias_target = alias_target(declaration, *context_),
-        .semantic_identity = semantic_identity(declaration, *manager_),
-        .publication_identity = publication_identity(declaration, *manager_),
-        .named_module = named_module(declaration),
-        .kind = *kind,
-        .name = name.clone(),
-        .qualified_name =
-            qualified_name.empty() ? rstd::move(name) : as_rstd(qualified_name),
-        .namespace_name = namespace_name(declaration),
-        .signature = rstd::move(signature),
-        .scope_signature = rstd::move(scope_signature),
-        .record_keyword = record_keyword(declaration),
-        .record_header = record_header(declaration, *context_),
-        .is_definition = declaration_definition(declaration),
-        .is_scope_declaration = is_scope_declaration(declaration),
-        .origin = declaration_origin(declaration, *context_),
-        .lexical_export = declaration.isInExportDeclContext(),
-        .exported_redeclaration = has_exported_redeclaration(declaration),
-        .access = declaration_access(declaration),
-        .parent = rstd::move(parent),
-        .owner = rstd::move(owner),
-        .record_ancestors = rstd::move(record_ancestors),
-        .comment = rstd::move(comment),
-        .spelling_span = span_for(*manager_, declaration.getSourceRange()),
-        .expansion_span =
-            span_for(*manager_, declaration.getSourceRange(), true),
-    });
-    indices_[&declaration] = index.to_primitive();
-  }
+    auto visit(clang::NamedDecl& declaration) -> void {
+        if (declaration.isImplicit() || llvm::isa<clang::ParmVarDecl>(declaration) ||
+            llvm::isa<clang::EnumConstantDecl>(declaration) || indices_.contains(&declaration)) {
+            return;
+        }
+        auto location = manager_->getExpansionLoc(declaration.getLocation());
+        if (location.isInvalid() || ! manager_->isWrittenInMainFile(location)) return;
+        auto kind = declaration_kind(declaration);
+        if (kind.is_none() || declared_in_function(declaration)) return;
+        auto display_name = declaration.getNameAsString();
+        if (display_name.empty()) return;
+        auto name           = as_rstd(display_name);
+        auto qualified_name = declaration.getQualifiedNameAsString();
 
-  clang::ASTContext *context_{};
-  clang::SourceManager *manager_{};
-  DocumentationUnit *unit_{};
-  llvm::DenseMap<const clang::NamedDecl *, size_t> indices_;
-  std::unordered_map<const clang::NamedDecl *, DeclarationOwner> owners_;
+        auto        parent           = Option<usize> {};
+        auto        owner            = Option<DeclarationOwner> {};
+        auto        record_ancestors = Vec<DeclarationOwner>::make();
+        const auto* parent_context   = declaration.getDeclContext();
+        if (parent_context != nullptr) {
+            const auto* parent_decl = llvm::dyn_cast<clang::NamedDecl>(parent_context);
+            if (parent_decl != nullptr) {
+                owner         = Some(owner_facts(*parent_decl));
+                auto existing = indices_.find(parent_decl);
+                if (existing != indices_.end()) parent = Some(usize(existing->second));
+            }
+        }
+        for (auto* context = declaration.getDeclContext(); context != nullptr;
+             context       = context->getParent()) {
+            if (const auto* record = llvm::dyn_cast<clang::RecordDecl>(context))
+                record_ancestors.push(owner_facts(*record));
+        }
+
+        auto        comment = Option<DocumentationComment> {};
+        const auto* raw     = context_->getRawCommentForAnyRedecl(&declaration);
+        if (raw != nullptr && raw->isDocumentation()) {
+            auto text = raw->getFormattedText(*manager_, context_->getDiagnostics());
+            comment   = Some(DocumentationComment {
+                .kind = raw->isTrailingComment() ? DocumentationCommentKind::Inner
+                                                 : DocumentationCommentKind::Outer,
+                .text = as_rstd(text),
+                .span = span_for(*manager_, raw->getSourceRange()),
+            });
+        }
+
+        auto index           = unit_->declarations.len();
+        auto signature       = printed_declaration_text(declaration, *context_, false);
+        auto scope_signature = printed_declaration_text(declaration, *context_, true);
+        auto source_scope    = scope_declaration_text(declaration, *context_);
+        if (source_scope.is_some()) scope_signature = rstd::move(*source_scope);
+        unit_->declarations.push(DeclarationOutline {
+            .alias_target         = alias_target(declaration, *context_),
+            .semantic_identity    = semantic_identity(declaration, *manager_),
+            .publication_identity = publication_identity(declaration, *manager_),
+            .named_module         = named_module(declaration),
+            .kind                 = *kind,
+            .name                 = name.clone(),
+            .qualified_name  = qualified_name.empty() ? rstd::move(name) : as_rstd(qualified_name),
+            .namespace_name  = namespace_name(declaration),
+            .signature       = rstd::move(signature),
+            .scope_signature = rstd::move(scope_signature),
+            .record_keyword  = record_keyword(declaration),
+            .record_header   = record_header(declaration, *context_),
+            .is_definition   = declaration_definition(declaration),
+            .is_scope_declaration   = is_scope_declaration(declaration),
+            .origin                 = declaration_origin(declaration, *context_),
+            .lexical_export         = declaration.isInExportDeclContext(),
+            .exported_redeclaration = has_exported_redeclaration(declaration),
+            .access                 = declaration_access(declaration),
+            .parent                 = rstd::move(parent),
+            .owner                  = rstd::move(owner),
+            .record_ancestors       = rstd::move(record_ancestors),
+            .comment                = rstd::move(comment),
+            .spelling_span          = span_for(*manager_, declaration.getSourceRange()),
+            .expansion_span         = span_for(*manager_, declaration.getSourceRange(), true),
+        });
+        indices_[&declaration] = index.to_primitive();
+    }
+
+    clang::ASTContext*                                            context_ {};
+    clang::SourceManager*                                         manager_ {};
+    DocumentationUnit*                                            unit_ {};
+    llvm::DenseMap<const clang::NamedDecl*, size_t>               indices_;
+    std::unordered_map<const clang::NamedDecl*, DeclarationOwner> owners_;
 };
 
 class DocumentationConsumer : public clang::ASTConsumer {
 public:
-  explicit DocumentationConsumer(DocumentationUnit &unit) : unit_(&unit) {}
+    explicit DocumentationConsumer(DocumentationUnit& unit): unit_(&unit) {}
 
-  void HandleTranslationUnit(clang::ASTContext &context) override {
-    if (const auto *module = context.getCurrentNamedModule()) {
-      unit_->logical_module = as_rstd(module->Name);
-      unit_->named_module = as_rstd(module->getPrimaryModuleInterfaceName());
-      switch (module->Kind) {
-      case clang::Module::ModuleInterfaceUnit:
-        unit_->kind = DocumentationUnitKind::PrimaryInterface;
-        break;
-      case clang::Module::ModulePartitionInterface:
-        unit_->kind = DocumentationUnitKind::InterfacePartition;
-        break;
-      case clang::Module::ModulePartitionImplementation:
-        unit_->kind = DocumentationUnitKind::ImplementationPartition;
-        break;
-      default:
-        unit_->kind = DocumentationUnitKind::Implementation;
-        break;
-      }
-      llvm::SmallVector<clang::Module *, 8> exports;
-      module->getExportedModules(exports);
-      for (const auto *exported : exports) {
-        if (!exported->isNamedModuleUnit())
-          continue;
-        unit_->reexports.push(DocumentationReexport{
-            .logical_module = as_rstd(exported->Name),
-            .named_module = as_rstd(exported->getPrimaryModuleInterfaceName()),
-            .is_partition = exported->isModulePartition(),
-            .span = DocumentationSpan{.path = unit_->source.clone()},
-        });
-      }
+    void HandleTranslationUnit(clang::ASTContext& context) override {
+        if (const auto* module = context.getCurrentNamedModule()) {
+            unit_->logical_module = as_rstd(module->Name);
+            unit_->named_module   = as_rstd(module->getPrimaryModuleInterfaceName());
+            switch (module->Kind) {
+            case clang::Module::ModuleInterfaceUnit:
+                unit_->kind = DocumentationUnitKind::PrimaryInterface;
+                break;
+            case clang::Module::ModulePartitionInterface:
+                unit_->kind = DocumentationUnitKind::InterfacePartition;
+                break;
+            case clang::Module::ModulePartitionImplementation:
+                unit_->kind = DocumentationUnitKind::ImplementationPartition;
+                break;
+            default: unit_->kind = DocumentationUnitKind::Implementation; break;
+            }
+            llvm::SmallVector<clang::Module*, 8> exports;
+            module->getExportedModules(exports);
+            for (const auto* exported : exports) {
+                if (! exported->isNamedModuleUnit()) continue;
+                unit_->reexports.push(DocumentationReexport {
+                    .logical_module = as_rstd(exported->Name),
+                    .named_module   = as_rstd(exported->getPrimaryModuleInterfaceName()),
+                    .is_partition   = exported->isModulePartition(),
+                    .span           = DocumentationSpan { .path = unit_->source.clone() },
+                });
+            }
+        }
+        DocumentationVisitor(context, *unit_).traverse(*context.getTranslationUnitDecl());
     }
-    DocumentationVisitor(context, *unit_)
-        .traverse(*context.getTranslationUnitDecl());
-  }
 
 private:
-  DocumentationUnit *unit_{};
+    DocumentationUnit* unit_ {};
 };
 
 class DocumentationAction : public clang::ASTFrontendAction {
 public:
-  explicit DocumentationAction(DocumentationUnit &unit) : unit_(&unit) {}
+    explicit DocumentationAction(DocumentationUnit& unit): unit_(&unit) {}
 
-  auto CreateASTConsumer(clang::CompilerInstance &, llvm::StringRef)
-      -> std::unique_ptr<clang::ASTConsumer> override {
-    return std::make_unique<DocumentationConsumer>(*unit_);
-  }
+    auto CreateASTConsumer(clang::CompilerInstance&, llvm::StringRef)
+        -> std::unique_ptr<clang::ASTConsumer> override {
+        return std::make_unique<DocumentationConsumer>(*unit_);
+    }
 
 private:
-  DocumentationUnit *unit_{};
+    DocumentationUnit* unit_ {};
 };
 
 class DocumentationDiagnostics : public clang::DiagnosticConsumer {
 public:
-  explicit DocumentationDiagnostics(DocumentationUnit &unit) : unit_(&unit) {}
+    explicit DocumentationDiagnostics(DocumentationUnit& unit): unit_(&unit) {}
 
-  void HandleDiagnostic(clang::DiagnosticsEngine::Level level,
-                        const clang::Diagnostic &information) override {
-    clang::DiagnosticConsumer::HandleDiagnostic(level, information);
-    if (level < clang::DiagnosticsEngine::Warning)
-      return;
-    llvm::SmallString<256> message;
-    information.FormatDiagnostic(message);
-    auto span = DocumentationSpan{};
-    if (information.hasSourceManager() && information.getLocation().isValid()) {
-      span = span_for(information.getSourceManager(),
-                      clang::SourceRange(information.getLocation()));
+    void HandleDiagnostic(clang::DiagnosticsEngine::Level level,
+                          const clang::Diagnostic&        information) override {
+        clang::DiagnosticConsumer::HandleDiagnostic(level, information);
+        if (level < clang::DiagnosticsEngine::Warning) return;
+        llvm::SmallString<256> message;
+        information.FormatDiagnostic(message);
+        auto span = DocumentationSpan {};
+        if (information.hasSourceManager() && information.getLocation().isValid()) {
+            span = span_for(information.getSourceManager(),
+                            clang::SourceRange(information.getLocation()));
+        }
+        unit_->diagnostics.push(DocumentationDiagnostic {
+            .severity = level >= clang::DiagnosticsEngine::Error ? DocumentationSeverity::Error
+                                                                 : DocumentationSeverity::Warning,
+            .code =
+                information.getDiags()
+                        ->getDiagnosticIDs()
+                        ->getWarningOptionForDiag(information.getID())
+                        .empty()
+                    ? String::make("clang"_str)
+                    : as_rstd(information.getDiags()->getDiagnosticIDs()->getWarningOptionForDiag(
+                          information.getID())),
+            .message = as_rstd(message),
+            .span    = rstd::move(span),
+        });
     }
-    unit_->diagnostics.push(DocumentationDiagnostic{
-        .severity = level >= clang::DiagnosticsEngine::Error
-                        ? DocumentationSeverity::Error
-                        : DocumentationSeverity::Warning,
-        .code =
-            information.getDiags()
-                    ->getDiagnosticIDs()
-                    ->getWarningOptionForDiag(information.getID())
-                    .empty()
-                ? String::make("clang"_str)
-                : as_rstd(information.getDiags()
-                              ->getDiagnosticIDs()
-                              ->getWarningOptionForDiag(information.getID())),
-        .message = as_rstd(message),
-        .span = rstd::move(span),
-    });
-  }
 
 private:
-  DocumentationUnit *unit_{};
+    DocumentationUnit* unit_ {};
 };
 
-auto extract(const ExtractionRequest &request)
-    -> Result<DocumentationUnit, String> {
-  auto source_contents = rstd::fs::read_to_string(request.source.as_path());
-  if (source_contents.is_err()) {
-    return failure<DocumentationUnit>(rstd::format(
-        "cannot read documentation source '{}': {}", request.source.as_path(),
-        rstd::move(source_contents).unwrap_err()));
-  }
-  auto unit = DocumentationUnit{
-      .source = request.source.clone(),
-      .source_contents = rstd::move(source_contents).unwrap(),
-      .logical_module = request.logical_module.clone(),
-  };
+auto extract(const ExtractionRequest& request) -> Result<DocumentationUnit, String> {
+    auto source_contents = rstd::fs::read_to_string(request.source.as_path());
+    if (source_contents.is_err()) {
+        return failure<DocumentationUnit>(rstd::format("cannot read documentation source '{}': {}",
+                                                       request.source.as_path(),
+                                                       rstd::move(source_contents).unwrap_err()));
+    }
+    auto unit = DocumentationUnit {
+        .source          = request.source.clone(),
+        .source_contents = rstd::move(source_contents).unwrap(),
+        .logical_module  = request.logical_module.clone(),
+    };
 
-  llvm::SmallString<256> old_working_directory;
-  auto current_error = llvm::sys::fs::current_path(old_working_directory);
-  if (current_error) {
-    return failure<DocumentationUnit>(
-        rstd::format("cannot read litodoc working directory: {}",
-                     as_rstd(current_error.message())));
-  }
-  auto changed = llvm::sys::fs::set_current_path(
-      as_std(request.working_directory.as_path().to_str().unwrap()));
-  if (changed) {
-    return failure<DocumentationUnit>(rstd::format(
-        "cannot enter documentation working directory '{}': {}",
-        request.working_directory.as_path(), as_rstd(changed.message())));
-  }
+    llvm::SmallString<256> old_working_directory;
+    auto                   current_error = llvm::sys::fs::current_path(old_working_directory);
+    if (current_error) {
+        return failure<DocumentationUnit>(rstd::format("cannot read litodoc working directory: {}",
+                                                       as_rstd(current_error.message())));
+    }
+    auto changed = llvm::sys::fs::set_current_path(
+        as_std(request.working_directory.as_path().to_str().unwrap()));
+    if (changed) {
+        return failure<DocumentationUnit>(
+            rstd::format("cannot enter documentation working directory '{}': {}",
+                         request.working_directory.as_path(),
+                         as_rstd(changed.message())));
+    }
 
-  auto adjusted = clang::tooling::getClangSyntaxOnlyAdjuster()(
-      request.arguments, as_std(request.source.as_path().to_str().unwrap()));
-  adjusted = clang::tooling::getClangStripOutputAdjuster()(
-      adjusted, as_std(request.source.as_path().to_str().unwrap()));
-  clang::FileSystemOptions file_system_options;
-  auto files = llvm::makeIntrusiveRefCnt<clang::FileManager>(
-      file_system_options, llvm::vfs::getRealFileSystem());
-  DocumentationDiagnostics diagnostics(unit);
-  clang::tooling::ToolInvocation invocation(
-      rstd::move(adjusted), std::make_unique<DocumentationAction>(unit),
-      files.get());
-  invocation.setDiagnosticConsumer(&diagnostics);
-  auto succeeded = invocation.run();
-  auto restored = llvm::sys::fs::set_current_path(old_working_directory);
-  if (restored) {
-    return failure<DocumentationUnit>(
-        rstd::format("cannot restore litodoc working directory: {}",
-                     as_rstd(restored.message())));
-  }
-  if (!succeeded) {
-    return failure<DocumentationUnit>(rstd::format(
-        "Clang AST extraction failed for '{}'", request.source.as_path()));
-  }
-  auto interface = unit.kind == DocumentationUnitKind::PrimaryInterface ||
-                   unit.kind == DocumentationUnitKind::InterfacePartition;
-  if (interface != request.is_interface ||
-      (unit.kind != DocumentationUnitKind::Ordinary &&
-       !request.logical_module.is_empty() &&
-       unit.logical_module.as_str() != request.logical_module.as_str()))
-    return failure<DocumentationUnit>(
-        "extraction request module facts disagree with Clang AST"_str);
-  for (const auto &declaration : unit.declarations) {
-    if (declaration.comment.is_some())
-      ++unit.documented;
-    else
-      ++unit.undocumented;
-  }
-  return Ok(rstd::move(unit));
+    auto adjusted = clang::tooling::getClangSyntaxOnlyAdjuster()(
+        request.arguments, as_std(request.source.as_path().to_str().unwrap()));
+    adjusted = clang::tooling::getClangStripOutputAdjuster()(
+        adjusted, as_std(request.source.as_path().to_str().unwrap()));
+    clang::FileSystemOptions file_system_options;
+    auto files = llvm::makeIntrusiveRefCnt<clang::FileManager>(file_system_options,
+                                                               llvm::vfs::getRealFileSystem());
+    DocumentationDiagnostics       diagnostics(unit);
+    clang::tooling::ToolInvocation invocation(
+        rstd::move(adjusted), std::make_unique<DocumentationAction>(unit), files.get());
+    invocation.setDiagnosticConsumer(&diagnostics);
+    auto succeeded = invocation.run();
+    auto restored  = llvm::sys::fs::set_current_path(old_working_directory);
+    if (restored) {
+        return failure<DocumentationUnit>(rstd::format(
+            "cannot restore litodoc working directory: {}", as_rstd(restored.message())));
+    }
+    if (! succeeded) {
+        return failure<DocumentationUnit>(
+            rstd::format("Clang AST extraction failed for '{}'", request.source.as_path()));
+    }
+    auto interface = unit.kind == DocumentationUnitKind::PrimaryInterface ||
+                     unit.kind == DocumentationUnitKind::InterfacePartition;
+    if (interface != request.is_interface ||
+        (unit.kind != DocumentationUnitKind::Ordinary && ! request.logical_module.is_empty() &&
+         unit.logical_module.as_str() != request.logical_module.as_str()))
+        return failure<DocumentationUnit>(
+            "extraction request module facts disagree with Clang AST"_str);
+    for (const auto& declaration : unit.declarations) {
+        if (declaration.comment.is_some())
+            ++unit.documented;
+        else
+            ++unit.undocumented;
+    }
+    return Ok(rstd::move(unit));
 }
 
-auto encode_span(const DocumentationSpan &span) -> llvm::json::Object {
-  return llvm::json::Object{
-      {"path", as_std(span.path.as_path().to_str().unwrap_or(""_str))},
-      {"begin_line", static_cast<int64_t>(span.begin_line.to_primitive())},
-      {"begin_column", static_cast<int64_t>(span.begin_column.to_primitive())},
-      {"end_line", static_cast<int64_t>(span.end_line.to_primitive())},
-      {"end_column", static_cast<int64_t>(span.end_column.to_primitive())},
-  };
+auto encode_span(const DocumentationSpan& span) -> llvm::json::Object {
+    return llvm::json::Object {
+        { "path", as_std(span.path.as_path().to_str().unwrap_or(""_str)) },
+        { "begin_line", static_cast<int64_t>(span.begin_line.to_primitive()) },
+        { "begin_column", static_cast<int64_t>(span.begin_column.to_primitive()) },
+        { "end_line", static_cast<int64_t>(span.end_line.to_primitive()) },
+        { "end_column", static_cast<int64_t>(span.end_column.to_primitive()) },
+    };
 }
 
-auto encode_declaration_references(const DeclarationText &declaration)
-    -> llvm::json::Array {
-  auto result = llvm::json::Array{};
-  for (const auto &reference : declaration.references) {
-    result.push_back(llvm::json::Object{
-        {"begin", static_cast<int64_t>(reference.begin.to_primitive())},
-        {"end", static_cast<int64_t>(reference.end.to_primitive())},
-        {"semantic_identity", as_std(reference.semantic_identity.as_str())},
-        {"kind", reference.kind == DeclarationReferenceKind::Concept ? "concept"
-                                                                     : "type"},
-    });
-  }
-  return result;
+auto encode_declaration_references(const DeclarationText& declaration) -> llvm::json::Array {
+    auto result = llvm::json::Array {};
+    for (const auto& reference : declaration.references) {
+        result.push_back(llvm::json::Object {
+            { "begin", static_cast<int64_t>(reference.begin.to_primitive()) },
+            { "end", static_cast<int64_t>(reference.end.to_primitive()) },
+            { "semantic_identity", as_std(reference.semantic_identity.as_str()) },
+            { "kind", reference.kind == DeclarationReferenceKind::Concept ? "concept" : "type" },
+        });
+    }
+    return result;
 }
 
 auto access_name(DeclarationAccess access) -> llvm::StringRef {
-  switch (access) {
-  case DeclarationAccess::Public:
-    return "public";
-  case DeclarationAccess::Protected:
-    return "protected";
-  case DeclarationAccess::Private:
-    return "private";
-  }
-  llvm_unreachable("unknown declaration access");
-}
-
-auto encode_owner(const DeclarationOwner &owner) -> llvm::json::Object {
-  return llvm::json::Object{
-      {"semantic_identity", as_std(owner.semantic_identity.as_str())},
-      {"named_module", as_std(owner.named_module.as_str())},
-      {"kind", as_std(declaration_kind_name(owner.kind))},
-      {"access", access_name(owner.access)},
-      {"anonymous_record", owner.anonymous_record},
-  };
-}
-
-auto encode_response(const ExtractionRequest &request,
-                     const DocumentationUnit &unit) -> llvm::json::Value {
-  auto declarations = llvm::json::Array{};
-  for (const auto &declaration : unit.declarations) {
-    auto object = llvm::json::Object{
-        {"semantic_identity", as_std(declaration.semantic_identity.as_str())},
-        {"publication_identity",
-         as_std(declaration.publication_identity.as_str())},
-        {"named_module", as_std(declaration.named_module.as_str())},
-        {"kind", as_std(declaration_kind_name(declaration.kind))},
-        {"name", as_std(declaration.name.as_str())},
-        {"qualified_name", as_std(declaration.qualified_name.as_str())},
-        {"namespace", as_std(declaration.namespace_name.as_str())},
-        {"signature", as_std(declaration.signature.as_str())},
-        {"scope_signature", as_std(declaration.scope_signature.as_str())},
-        {"signature_references",
-         encode_declaration_references(declaration.signature)},
-        {"scope_signature_references",
-         encode_declaration_references(declaration.scope_signature)},
-        {"is_definition", declaration.is_definition},
-        {"is_scope_declaration", declaration.is_scope_declaration},
-        {"origin", as_std(declaration_origin_name(declaration.origin))},
-        {"lexical_export", declaration.lexical_export},
-        {"exported_redeclaration", declaration.exported_redeclaration},
-        {"access", access_name(declaration.access)},
-        {"spelling_span", encode_span(declaration.spelling_span)},
-        {"expansion_span", encode_span(declaration.expansion_span)},
-    };
-    if (declaration.parent.is_some())
-      object["parent"] =
-          static_cast<int64_t>(declaration.parent->to_primitive());
-    else
-      object["parent"] = nullptr;
-    object["owner"] = declaration.owner.is_some()
-                          ? llvm::json::Value(encode_owner(*declaration.owner))
-                          : llvm::json::Value(nullptr);
-    auto ancestors = llvm::json::Array{};
-    for (const auto &ancestor : declaration.record_ancestors)
-      ancestors.push_back(encode_owner(ancestor));
-    object["record_ancestors"] = rstd::move(ancestors);
-    if (declaration.record_keyword.is_some())
-      object["record_keyword"] = as_std(declaration.record_keyword->as_str());
-    else
-      object["record_keyword"] = nullptr;
-    if (declaration.alias_target.is_some())
-      object["alias_target"] = as_std(declaration.alias_target->as_str());
-    if (declaration.record_header.is_some())
-      object["record_header"] = as_std(declaration.record_header->as_str());
-    else
-      object["record_header"] = nullptr;
-    if (declaration.comment.is_some()) {
-      object["comment"] = llvm::json::Object{
-          {"kind", declaration.comment->kind == DocumentationCommentKind::Inner
-                       ? "inner"
-                       : "outer"},
-          {"text", as_std(declaration.comment->text.as_str())},
-          {"span", encode_span(declaration.comment->span)},
-      };
-    } else {
-      object["comment"] = nullptr;
+    switch (access) {
+    case DeclarationAccess::Public: return "public";
+    case DeclarationAccess::Protected: return "protected";
+    case DeclarationAccess::Private: return "private";
     }
-    declarations.push_back(rstd::move(object));
-  }
-  auto reexports = llvm::json::Array{};
-  for (const auto &reexport : unit.reexports) {
-    reexports.push_back(llvm::json::Object{
-        {"module", as_std(reexport.logical_module.as_str())},
-        {"named_module", as_std(reexport.named_module.as_str())},
-        {"is_partition", reexport.is_partition},
-        {"span", encode_span(reexport.span)},
-    });
-  }
-  auto diagnostics = llvm::json::Array{};
-  for (const auto &diagnostic : unit.diagnostics) {
-    diagnostics.push_back(llvm::json::Object{
-        {"severity", diagnostic.severity == DocumentationSeverity::Error
-                         ? "error"
-                         : "warning"},
-        {"code", as_std(diagnostic.code.as_str())},
-        {"message", as_std(diagnostic.message.as_str())},
-        {"span", encode_span(diagnostic.span)},
-    });
-  }
-  return llvm::json::Object{
-      {"format", "litodoc-extract-result"},
-      {"version", 2},
-      {"request_id", as_std(request.request_id.as_str())},
-      {"producer",
-       llvm::json::Object{
-           {"litodoc", as_std(litodoc_version())},
-           {"clang", clang::getClangFullVersion()},
-       }},
-      {"package", as_std(request.package_name.as_str())},
-      {"package_identity", as_std(request.package_identity.as_str())},
-      {"target", as_std(request.target_name.as_str())},
-      {"unit_identity", as_std(request.unit_identity.as_str())},
-      {"source", as_std(unit.source.as_path().to_str().unwrap())},
-      {"source_contents", as_std(unit.source_contents.as_str())},
-      {"logical_module", as_std(unit.logical_module.as_str())},
-      {"named_module", as_std(unit.named_module.as_str())},
-      {"unit_kind", as_std(documentation_unit_kind_name(unit.kind))},
-      {"declarations", rstd::move(declarations)},
-      {"reexports", rstd::move(reexports)},
-      {"diagnostics", rstd::move(diagnostics)},
-      {"documented", static_cast<int64_t>(unit.documented.to_primitive())},
-      {"undocumented", static_cast<int64_t>(unit.undocumented.to_primitive())},
-      {"unsupported", static_cast<int64_t>(unit.unsupported.to_primitive())},
-  };
+    llvm_unreachable("unknown declaration access");
 }
 
-auto write_json(ref<rstd::path::Path> path, llvm::json::Value value,
-                ref<str> context) -> Result<empty, String> {
-  auto parent = path.parent();
-  if (parent.is_none())
-    return failure<empty>(rstd::format("{} '{}' has no parent", context, path));
-  auto created = rstd::fs::create_dir_all(*parent);
-  if (created.is_err()) {
-    return failure<empty>(rstd::format("cannot create {} directory '{}': {}",
-                                       context, *parent,
-                                       rstd::move(created).unwrap_err()));
-  }
-  auto text = json_text(rstd::move(value));
-  auto written = rstd::fs::write_atomic(path, text.as_str().as_bytes());
-  if (written.is_err()) {
-    return failure<empty>(rstd::format("cannot write {} '{}': {}", context,
-                                       path, rstd::move(written).unwrap_err()));
-  }
-  return Ok(empty{});
+auto encode_owner(const DeclarationOwner& owner) -> llvm::json::Object {
+    return llvm::json::Object {
+        { "semantic_identity", as_std(owner.semantic_identity.as_str()) },
+        { "named_module", as_std(owner.named_module.as_str()) },
+        { "kind", as_std(declaration_kind_name(owner.kind)) },
+        { "access", access_name(owner.access) },
+        { "anonymous_record", owner.anonymous_record },
+    };
 }
 
-auto execute_extract(ref<rstd::path::Path> request_path,
-                     ref<rstd::path::Path> response_path)
+auto encode_response(const ExtractionRequest& request, const DocumentationUnit& unit)
+    -> llvm::json::Value {
+    auto declarations = llvm::json::Array {};
+    for (const auto& declaration : unit.declarations) {
+        auto object = llvm::json::Object {
+            { "semantic_identity", as_std(declaration.semantic_identity.as_str()) },
+            { "publication_identity", as_std(declaration.publication_identity.as_str()) },
+            { "named_module", as_std(declaration.named_module.as_str()) },
+            { "kind", as_std(declaration_kind_name(declaration.kind)) },
+            { "name", as_std(declaration.name.as_str()) },
+            { "qualified_name", as_std(declaration.qualified_name.as_str()) },
+            { "namespace", as_std(declaration.namespace_name.as_str()) },
+            { "signature", as_std(declaration.signature.as_str()) },
+            { "scope_signature", as_std(declaration.scope_signature.as_str()) },
+            { "signature_references", encode_declaration_references(declaration.signature) },
+            { "scope_signature_references",
+              encode_declaration_references(declaration.scope_signature) },
+            { "is_definition", declaration.is_definition },
+            { "is_scope_declaration", declaration.is_scope_declaration },
+            { "origin", as_std(declaration_origin_name(declaration.origin)) },
+            { "lexical_export", declaration.lexical_export },
+            { "exported_redeclaration", declaration.exported_redeclaration },
+            { "access", access_name(declaration.access) },
+            { "spelling_span", encode_span(declaration.spelling_span) },
+            { "expansion_span", encode_span(declaration.expansion_span) },
+        };
+        if (declaration.parent.is_some())
+            object["parent"] = static_cast<int64_t>(declaration.parent->to_primitive());
+        else
+            object["parent"] = nullptr;
+        object["owner"] = declaration.owner.is_some()
+                              ? llvm::json::Value(encode_owner(*declaration.owner))
+                              : llvm::json::Value(nullptr);
+        auto ancestors  = llvm::json::Array {};
+        for (const auto& ancestor : declaration.record_ancestors)
+            ancestors.push_back(encode_owner(ancestor));
+        object["record_ancestors"] = rstd::move(ancestors);
+        if (declaration.record_keyword.is_some())
+            object["record_keyword"] = as_std(declaration.record_keyword->as_str());
+        else
+            object["record_keyword"] = nullptr;
+        if (declaration.alias_target.is_some())
+            object["alias_target"] = as_std(declaration.alias_target->as_str());
+        if (declaration.record_header.is_some())
+            object["record_header"] = as_std(declaration.record_header->as_str());
+        else
+            object["record_header"] = nullptr;
+        if (declaration.comment.is_some()) {
+            object["comment"] = llvm::json::Object {
+                { "kind",
+                  declaration.comment->kind == DocumentationCommentKind::Inner ? "inner"
+                                                                               : "outer" },
+                { "text", as_std(declaration.comment->text.as_str()) },
+                { "span", encode_span(declaration.comment->span) },
+            };
+        } else {
+            object["comment"] = nullptr;
+        }
+        declarations.push_back(rstd::move(object));
+    }
+    auto reexports = llvm::json::Array {};
+    for (const auto& reexport : unit.reexports) {
+        reexports.push_back(llvm::json::Object {
+            { "module", as_std(reexport.logical_module.as_str()) },
+            { "named_module", as_std(reexport.named_module.as_str()) },
+            { "is_partition", reexport.is_partition },
+            { "span", encode_span(reexport.span) },
+        });
+    }
+    auto diagnostics = llvm::json::Array {};
+    for (const auto& diagnostic : unit.diagnostics) {
+        diagnostics.push_back(llvm::json::Object {
+            { "severity",
+              diagnostic.severity == DocumentationSeverity::Error ? "error" : "warning" },
+            { "code", as_std(diagnostic.code.as_str()) },
+            { "message", as_std(diagnostic.message.as_str()) },
+            { "span", encode_span(diagnostic.span) },
+        });
+    }
+    return llvm::json::Object {
+        { "format", "litodoc-extract-result" },
+        { "version", 2 },
+        { "request_id", as_std(request.request_id.as_str()) },
+        { "producer",
+          llvm::json::Object {
+              { "litodoc", as_std(litodoc_version()) },
+              { "clang", clang::getClangFullVersion() },
+          } },
+        { "package", as_std(request.package_name.as_str()) },
+        { "package_identity", as_std(request.package_identity.as_str()) },
+        { "target", as_std(request.target_name.as_str()) },
+        { "unit_identity", as_std(request.unit_identity.as_str()) },
+        { "source", as_std(unit.source.as_path().to_str().unwrap()) },
+        { "source_contents", as_std(unit.source_contents.as_str()) },
+        { "logical_module", as_std(unit.logical_module.as_str()) },
+        { "named_module", as_std(unit.named_module.as_str()) },
+        { "unit_kind", as_std(documentation_unit_kind_name(unit.kind)) },
+        { "declarations", rstd::move(declarations) },
+        { "reexports", rstd::move(reexports) },
+        { "diagnostics", rstd::move(diagnostics) },
+        { "documented", static_cast<int64_t>(unit.documented.to_primitive()) },
+        { "undocumented", static_cast<int64_t>(unit.undocumented.to_primitive()) },
+        { "unsupported", static_cast<int64_t>(unit.unsupported.to_primitive()) },
+    };
+}
+
+auto write_json(ref<rstd::path::Path> path, llvm::json::Value value, ref<str> context)
     -> Result<empty, String> {
-  auto document = rstd_try(read_json(request_path, "extract request"_str));
-  auto request = rstd_try(decode_extraction_request(document));
-  auto unit = rstd_try(extract(request));
-  return write_json(response_path, encode_response(request, unit),
-                    "extract response"_str);
+    auto parent = path.parent();
+    if (parent.is_none())
+        return failure<empty>(rstd::format("{} '{}' has no parent", context, path));
+    auto created = rstd::fs::create_dir_all(*parent);
+    if (created.is_err()) {
+        return failure<empty>(rstd::format("cannot create {} directory '{}': {}",
+                                           context,
+                                           *parent,
+                                           rstd::move(created).unwrap_err()));
+    }
+    auto text    = json_text(rstd::move(value));
+    auto written = rstd::fs::write_atomic(path, text.as_str().as_bytes());
+    if (written.is_err()) {
+        return failure<empty>(rstd::format(
+            "cannot write {} '{}': {}", context, path, rstd::move(written).unwrap_err()));
+    }
+    return Ok(empty {});
 }
 
-auto decode_span(const llvm::json::Object &object, ref<str> context)
+auto execute_extract(ref<rstd::path::Path> request_path, ref<rstd::path::Path> response_path)
+    -> Result<empty, String> {
+    auto document = rstd_try(read_json(request_path, "extract request"_str));
+    auto request  = rstd_try(decode_extraction_request(document));
+    auto unit     = rstd_try(extract(request));
+    return write_json(response_path, encode_response(request, unit), "extract response"_str);
+}
+
+auto decode_span(const llvm::json::Object& object, ref<str> context)
     -> Result<DocumentationSpan, String> {
-  return Ok(DocumentationSpan{
-      .path = PathBuf::from(rstd_try(required_string(object, "path", context))),
-      .begin_line = rstd_try(required_integer(object, "begin_line", context)),
-      .begin_column =
-          rstd_try(required_integer(object, "begin_column", context)),
-      .end_line = rstd_try(required_integer(object, "end_line", context)),
-      .end_column = rstd_try(required_integer(object, "end_column", context)),
-  });
+    return Ok(DocumentationSpan {
+        .path         = PathBuf::from(rstd_try(required_string(object, "path", context))),
+        .begin_line   = rstd_try(required_integer(object, "begin_line", context)),
+        .begin_column = rstd_try(required_integer(object, "begin_column", context)),
+        .end_line     = rstd_try(required_integer(object, "end_line", context)),
+        .end_column   = rstd_try(required_integer(object, "end_column", context)),
+    });
 }
 
 auto decode_kind(llvm::StringRef value) -> Option<DeclarationKind> {
-  if (value == "module")
-    return Some(DeclarationKind::Module);
-  if (value == "namespace")
-    return Some(DeclarationKind::Namespace);
-  if (value == "record")
-    return Some(DeclarationKind::Record);
-  if (value == "enum")
-    return Some(DeclarationKind::Enum);
-  if (value == "concept")
-    return Some(DeclarationKind::Concept);
-  if (value == "alias")
-    return Some(DeclarationKind::Alias);
-  if (value == "function")
-    return Some(DeclarationKind::Function);
-  if (value == "variable")
-    return Some(DeclarationKind::Variable);
-  if (value == "field")
-    return Some(DeclarationKind::Field);
-  return None();
+    if (value == "module") return Some(DeclarationKind::Module);
+    if (value == "namespace") return Some(DeclarationKind::Namespace);
+    if (value == "record") return Some(DeclarationKind::Record);
+    if (value == "enum") return Some(DeclarationKind::Enum);
+    if (value == "concept") return Some(DeclarationKind::Concept);
+    if (value == "alias") return Some(DeclarationKind::Alias);
+    if (value == "function") return Some(DeclarationKind::Function);
+    if (value == "variable") return Some(DeclarationKind::Variable);
+    if (value == "field") return Some(DeclarationKind::Field);
+    return None();
 }
 
 auto decode_access(llvm::StringRef value) -> Option<DeclarationAccess> {
-  if (value == "public")
-    return Some(DeclarationAccess::Public);
-  if (value == "protected")
-    return Some(DeclarationAccess::Protected);
-  if (value == "private")
-    return Some(DeclarationAccess::Private);
-  return None();
+    if (value == "public") return Some(DeclarationAccess::Public);
+    if (value == "protected") return Some(DeclarationAccess::Protected);
+    if (value == "private") return Some(DeclarationAccess::Private);
+    return None();
 }
 
 auto decode_unit_kind(ref<str> name) -> Result<DocumentationUnitKind, String> {
-  for (auto kind : {DocumentationUnitKind::Ordinary,
-                    DocumentationUnitKind::PrimaryInterface,
-                    DocumentationUnitKind::InterfacePartition,
-                    DocumentationUnitKind::Implementation,
-                    DocumentationUnitKind::ImplementationPartition})
-    if (name == documentation_unit_kind_name(kind))
-      return Ok(kind);
-  return failure<DocumentationUnitKind>(
-      rstd::format("unsupported documentation unit kind '{}'", name));
+    for (auto kind : { DocumentationUnitKind::Ordinary,
+                       DocumentationUnitKind::PrimaryInterface,
+                       DocumentationUnitKind::InterfacePartition,
+                       DocumentationUnitKind::Implementation,
+                       DocumentationUnitKind::ImplementationPartition })
+        if (name == documentation_unit_kind_name(kind)) return Ok(kind);
+    return failure<DocumentationUnitKind>(
+        rstd::format("unsupported documentation unit kind '{}'", name));
 }
 
 auto decode_origin(ref<str> name) -> Result<DeclarationOrigin, String> {
-  for (auto origin :
-       {DeclarationOrigin::Ordinary, DeclarationOrigin::Interface,
-        DeclarationOrigin::Implementation, DeclarationOrigin::GlobalFragment,
-        DeclarationOrigin::PrivateFragment})
-    if (name == declaration_origin_name(origin))
-      return Ok(origin);
-  return failure<DeclarationOrigin>(
-      rstd::format("unsupported declaration origin '{}'", name));
+    for (auto origin : { DeclarationOrigin::Ordinary,
+                         DeclarationOrigin::Interface,
+                         DeclarationOrigin::Implementation,
+                         DeclarationOrigin::GlobalFragment,
+                         DeclarationOrigin::PrivateFragment })
+        if (name == declaration_origin_name(origin)) return Ok(origin);
+    return failure<DeclarationOrigin>(rstd::format("unsupported declaration origin '{}'", name));
 }
 
-auto decode_owner(const llvm::json::Object &object)
-    -> Result<DeclarationOwner, String> {
-  auto identity = rstd_try(
-      required_string(object, "semantic_identity", "declaration owner"_str));
-  auto kind = decode_kind(
-      as_std(rstd_try(required_string(object, "kind", "declaration owner"_str))
-                 .as_str()));
-  auto access = decode_access(as_std(
-      rstd_try(required_string(object, "access", "declaration owner"_str))
-          .as_str()));
-  if (identity.is_empty() || kind.is_none() || access.is_none())
-    return failure<DeclarationOwner>("invalid declaration owner facts"_str);
-  return Ok(DeclarationOwner{
-      .semantic_identity = rstd::move(identity),
-      .named_module = rstd_try(required_string(object, "named_module",
-                                               "declaration owner"_str, true)),
-      .kind = *kind,
-      .access = *access,
-      .anonymous_record = rstd_try(
-          required_bool(object, "anonymous_record", "declaration owner"_str)),
-  });
-}
-
-auto decode_declaration_text(const llvm::json::Object &object,
-                             llvm::StringRef text_name,
-                             llvm::StringRef references_name, ref<str> context)
-    -> Result<DeclarationText, String> {
-  auto result =
-      DeclarationText{rstd_try(required_string(object, text_name, context))};
-  const auto *references = object.getArray(references_name);
-  if (references == nullptr)
-    return Ok(rstd::move(result));
-  for (const auto &item : *references) {
-    auto reference = rstd_try(json_object(item, context));
-    auto begin = rstd_try(required_integer(*reference, "begin", context));
-    auto end = rstd_try(required_integer(*reference, "end", context));
-    auto identity =
-        rstd_try(required_string(*reference, "semantic_identity", context));
-    auto kind = rstd_try(required_string(*reference, "kind", context));
-    if (kind.as_str() != "type"_str && kind.as_str() != "concept"_str)
-      return failure<DeclarationText>(rstd::format(
-          "{} has unsupported reference kind '{}'", context, kind.as_str()));
-    result.references.push(DeclarationReference{
-        .begin = begin,
-        .end = end,
+auto decode_owner(const llvm::json::Object& object) -> Result<DeclarationOwner, String> {
+    auto identity = rstd_try(required_string(object, "semantic_identity", "declaration owner"_str));
+    auto kind     = decode_kind(
+        as_std(rstd_try(required_string(object, "kind", "declaration owner"_str)).as_str()));
+    auto access = decode_access(
+        as_std(rstd_try(required_string(object, "access", "declaration owner"_str)).as_str()));
+    if (identity.is_empty() || kind.is_none() || access.is_none())
+        return failure<DeclarationOwner>("invalid declaration owner facts"_str);
+    return Ok(DeclarationOwner {
         .semantic_identity = rstd::move(identity),
-        .kind = kind.as_str() == "concept"_str
-                    ? DeclarationReferenceKind::Concept
-                    : DeclarationReferenceKind::Type,
+        .named_module =
+            rstd_try(required_string(object, "named_module", "declaration owner"_str, true)),
+        .kind   = *kind,
+        .access = *access,
+        .anonymous_record =
+            rstd_try(required_bool(object, "anonymous_record", "declaration owner"_str)),
     });
-  }
-  auto valid = result.validate(context);
-  if (valid.is_err())
-    return failure<DeclarationText>(rstd::move(valid).unwrap_err());
-  return Ok(rstd::move(result));
+}
+
+auto decode_declaration_text(const llvm::json::Object& object,
+                             llvm::StringRef           text_name,
+                             llvm::StringRef           references_name,
+                             ref<str>                  context) -> Result<DeclarationText, String> {
+    auto        result = DeclarationText { rstd_try(required_string(object, text_name, context)) };
+    const auto* references = object.getArray(references_name);
+    if (references == nullptr) return Ok(rstd::move(result));
+    for (const auto& item : *references) {
+        auto reference = rstd_try(json_object(item, context));
+        auto begin     = rstd_try(required_integer(*reference, "begin", context));
+        auto end       = rstd_try(required_integer(*reference, "end", context));
+        auto identity  = rstd_try(required_string(*reference, "semantic_identity", context));
+        auto kind      = rstd_try(required_string(*reference, "kind", context));
+        if (kind.as_str() != "type"_str && kind.as_str() != "concept"_str)
+            return failure<DeclarationText>(
+                rstd::format("{} has unsupported reference kind '{}'", context, kind.as_str()));
+        result.references.push(DeclarationReference {
+            .begin             = begin,
+            .end               = end,
+            .semantic_identity = rstd::move(identity),
+            .kind              = kind.as_str() == "concept"_str ? DeclarationReferenceKind::Concept
+                                                                : DeclarationReferenceKind::Type,
+        });
+    }
+    auto valid = result.validate(context);
+    if (valid.is_err()) return failure<DeclarationText>(rstd::move(valid).unwrap_err());
+    return Ok(rstd::move(result));
 }
 
 auto decode_unit(ref<rstd::path::Path> response_path, ref<str> expected_digest)
     -> Result<DocumentationUnit, String> {
-  auto value = rstd_try(
-      read_json(response_path, expected_digest, "extract response"_str));
-  auto root = rstd_try(json_object(value, "extract response"_str));
-  rstd_try(validate_header(*root, "litodoc-extract-result", 2,
-                           "extract response"_str));
-  auto declarations =
-      rstd_try(required_array(*root, "declarations", "extract response"_str));
-  auto reexports =
-      rstd_try(required_array(*root, "reexports", "extract response"_str));
-  auto diagnostics =
-      rstd_try(required_array(*root, "diagnostics", "extract response"_str));
-  auto unit = DocumentationUnit{
-      .source = PathBuf::from(
-          rstd_try(required_string(*root, "source", "extract response"_str))),
-      .source_contents = rstd_try(
-          required_string(*root, "source_contents", "extract response"_str)),
-      .logical_module = rstd_try(optional_string(*root, "logical_module",
-                                                 "extract response"_str))
-                            .unwrap_or(String::make()),
-      .named_module = rstd_try(
-          required_string(*root, "named_module", "extract response"_str, true)),
-      .kind = rstd_try(decode_unit_kind(
-          rstd_try(required_string(*root, "unit_kind", "extract response"_str))
-              .as_str())),
-      .documented = rstd_try(
-          required_integer(*root, "documented", "extract response"_str)),
-      .undocumented = rstd_try(
-          required_integer(*root, "undocumented", "extract response"_str)),
-      .unsupported = rstd_try(
-          required_integer(*root, "unsupported", "extract response"_str)),
-  };
-  for (const auto &item : *declarations) {
-    auto object =
-        rstd_try(json_object(item, "extract response declaration"_str));
-    auto kind_text = rstd_try(
-        required_string(*object, "kind", "extract response declaration"_str));
-    auto access_text = rstd_try(
-        required_string(*object, "access", "extract response declaration"_str));
-    auto kind = decode_kind(as_std(kind_text.as_str()));
-    auto access = decode_access(as_std(access_text.as_str()));
-    if (kind.is_none() || access.is_none())
-      return failure<DocumentationUnit>(
-          "extract response declaration has unsupported kind or access"_str);
-    auto spelling_span = rstd_try(required_object(
-        *object, "spelling_span", "extract response declaration"_str));
-    auto expansion_span = rstd_try(required_object(
-        *object, "expansion_span", "extract response declaration"_str));
-    auto parent = Option<usize>{};
-    const auto *parent_json = object->get("parent");
-    if (parent_json == nullptr)
-      return failure<DocumentationUnit>(
-          "extract response declaration has no parent field"_str);
-    if (parent_json->kind() != llvm::json::Value::Null) {
-      auto value = parent_json->getAsInteger();
-      if (!value || *value < 0)
-        return failure<DocumentationUnit>(
-            "extract response declaration parent is invalid"_str);
-      parent = Some(usize(static_cast<size_t>(*value)));
+    auto value = rstd_try(read_json(response_path, expected_digest, "extract response"_str));
+    auto root  = rstd_try(json_object(value, "extract response"_str));
+    rstd_try(validate_header(*root, "litodoc-extract-result", 2, "extract response"_str));
+    auto declarations = rstd_try(required_array(*root, "declarations", "extract response"_str));
+    auto reexports    = rstd_try(required_array(*root, "reexports", "extract response"_str));
+    auto diagnostics  = rstd_try(required_array(*root, "diagnostics", "extract response"_str));
+    auto unit         = DocumentationUnit {
+        .source = PathBuf::from(rstd_try(required_string(*root, "source", "extract response"_str))),
+        .source_contents =
+            rstd_try(required_string(*root, "source_contents", "extract response"_str)),
+        .logical_module = rstd_try(optional_string(*root, "logical_module", "extract response"_str))
+                              .unwrap_or(String::make()),
+        .named_module =
+            rstd_try(required_string(*root, "named_module", "extract response"_str, true)),
+        .kind         = rstd_try(decode_unit_kind(
+            rstd_try(required_string(*root, "unit_kind", "extract response"_str)).as_str())),
+        .documented   = rstd_try(required_integer(*root, "documented", "extract response"_str)),
+        .undocumented = rstd_try(required_integer(*root, "undocumented", "extract response"_str)),
+        .unsupported  = rstd_try(required_integer(*root, "unsupported", "extract response"_str)),
+    };
+    for (const auto& item : *declarations) {
+        auto object = rstd_try(json_object(item, "extract response declaration"_str));
+        auto kind_text =
+            rstd_try(required_string(*object, "kind", "extract response declaration"_str));
+        auto access_text =
+            rstd_try(required_string(*object, "access", "extract response declaration"_str));
+        auto kind   = decode_kind(as_std(kind_text.as_str()));
+        auto access = decode_access(as_std(access_text.as_str()));
+        if (kind.is_none() || access.is_none())
+            return failure<DocumentationUnit>(
+                "extract response declaration has unsupported kind or access"_str);
+        auto spelling_span =
+            rstd_try(required_object(*object, "spelling_span", "extract response declaration"_str));
+        auto expansion_span = rstd_try(
+            required_object(*object, "expansion_span", "extract response declaration"_str));
+        auto        parent      = Option<usize> {};
+        const auto* parent_json = object->get("parent");
+        if (parent_json == nullptr)
+            return failure<DocumentationUnit>(
+                "extract response declaration has no parent field"_str);
+        if (parent_json->kind() != llvm::json::Value::Null) {
+            auto value = parent_json->getAsInteger();
+            if (! value || *value < 0)
+                return failure<DocumentationUnit>(
+                    "extract response declaration parent is invalid"_str);
+            parent = Some(usize(static_cast<size_t>(*value)));
+        }
+        auto        comment    = Option<DocumentationComment> {};
+        auto        owner      = Option<DeclarationOwner> {};
+        const auto* owner_json = object->get("owner");
+        if (owner_json == nullptr)
+            return failure<DocumentationUnit>(
+                "extract response declaration has no owner field"_str);
+        if (owner_json->kind() != llvm::json::Value::Null) {
+            auto owner_object = rstd_try(json_object(*owner_json, "declaration owner"_str));
+            owner             = Some(rstd_try(decode_owner(*owner_object)));
+        }
+        auto ancestors = Vec<DeclarationOwner>::make();
+        for (const auto& ancestor :
+             *rstd_try(required_array(*object, "record_ancestors", "declaration owner"_str))) {
+            auto ancestor_object = rstd_try(json_object(ancestor, "declaration owner"_str));
+            auto decoded         = rstd_try(decode_owner(*ancestor_object));
+            if (decoded.kind != DeclarationKind::Record)
+                return failure<DocumentationUnit>("non-record ancestor in extraction response"_str);
+            ancestors.push(rstd::move(decoded));
+        }
+        if (auto comment_object = object->getObject("comment")) {
+            auto comment_span =
+                rstd_try(required_object(*comment_object, "span", "extract response comment"_str));
+            auto comment_kind =
+                rstd_try(required_string(*comment_object, "kind", "extract response comment"_str));
+            comment = Some(DocumentationComment {
+                .kind = comment_kind.as_str() == "inner"_str ? DocumentationCommentKind::Inner
+                                                             : DocumentationCommentKind::Outer,
+                .text = rstd_try(
+                    required_string(*comment_object, "text", "extract response comment"_str)),
+                .span = rstd_try(decode_span(*comment_span, "extract response comment span"_str)),
+            });
+        }
+        unit.declarations.push(DeclarationOutline {
+            .alias_target = rstd_try(
+                optional_string(*object, "alias_target", "extract response declaration"_str)),
+            .semantic_identity = rstd_try(
+                required_string(*object, "semantic_identity", "extract response declaration"_str)),
+            .publication_identity = rstd_try(required_string(
+                *object, "publication_identity", "extract response declaration"_str)),
+            .named_module         = rstd_try(
+                required_string(*object, "named_module", "extract response declaration"_str, true)),
+            .kind = *kind,
+            .name = rstd_try(required_string(*object, "name", "extract response declaration"_str)),
+            .qualified_name = rstd_try(
+                required_string(*object, "qualified_name", "extract response declaration"_str)),
+            .namespace_name =
+                rstd_try(optional_string(*object, "namespace", "extract response declaration"_str))
+                    .unwrap_or(String::make()),
+            .signature =
+                rstd_try(decode_declaration_text(*object,
+                                                 "signature",
+                                                 "signature_references",
+                                                 "extract response declaration signature"_str)),
+            .scope_signature = rstd_try(
+                decode_declaration_text(*object,
+                                        "scope_signature",
+                                        "scope_signature_references",
+                                        "extract response declaration scope signature"_str)),
+            .record_keyword = rstd_try(
+                optional_string(*object, "record_keyword", "extract response declaration"_str)),
+            .record_header = rstd_try(
+                optional_string(*object, "record_header", "extract response declaration"_str)),
+            .is_definition = rstd_try(
+                required_bool(*object, "is_definition", "extract response declaration"_str)),
+            .is_scope_declaration = rstd_try(
+                required_bool(*object, "is_scope_declaration", "extract response declaration"_str)),
+            .origin         = rstd_try(decode_origin(
+                rstd_try(required_string(*object, "origin", "extract response declaration"_str))
+                    .as_str())),
+            .lexical_export = rstd_try(
+                required_bool(*object, "lexical_export", "extract response declaration"_str)),
+            .exported_redeclaration = rstd_try(required_bool(
+                *object, "exported_redeclaration", "extract response declaration"_str)),
+            .access                 = *access,
+            .parent                 = rstd::move(parent),
+            .owner                  = rstd::move(owner),
+            .record_ancestors       = rstd::move(ancestors),
+            .comment                = rstd::move(comment),
+            .spelling_span          = rstd_try(
+                decode_span(*spelling_span, "extract response declaration spelling span"_str)),
+            .expansion_span = rstd_try(
+                decode_span(*expansion_span, "extract response declaration expansion span"_str)),
+        });
     }
-    auto comment = Option<DocumentationComment>{};
-    auto owner = Option<DeclarationOwner>{};
-    const auto *owner_json = object->get("owner");
-    if (owner_json == nullptr)
-      return failure<DocumentationUnit>(
-          "extract response declaration has no owner field"_str);
-    if (owner_json->kind() != llvm::json::Value::Null) {
-      auto owner_object =
-          rstd_try(json_object(*owner_json, "declaration owner"_str));
-      owner = Some(rstd_try(decode_owner(*owner_object)));
+    for (const auto& item : *reexports) {
+        auto object = rstd_try(json_object(item, "extract response reexport"_str));
+        auto span   = rstd_try(required_object(*object, "span", "extract response reexport"_str));
+        unit.reexports.push(DocumentationReexport {
+            .logical_module =
+                rstd_try(required_string(*object, "module", "extract response reexport"_str)),
+            .named_module =
+                rstd_try(required_string(*object, "named_module", "extract response reexport"_str)),
+            .is_partition =
+                rstd_try(required_bool(*object, "is_partition", "extract response reexport"_str)),
+            .span = rstd_try(decode_span(*span, "extract response reexport span"_str)),
+        });
     }
-    auto ancestors = Vec<DeclarationOwner>::make();
-    for (const auto &ancestor : *rstd_try(required_array(
-             *object, "record_ancestors", "declaration owner"_str))) {
-      auto ancestor_object =
-          rstd_try(json_object(ancestor, "declaration owner"_str));
-      auto decoded = rstd_try(decode_owner(*ancestor_object));
-      if (decoded.kind != DeclarationKind::Record)
-        return failure<DocumentationUnit>(
-            "non-record ancestor in extraction response"_str);
-      ancestors.push(rstd::move(decoded));
+    for (const auto& item : *diagnostics) {
+        auto object = rstd_try(json_object(item, "extract response diagnostic"_str));
+        auto span   = rstd_try(required_object(*object, "span", "extract response diagnostic"_str));
+        auto severity =
+            rstd_try(required_string(*object, "severity", "extract response diagnostic"_str));
+        unit.diagnostics.push(DocumentationDiagnostic {
+            .severity = severity.as_str() == "error"_str ? DocumentationSeverity::Error
+                                                         : DocumentationSeverity::Warning,
+            .code = rstd_try(required_string(*object, "code", "extract response diagnostic"_str)),
+            .message =
+                rstd_try(required_string(*object, "message", "extract response diagnostic"_str)),
+            .span = rstd_try(decode_span(*span, "extract response diagnostic span"_str)),
+        });
     }
-    if (auto comment_object = object->getObject("comment")) {
-      auto comment_span = rstd_try(required_object(
-          *comment_object, "span", "extract response comment"_str));
-      auto comment_kind = rstd_try(required_string(
-          *comment_object, "kind", "extract response comment"_str));
-      comment = Some(DocumentationComment{
-          .kind = comment_kind.as_str() == "inner"_str
-                      ? DocumentationCommentKind::Inner
-                      : DocumentationCommentKind::Outer,
-          .text = rstd_try(required_string(*comment_object, "text",
-                                           "extract response comment"_str)),
-          .span = rstd_try(
-              decode_span(*comment_span, "extract response comment span"_str)),
-      });
-    }
-    unit.declarations.push(DeclarationOutline{
-        .alias_target = rstd_try(optional_string(
-            *object, "alias_target", "extract response declaration"_str)),
-        .semantic_identity = rstd_try(required_string(
-            *object, "semantic_identity", "extract response declaration"_str)),
-        .publication_identity =
-            rstd_try(required_string(*object, "publication_identity",
-                                     "extract response declaration"_str)),
-        .named_module = rstd_try(required_string(
-            *object, "named_module", "extract response declaration"_str, true)),
-        .kind = *kind,
-        .name = rstd_try(required_string(*object, "name",
-                                         "extract response declaration"_str)),
-        .qualified_name = rstd_try(required_string(
-            *object, "qualified_name", "extract response declaration"_str)),
-        .namespace_name =
-            rstd_try(optional_string(*object, "namespace",
-                                     "extract response declaration"_str))
-                .unwrap_or(String::make()),
-        .signature = rstd_try(decode_declaration_text(
-            *object, "signature", "signature_references",
-            "extract response declaration signature"_str)),
-        .scope_signature = rstd_try(decode_declaration_text(
-            *object, "scope_signature", "scope_signature_references",
-            "extract response declaration scope signature"_str)),
-        .record_keyword = rstd_try(optional_string(
-            *object, "record_keyword", "extract response declaration"_str)),
-        .record_header = rstd_try(optional_string(
-            *object, "record_header", "extract response declaration"_str)),
-        .is_definition = rstd_try(required_bool(
-            *object, "is_definition", "extract response declaration"_str)),
-        .is_scope_declaration =
-            rstd_try(required_bool(*object, "is_scope_declaration",
-                                   "extract response declaration"_str)),
-        .origin = rstd_try(decode_origin(
-            rstd_try(required_string(*object, "origin",
-                                     "extract response declaration"_str))
-                .as_str())),
-        .lexical_export = rstd_try(required_bool(
-            *object, "lexical_export", "extract response declaration"_str)),
-        .exported_redeclaration =
-            rstd_try(required_bool(*object, "exported_redeclaration",
-                                   "extract response declaration"_str)),
-        .access = *access,
-        .parent = rstd::move(parent),
-        .owner = rstd::move(owner),
-        .record_ancestors = rstd::move(ancestors),
-        .comment = rstd::move(comment),
-        .spelling_span = rstd_try(decode_span(
-            *spelling_span, "extract response declaration spelling span"_str)),
-        .expansion_span = rstd_try(
-            decode_span(*expansion_span,
-                        "extract response declaration expansion span"_str)),
-    });
-  }
-  for (const auto &item : *reexports) {
-    auto object = rstd_try(json_object(item, "extract response reexport"_str));
-    auto span = rstd_try(
-        required_object(*object, "span", "extract response reexport"_str));
-    unit.reexports.push(DocumentationReexport{
-        .logical_module = rstd_try(required_string(
-            *object, "module", "extract response reexport"_str)),
-        .named_module = rstd_try(required_string(
-            *object, "named_module", "extract response reexport"_str)),
-        .is_partition = rstd_try(required_bool(
-            *object, "is_partition", "extract response reexport"_str)),
-        .span =
-            rstd_try(decode_span(*span, "extract response reexport span"_str)),
-    });
-  }
-  for (const auto &item : *diagnostics) {
-    auto object =
-        rstd_try(json_object(item, "extract response diagnostic"_str));
-    auto span = rstd_try(
-        required_object(*object, "span", "extract response diagnostic"_str));
-    auto severity = rstd_try(required_string(
-        *object, "severity", "extract response diagnostic"_str));
-    unit.diagnostics.push(DocumentationDiagnostic{
-        .severity = severity.as_str() == "error"_str
-                        ? DocumentationSeverity::Error
-                        : DocumentationSeverity::Warning,
-        .code = rstd_try(required_string(*object, "code",
-                                         "extract response diagnostic"_str)),
-        .message = rstd_try(required_string(*object, "message",
-                                            "extract response diagnostic"_str)),
-        .span = rstd_try(
-            decode_span(*span, "extract response diagnostic span"_str)),
-    });
-  }
-  return Ok(rstd::move(unit));
+    return Ok(rstd::move(unit));
 }
 
-auto execute_generate(ref<rstd::path::Path> manifest_path)
-    -> Result<Summary, String> {
-  auto value = rstd_try(read_json(manifest_path, "site manifest"_str));
-  auto root = rstd_try(json_object(value, "site manifest"_str));
-  rstd_try(validate_header(*root, "litodoc-site", 1, "site manifest"_str));
-  if (rstd_try(required_integer(*root, "data_api", "site manifest"_str)) !=
-      usize(4))
-    return failure<Summary>("site manifest requires unsupported data API"_str);
-  if (rstd_try(required_integer(*root, "template_api", "site manifest"_str)) !=
-      usize(1))
-    return failure<Summary>(
-        "site manifest requires unsupported template API"_str);
-  auto packages =
-      rstd_try(required_array(*root, "packages", "site manifest"_str));
-  auto frontend =
-      rstd_try(optional_string(*root, "frontend", "site manifest"_str))
-          .map([](String value) { return PathBuf::from(rstd::move(value)); });
-  auto data_only =
-      rstd_try(required_bool(*root, "data_only", "site manifest"_str));
-  auto publication_name =
-      rstd_try(optional_string(*root, "publication", "site manifest"_str))
-          .unwrap_or(String::make("site"_str));
-  auto publication = PublicationKind::Site;
-  if (publication_name.as_str() == "package-set"_str) {
-    publication = PublicationKind::PackageSet;
-  } else if (publication_name.as_str() != "site"_str) {
-    return failure<Summary>(rstd::format(
-        "site manifest publication '{}' is unsupported", publication_name));
-  }
-  auto default_frontend = Option<lito::site::FrontendBundle>{};
-  if (frontend.is_none() && !data_only) {
-    default_frontend = Some(rstd_try(lito::doc::web::load_default_frontend()));
-  }
-  auto input = SiteInput{
-      .title = rstd_try(required_string(*root, "title", "site manifest"_str)),
-      .output = PathBuf::from(
-          rstd_try(required_string(*root, "output", "site manifest"_str))),
-      .data_output = PathBuf::from(
-          rstd_try(required_string(*root, "data_output", "site manifest"_str))),
-      .frontend = rstd::move(frontend),
-      .data_only = data_only,
-      .publication = publication,
-  };
-  for (const auto &item : *packages) {
-    auto package = rstd_try(json_object(item, "site manifest package"_str));
-    auto responses = rstd_try(
-        required_array(*package, "responses", "site manifest package"_str));
-    auto package_input = PackageInput{
-        .name = rstd_try(
-            required_string(*package, "name", "site manifest package"_str)),
-        .version = rstd_try(optional_string(*package, "version",
-                                            "site manifest package"_str))
-                       .unwrap_or(String::make()),
-        .source_identity =
-            rstd_try(optional_string(*package, "source_identity",
-                                     "site manifest package"_str))
-                .unwrap_or(String::make()),
-        .root_module = rstd_try(optional_string(*package, "root_module",
-                                                "site manifest package"_str))
-                           .unwrap_or(String::make()),
-        .profile = rstd_try(
-            required_string(*package, "profile", "site manifest package"_str)),
-        .root = PathBuf::from(rstd_try(
-            required_string(*package, "root", "site manifest package"_str))),
-        .toolchain_version = rstd_try(required_string(
-            *package, "toolchain_version", "site manifest package"_str)),
-        .toolchain_target = rstd_try(required_string(
-            *package, "toolchain_target", "site manifest package"_str)),
-        .language_standard = rstd_try(required_string(
-            *package, "language_standard", "site manifest package"_str)),
-    };
-    for (const auto &response : *responses) {
-      auto artifact =
-          rstd_try(json_object(response, "site manifest response"_str));
-      auto path = PathBuf::from(rstd_try(
-          required_string(*artifact, "path", "site manifest response"_str)));
-      auto digest = rstd_try(
-          required_string(*artifact, "digest", "site manifest response"_str));
-      package_input.units.push(
-          rstd_try(decode_unit(path.as_path(), digest.as_str())));
+auto execute_generate(ref<rstd::path::Path> manifest_path) -> Result<Summary, String> {
+    auto value = rstd_try(read_json(manifest_path, "site manifest"_str));
+    auto root  = rstd_try(json_object(value, "site manifest"_str));
+    rstd_try(validate_header(*root, "litodoc-site", 1, "site manifest"_str));
+    if (rstd_try(required_integer(*root, "data_api", "site manifest"_str)) != usize(4))
+        return failure<Summary>("site manifest requires unsupported data API"_str);
+    if (rstd_try(required_integer(*root, "template_api", "site manifest"_str)) != usize(1))
+        return failure<Summary>("site manifest requires unsupported template API"_str);
+    auto packages = rstd_try(required_array(*root, "packages", "site manifest"_str));
+    auto frontend =
+        rstd_try(optional_string(*root, "frontend", "site manifest"_str)).map([](String value) {
+            return PathBuf::from(rstd::move(value));
+        });
+    auto data_only        = rstd_try(required_bool(*root, "data_only", "site manifest"_str));
+    auto publication_name = rstd_try(optional_string(*root, "publication", "site manifest"_str))
+                                .unwrap_or(String::make("site"_str));
+    auto publication      = PublicationKind::Site;
+    if (publication_name.as_str() == "package-set"_str) {
+        publication = PublicationKind::PackageSet;
+    } else if (publication_name.as_str() != "site"_str) {
+        return failure<Summary>(
+            rstd::format("site manifest publication '{}' is unsupported", publication_name));
     }
-    input.packages.push(rstd::move(package_input));
-  }
-  auto highlighter = ClangDeclarationHighlighter{};
-  input.highlighter = &highlighter;
-  return generate(rstd::move(input), rstd::move(default_frontend));
+    auto default_frontend = Option<lito::site::FrontendBundle> {};
+    if (frontend.is_none() && ! data_only) {
+        default_frontend = Some(rstd_try(lito::doc::web::load_default_frontend()));
+    }
+    auto input = SiteInput {
+        .title  = rstd_try(required_string(*root, "title", "site manifest"_str)),
+        .output = PathBuf::from(rstd_try(required_string(*root, "output", "site manifest"_str))),
+        .data_output =
+            PathBuf::from(rstd_try(required_string(*root, "data_output", "site manifest"_str))),
+        .frontend    = rstd::move(frontend),
+        .data_only   = data_only,
+        .publication = publication,
+    };
+    for (const auto& item : *packages) {
+        auto package = rstd_try(json_object(item, "site manifest package"_str));
+        auto responses =
+            rstd_try(required_array(*package, "responses", "site manifest package"_str));
+        auto package_input = PackageInput {
+            .name    = rstd_try(required_string(*package, "name", "site manifest package"_str)),
+            .version = rstd_try(optional_string(*package, "version", "site manifest package"_str))
+                           .unwrap_or(String::make()),
+            .source_identity =
+                rstd_try(optional_string(*package, "source_identity", "site manifest package"_str))
+                    .unwrap_or(String::make()),
+            .root_module =
+                rstd_try(optional_string(*package, "root_module", "site manifest package"_str))
+                    .unwrap_or(String::make()),
+            .profile = rstd_try(required_string(*package, "profile", "site manifest package"_str)),
+            .root    = PathBuf::from(
+                rstd_try(required_string(*package, "root", "site manifest package"_str))),
+            .toolchain_version = rstd_try(
+                required_string(*package, "toolchain_version", "site manifest package"_str)),
+            .toolchain_target = rstd_try(
+                required_string(*package, "toolchain_target", "site manifest package"_str)),
+            .language_standard = rstd_try(
+                required_string(*package, "language_standard", "site manifest package"_str)),
+        };
+        for (const auto& response : *responses) {
+            auto artifact = rstd_try(json_object(response, "site manifest response"_str));
+            auto path     = PathBuf::from(
+                rstd_try(required_string(*artifact, "path", "site manifest response"_str)));
+            auto digest =
+                rstd_try(required_string(*artifact, "digest", "site manifest response"_str));
+            package_input.units.push(rstd_try(decode_unit(path.as_path(), digest.as_str())));
+        }
+        input.packages.push(rstd::move(package_input));
+    }
+    auto highlighter  = ClangDeclarationHighlighter {};
+    input.highlighter = &highlighter;
+    return generate(rstd::move(input), rstd::move(default_frontend));
 }
 
 auto capabilities() -> String {
-  auto protocols = llvm::json::Array{};
-  protocols.push_back(2);
-  auto site_versions = llvm::json::Array{};
-  site_versions.push_back(1);
-  auto data_versions = llvm::json::Array{};
-  data_versions.push_back(4);
-  auto features = llvm::json::Array{};
-  features.push_back("embedded-default-frontend");
-  features.push_back("package-publications-v1");
-  return json_text(llvm::json::Object{
-      {"format", "litodoc-capabilities"},
-      {"version", 1},
-      {"extract_protocols", rstd::move(protocols)},
-      {"site_manifest_versions", rstd::move(site_versions)},
-      {"data_api_versions", rstd::move(data_versions)},
-      {"features", rstd::move(features)},
-      {"litodoc_build", as_std(litodoc_version())},
-      {"clang_version", CLANG_VERSION_STRING},
-      {"clang_build", clang::getClangFullVersion()},
-  });
+    auto protocols = llvm::json::Array {};
+    protocols.push_back(2);
+    auto site_versions = llvm::json::Array {};
+    site_versions.push_back(1);
+    auto data_versions = llvm::json::Array {};
+    data_versions.push_back(4);
+    auto features = llvm::json::Array {};
+    features.push_back("embedded-default-frontend");
+    features.push_back("package-publications-v1");
+    return json_text(llvm::json::Object {
+        { "format", "litodoc-capabilities" },
+        { "version", 1 },
+        { "extract_protocols", rstd::move(protocols) },
+        { "site_manifest_versions", rstd::move(site_versions) },
+        { "data_api_versions", rstd::move(data_versions) },
+        { "features", rstd::move(features) },
+        { "litodoc_build", as_std(litodoc_version()) },
+        { "clang_version", CLANG_VERSION_STRING },
+        { "clang_build", clang::getClangFullVersion() },
+    });
 }
 
 struct CliSchema {
-  Parser parser;
-  CommandKey capabilities;
-  CommandKey extract;
-  CommandKey generate;
-  ArgKey<String> request;
-  ArgKey<String> response;
-  ArgKey<String> manifest;
-  ArgKey<String> audit;
+    Parser         parser;
+    CommandKey     capabilities;
+    CommandKey     extract;
+    CommandKey     generate;
+    ArgKey<String> request;
+    ArgKey<String> response;
+    ArgKey<String> manifest;
+    ArgKey<String> audit;
 };
 
 auto make_cli() -> Result<CliSchema, String> {
-  auto capabilities_command = Command::make("capabilities"_str);
-  capabilities_command.about("Report supported documentation protocols"_str);
-  auto capabilities_key = capabilities_command.key();
-  (void)capabilities_command.add_arg(Arg<bool>::flag("json"_str)
-                                         .long_name("json"_str)
-                                         .help("Write capabilities as JSON"_str)
-                                         .required());
+    auto capabilities_command = Command::make("capabilities"_str);
+    capabilities_command.about("Report supported documentation protocols"_str);
+    auto capabilities_key = capabilities_command.key();
+    (void)capabilities_command.add_arg(Arg<bool>::flag("json"_str)
+                                           .long_name("json"_str)
+                                           .help("Write capabilities as JSON"_str)
+                                           .required());
 
-  auto extract_command = Command::make("extract"_str);
-  extract_command.about(
-      "Extract documentation from one C++ compilation unit"_str);
-  auto extract_key = extract_command.key();
-  auto request = extract_command.add_arg(
-      Arg<String>::value("request"_str, string_parser())
-          .long_name("request"_str)
-          .value_name("PATH"_str)
-          .help("Read the extraction request from PATH"_str)
-          .required());
-  auto response = extract_command.add_arg(
-      Arg<String>::value("response"_str, string_parser())
-          .long_name("response"_str)
-          .value_name("PATH"_str)
-          .help("Write the extraction response to PATH"_str)
-          .required());
+    auto extract_command = Command::make("extract"_str);
+    extract_command.about("Extract documentation from one C++ compilation unit"_str);
+    auto extract_key = extract_command.key();
+    auto request  = extract_command.add_arg(Arg<String>::value("request"_str, string_parser())
+                                                .long_name("request"_str)
+                                                .value_name("PATH"_str)
+                                                .help("Read the extraction request from PATH"_str)
+                                                .required());
+    auto response = extract_command.add_arg(Arg<String>::value("response"_str, string_parser())
+                                                .long_name("response"_str)
+                                                .value_name("PATH"_str)
+                                                .help("Write the extraction response to PATH"_str)
+                                                .required());
 
-  auto generate_command = Command::make("generate"_str);
-  generate_command.about("Generate documentation from extracted units"_str);
-  auto generate_key = generate_command.key();
-  auto manifest = generate_command.add_arg(
-      Arg<String>::value("manifest"_str, string_parser())
-          .long_name("manifest"_str)
-          .value_name("PATH"_str)
-          .help("Read the site manifest from PATH"_str)
-          .required());
-  auto audit = generate_command.add_arg(
-      Arg<String>::value("audit"_str, string_parser())
-          .long_name("audit"_str)
-          .value_name("PATH"_str)
-          .help("Write public API selection counts to PATH"_str));
+    auto generate_command = Command::make("generate"_str);
+    generate_command.about("Generate documentation from extracted units"_str);
+    auto generate_key = generate_command.key();
+    auto manifest     = generate_command.add_arg(Arg<String>::value("manifest"_str, string_parser())
+                                                     .long_name("manifest"_str)
+                                                     .value_name("PATH"_str)
+                                                     .help("Read the site manifest from PATH"_str)
+                                                     .required());
+    auto audit =
+        generate_command.add_arg(Arg<String>::value("audit"_str, string_parser())
+                                     .long_name("audit"_str)
+                                     .value_name("PATH"_str)
+                                     .help("Write public API selection counts to PATH"_str));
 
-  auto root = Command::make("litodoc"_str);
-  root.about("Extract and generate C++ API documentation"_str);
-  root.version(litodoc_version());
-  root.require_subcommand();
-  root.add_subcommand(rstd::move(capabilities_command));
-  root.add_subcommand(rstd::move(extract_command));
-  root.add_subcommand(rstd::move(generate_command));
-  auto parser = rstd::move(root).build();
-  if (parser.is_err())
-    return Err(rstd::format("invalid command definition: {}",
-                            rstd::move(parser).unwrap_err()));
-  return Ok(CliSchema{
-      .parser = rstd::move(parser).unwrap(),
-      .capabilities = capabilities_key,
-      .extract = extract_key,
-      .generate = generate_key,
-      .request = request,
-      .response = response,
-      .manifest = manifest,
-      .audit = audit,
-  });
+    auto root = Command::make("litodoc"_str);
+    root.about("Extract and generate C++ API documentation"_str);
+    root.version(litodoc_version());
+    root.require_subcommand();
+    root.add_subcommand(rstd::move(capabilities_command));
+    root.add_subcommand(rstd::move(extract_command));
+    root.add_subcommand(rstd::move(generate_command));
+    auto parser = rstd::move(root).build();
+    if (parser.is_err())
+        return Err(rstd::format("invalid command definition: {}", rstd::move(parser).unwrap_err()));
+    return Ok(CliSchema {
+        .parser       = rstd::move(parser).unwrap(),
+        .capabilities = capabilities_key,
+        .extract      = extract_key,
+        .generate     = generate_key,
+        .request      = request,
+        .response     = response,
+        .manifest     = manifest,
+        .audit        = audit,
+    });
 }
 
 auto arguments() -> Vec<OsString> {
-  auto result = Vec<OsString>::make();
-  result.push(OsString::from("litodoc"_str));
-  auto input = rstd::env::args_os();
-  (void)input.next();
-  for (auto value = input.next(); value.is_some(); value = input.next())
-    result.push(rstd::move(value).unwrap());
-  return result;
+    auto result = Vec<OsString>::make();
+    result.push(OsString::from("litodoc"_str));
+    auto input = rstd::env::args_os();
+    (void)input.next();
+    for (auto value = input.next(); value.is_some(); value = input.next())
+        result.push(rstd::move(value).unwrap());
+    return result;
 }
 
-auto argument(const Matches &matches, const ArgKey<String> &key)
-    -> Result<PathBuf, String> {
-  auto value = matches.get_one(key);
-  if (value.is_err())
-    return Err(rstd::format("cannot read parsed argument: {}",
-                            rstd::move(value).unwrap_err()));
-  if (value->is_none())
-    return Err(String::make("required argument is missing"_str));
-  return Ok(PathBuf::from((***value).as_str()));
+auto argument(const Matches& matches, const ArgKey<String>& key) -> Result<PathBuf, String> {
+    auto value = matches.get_one(key);
+    if (value.is_err())
+        return Err(rstd::format("cannot read parsed argument: {}", rstd::move(value).unwrap_err()));
+    if (value->is_none()) return Err(String::make("required argument is missing"_str));
+    return Ok(PathBuf::from((***value).as_str()));
 }
 
 auto fail(ref<str> message, i32 code = i32(1)) -> int {
-  rstd::io::eprintln("litodoc: {}", message);
-  return code.to_primitive();
+    rstd::io::eprintln("litodoc: {}", message);
+    return code.to_primitive();
 }
 
 } // namespace lito::doc::tool
 
-namespace lito::doc::tool {
+namespace lito::doc::tool
+{
 
 auto run() -> int {
-  auto schema = make_cli();
-  if (schema.is_err())
-    return fail(schema.unwrap_err().as_str());
-  auto parsed = schema->parser.parse_from(arguments());
-  if (parsed.is_err()) {
-    auto report = schema->parser.render_error(rstd::move(parsed).unwrap_err());
-    if (report.target() == OutputTarget::Tag::Stderr)
-      rstd::io::eprint("{}", report.text());
-    else
-      rstd::io::print("{}", report.text());
-    return report.exit_code().to_primitive();
-  }
-  auto outcome = rstd::move(parsed).unwrap();
-  if (outcome.is_Display()) {
-    auto request = rstd::move(outcome).as_Display().request;
-    if (request.target() == OutputTarget::Tag::Stderr)
-      rstd::io::eprint("{}", request.text());
-    else
-      rstd::io::print("{}", request.text());
-    if (request.kind() == DisplayKind::Tag::Version)
-      rstd::io::print("\n");
-    return request.exit_code().to_primitive();
-  }
-  auto matches = rstd::move(outcome).as_Parsed().value;
-  if (matches.subcommand_matches(schema->capabilities).is_some()) {
-    rstd::io::print("{}", capabilities().as_str());
-    return 0;
-  }
+    auto schema = make_cli();
+    if (schema.is_err()) return fail(schema.unwrap_err().as_str());
+    auto parsed = schema->parser.parse_from(arguments());
+    if (parsed.is_err()) {
+        auto report = schema->parser.render_error(rstd::move(parsed).unwrap_err());
+        if (report.target() == OutputTarget::Tag::Stderr)
+            rstd::io::eprint("{}", report.text());
+        else
+            rstd::io::print("{}", report.text());
+        return report.exit_code().to_primitive();
+    }
+    auto outcome = rstd::move(parsed).unwrap();
+    if (outcome.is_Display()) {
+        auto request = rstd::move(outcome).as_Display().request;
+        if (request.target() == OutputTarget::Tag::Stderr)
+            rstd::io::eprint("{}", request.text());
+        else
+            rstd::io::print("{}", request.text());
+        if (request.kind() == DisplayKind::Tag::Version) rstd::io::print("\n");
+        return request.exit_code().to_primitive();
+    }
+    auto matches = rstd::move(outcome).as_Parsed().value;
+    if (matches.subcommand_matches(schema->capabilities).is_some()) {
+        rstd::io::print("{}", capabilities().as_str());
+        return 0;
+    }
 
-  auto extract_matches = matches.subcommand_matches(schema->extract);
-  if (extract_matches.is_some()) {
-    auto request = argument(**extract_matches, schema->request);
-    auto response = argument(**extract_matches, schema->response);
-    if (request.is_err())
-      return fail(request.unwrap_err().as_str(), i32(2));
-    if (response.is_err())
-      return fail(response.unwrap_err().as_str(), i32(2));
-    auto result = execute_extract(request->as_path(), response->as_path());
-    if (result.is_err()) {
-      return fail(rstd::move(result).unwrap_err().as_str());
+    auto extract_matches = matches.subcommand_matches(schema->extract);
+    if (extract_matches.is_some()) {
+        auto request  = argument(**extract_matches, schema->request);
+        auto response = argument(**extract_matches, schema->response);
+        if (request.is_err()) return fail(request.unwrap_err().as_str(), i32(2));
+        if (response.is_err()) return fail(response.unwrap_err().as_str(), i32(2));
+        auto result = execute_extract(request->as_path(), response->as_path());
+        if (result.is_err()) {
+            return fail(rstd::move(result).unwrap_err().as_str());
+        }
+        return 0;
     }
-    return 0;
-  }
 
-  auto generate_matches = matches.subcommand_matches(schema->generate);
-  if (generate_matches.is_some()) {
-    auto manifest = argument(**generate_matches, schema->manifest);
-    if (manifest.is_err())
-      return fail(manifest.unwrap_err().as_str(), i32(2));
-    auto result = execute_generate(manifest->as_path());
-    if (result.is_err()) {
-      return fail(rstd::move(result).unwrap_err().as_str());
+    auto generate_matches = matches.subcommand_matches(schema->generate);
+    if (generate_matches.is_some()) {
+        auto manifest = argument(**generate_matches, schema->manifest);
+        if (manifest.is_err()) return fail(manifest.unwrap_err().as_str(), i32(2));
+        auto result = execute_generate(manifest->as_path());
+        if (result.is_err()) {
+            return fail(rstd::move(result).unwrap_err().as_str());
+        }
+        auto audit = (**generate_matches).get_one(schema->audit);
+        if (audit.is_err()) return fail("cannot read audit output argument"_str);
+        if (audit->is_some()) {
+            auto packages = llvm::json::Array {};
+            for (const auto& package : result->packages) {
+                auto counts = llvm::json::Object {};
+                for (const auto& count : package.public_api_counts)
+                    counts[as_std(count.reason.as_str())] =
+                        static_cast<int64_t>(count.declarations.to_primitive());
+                packages.push_back(llvm::json::Object {
+                    { "name", as_std(package.name.as_str()) },
+                    { "published_symbols", static_cast<int64_t>(package.symbols.to_primitive()) },
+                    { "declaration_counts", rstd::move(counts) } });
+            }
+            auto written = write_json(PathBuf::from((***audit).as_str()).as_path(),
+                                      llvm::json::Object { { "format", "litodoc-public-api-audit" },
+                                                           { "version", 1 },
+                                                           { "packages", rstd::move(packages) } },
+                                      "public API audit"_str);
+            if (written.is_err()) return fail(written.unwrap_err().as_str());
+        }
+        if (result->publication_set.is_some()) {
+            rstd::io::println("generated {}", result->publication_set->manifest.as_path());
+        } else {
+            rstd::io::println("generated {}", result->output.as_path());
+        }
+        return 0;
     }
-    auto audit = (**generate_matches).get_one(schema->audit);
-    if (audit.is_err())
-      return fail("cannot read audit output argument"_str);
-    if (audit->is_some()) {
-      auto packages = llvm::json::Array{};
-      for (const auto &package : result->packages) {
-        auto counts = llvm::json::Object{};
-        for (const auto &count : package.public_api_counts)
-          counts[as_std(count.reason.as_str())] =
-              static_cast<int64_t>(count.declarations.to_primitive());
-        packages.push_back(llvm::json::Object{
-            {"name", as_std(package.name.as_str())},
-            {"published_symbols",
-             static_cast<int64_t>(package.symbols.to_primitive())},
-            {"declaration_counts", rstd::move(counts)}});
-      }
-      auto written =
-          write_json(PathBuf::from((***audit).as_str()).as_path(),
-                     llvm::json::Object{{"format", "litodoc-public-api-audit"},
-                                        {"version", 1},
-                                        {"packages", rstd::move(packages)}},
-                     "public API audit"_str);
-      if (written.is_err())
-        return fail(written.unwrap_err().as_str());
-    }
-    if (result->publication_set.is_some()) {
-      rstd::io::println("generated {}",
-                        result->publication_set->manifest.as_path());
-    } else {
-      rstd::io::println("generated {}", result->output.as_path());
-    }
-    return 0;
-  }
 
-  return fail("expected capabilities, extract, or generate"_str, i32(2));
+    return fail("expected capabilities, extract, or generate"_str, i32(2));
 }
 
 } // namespace lito::doc::tool
