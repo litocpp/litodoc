@@ -1,4 +1,6 @@
 local esbuild = lito.tool("esbuild")
+local embed = require("@lito.resource")
+local target = lito.target({ kind = "lib", name = "litodoc-web" })
 
 local frontend_sources = {
   "static/fonts/IBMPlexSans-Bold-Latin1.woff2",
@@ -35,43 +37,29 @@ local frontend_sources = {
 }
 
 local resources = {
-  { path = "static/highlight-LICENSE.txt", media_type = "text/plain", source = "src/vendor/highlight.js/LICENSE" },
-  { path = "static/fonts/LICENSE.txt", media_type = "text/plain", source = "src/static/fonts/LICENSE.txt" },
-  { path = "frontend.json", media_type = "application/json", source = "frontend.json" },
-  { path = "static/app.js", media_type = "text/javascript", entry = "app.ts", target = "es2020" },
-  { path = "static/favicon.svg", media_type = "image/svg+xml", source = "src/static/favicon.svg" },
-  { path = "static/style.css", media_type = "text/css", entry = "styles/style.css" },
-  { path = "static/theme-bootstrap.js", media_type = "text/javascript", entry = "theme-bootstrap.ts", target = "es2020" },
-  { path = "static/theme-icons.svg", media_type = "image/svg+xml", source = "src/static/theme-icons.svg" },
-  { path = "templates/book-page.html", media_type = "text/html", source = "src/templates/book-page.html" },
-  { path = "templates/book-root.html", media_type = "text/html", source = "src/templates/book-root.html" },
-  { path = "templates/module.html", media_type = "text/html", source = "src/templates/module.html" },
-  { path = "templates/package.html", media_type = "text/html", source = "src/templates/package.html" },
-  { path = "templates/partials/foot.html", media_type = "text/html", source = "src/templates/partials/foot.html" },
-  { path = "templates/partials/head.html", media_type = "text/html", source = "src/templates/partials/head.html" },
-  { path = "templates/root.html", media_type = "text/html", source = "src/templates/root.html" },
-  { path = "templates/symbol.html", media_type = "text/html", source = "src/templates/symbol.html" },
+  { path = "static/highlight-LICENSE.txt", source = "src/vendor/highlight.js/LICENSE" },
+  { path = "static/fonts/LICENSE.txt", source = "src/static/fonts/LICENSE.txt" },
+  { path = "frontend.json", source = "frontend.json" },
+  { path = "static/app.js", entry = "app.ts", target = "es2020" },
+  { path = "static/favicon.svg", source = "src/static/favicon.svg" },
+  { path = "static/style.css", entry = "styles/style.css" },
+  { path = "static/theme-bootstrap.js", entry = "theme-bootstrap.ts", target = "es2020" },
+  { path = "static/theme-icons.svg", source = "src/static/theme-icons.svg" },
+  { path = "templates/book-page.html", source = "src/templates/book-page.html" },
+  { path = "templates/book-root.html", source = "src/templates/book-root.html" },
+  { path = "templates/module.html", source = "src/templates/module.html" },
+  { path = "templates/package.html", source = "src/templates/package.html" },
+  { path = "templates/partials/foot.html", source = "src/templates/partials/foot.html" },
+  { path = "templates/partials/head.html", source = "src/templates/partials/head.html" },
+  { path = "templates/root.html", source = "src/templates/root.html" },
+  { path = "templates/symbol.html", source = "src/templates/symbol.html" },
 }
 
-for index = 1, #resources do
-  for candidate = index + 1, #resources do
-    if resources[candidate].path < resources[index].path then
-      local value = resources[index]
-      resources[index] = resources[candidate]
-      resources[candidate] = value
-    end
-  end
-end
-
+local files = {}
 for index = 1, #resources do
   local resource = resources[index]
-  if resource.path == "" or resource.media_type == "" then
-    error("frontend resources require a path and media type")
-  end
-  if index > 1 and resources[index - 1].path == resource.path then
-    error("frontend resource path is repeated: " .. resource.path)
-  end
   local output = "frontend/default/" .. resource.path
+  local generated
   if resource.entry then
     local args = {
       resource.entry,
@@ -83,47 +71,24 @@ for index = 1, #resources do
     if resource.target then
       args[#args + 1] = "--target=" .. resource.target
     end
-    lito.run({
+    generated = lito.run({
       tool = esbuild,
       cwd = "src",
       args = args,
       inputs = frontend_sources,
       outputs = { output },
     })
+    generated = generated.outputs[1]
   else
-    lito.configure_file({
+    generated = lito.copy({
       input = resource.source,
       output = output,
-      values = {},
     })
+    generated = generated.output
   end
+  files[#files + 1] = { input = generated, path = resource.path }
 end
-
-local arrays = ""
-local entries = ""
-for index = 1, #resources do
-  local resource = resources[index]
-  arrays = arrays
-      .. "static constexpr unsigned char resource_"
-      .. index
-      .. "[] = {\n#embed \"../frontend/default/"
-      .. resource.path
-      .. "\"\n};\n\n"
-  entries = entries
-      .. "      FrontendResourceInput{ .path = \""
-      .. resource.path
-      .. "\"_str, .media_type = \""
-      .. resource.media_type
-      .. "\"_str, .contents = embedded_bytes(resource_"
-      .. index
-      .. ") },\n"
-end
-
-lito.configure_file({
-  input = "src/embedded.cpp.in",
-  output = "src/embedded.cpp",
-  values = {
-    resource_arrays = arrays,
-    resource_entries = entries,
-  },
+embed.embed({
+  target = target, module = "lito.doc.web", namespace = "lito::doc::web",
+  name = "embedded_resources", files = files,
 })

@@ -26,6 +26,11 @@ struct FrontendResourceInput {
     slice<u8> contents;
 };
 
+struct FrontendResourceData {
+    ref<str>  path;
+    slice<u8> contents;
+};
+
 struct FrontendAsset {
     String path;
     String media_type;
@@ -445,6 +450,39 @@ auto load_frontend_directory(ref<rstd::path::Path> root) -> Result<FrontendBundl
     return finish_frontend_resources(rstd::format("directory:{}", *root_text),
                                      rstd::move(resources),
                                      rstd::move(description).unwrap());
+}
+
+auto load_frontend_data(ref<str> identity, slice<FrontendResourceData> inputs)
+    -> Result<FrontendBundle, String> {
+    if (identity.is_empty()) return Err("frontend resource identity must not be empty"_Str);
+    auto resources = rstd::collections::BTreeMap<String, FrontendResource>::make();
+    for (const auto& input : inputs) {
+        if (! safe_frontend_path(input.path))
+            return Err(rstd::format("invalid frontend resource path '{}'", input.path));
+        auto text = rstd::str_::from_utf8(input.contents);
+        if (text.is_err())
+            return Err(rstd::format("frontend resource '{}' is not valid UTF-8", input.path));
+        auto previous = resources.insert(String::make(input.path),
+                                         FrontendResource {
+                                             .path       = String::make(input.path),
+                                             .media_type = "text/html"_Str,
+                                             .contents   = String::make(*text),
+                                         });
+        if (previous.is_some())
+            return Err(rstd::format("frontend resource '{}' is repeated", input.path));
+    }
+    auto manifest = resources.get_mut("frontend.json"_str);
+    if (manifest.is_none()) return Err("frontend resources are missing frontend.json"_Str);
+    (**manifest).media_type = "application/json"_Str;
+    auto description        = rstd_try(describe_frontend_manifest((**manifest).contents.as_str()));
+    if (description.manifest.assets.is_none())
+        return Err("frontend manifest is missing 'assets'"_Str);
+    for (const auto& asset : *description.manifest.assets) {
+        auto entry = resources.get_mut(asset.path.as_str());
+        if (entry.is_some()) (**entry).media_type = asset.media_type.clone();
+    }
+    return finish_frontend_resources(
+        String::make(identity), rstd::move(resources), rstd::move(description));
 }
 
 auto load_frontend_resources(ref<str> identity, slice<FrontendResourceInput> inputs)

@@ -4,16 +4,11 @@ version.workspace = true
 license.workspace = true
 authors.workspace = true
 
-[source-groups.embedded]
-root = "generated"
-sources = ["src/embedded.cpp"]
-
 [lib]
 name = "litodoc-web"
 module = "lito.doc.web"
 archive = "lito.doc.web"
-sources = ["src/lib.cppm"]
-source-groups = ["embedded"]
+sources = ["src/lib.cppm", "src/lib.cpp"]
 
 [build-tools.esbuild]
 version = "0.28.1"
@@ -34,3 +29,13 @@ visibility = "public"
 [dependencies.rstd-std]
 workspace = true
 visibility = "private"
+
+[dependencies.liresto]
+version = "0.1.0"
+
+[dependencies.liresto-pack]
+version = "0.1.0"
+usage = "tool"
+
+[dependencies.lito-resource]
+version = "0.1.0"
