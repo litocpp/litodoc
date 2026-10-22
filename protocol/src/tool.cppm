@@ -164,7 +164,10 @@ auto read_json(ref<rstd::path::Path> path, ref<str> expected_digest, ref<str> co
         return failure<llvm::json::Value>(rstd::format(
             "cannot read {} '{}': {}", context, path, rstd::move(contents).unwrap_err()));
     }
-    auto digest = licrypto::sha256_hex(contents->as_str());
+    auto digest =
+        rstd_try(licrypto::sha256_hex(contents->as_str()).map_err([](licrypto::Error error) {
+            return rstd::format("SHA-256 failed: {}", error);
+        }));
     if (digest.as_str() != expected_digest) {
         return failure<llvm::json::Value>(rstd::format(
             "{} '{}' has digest '{}', expected '{}'", context, path, digest, expected_digest));

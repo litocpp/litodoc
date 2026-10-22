@@ -63,10 +63,13 @@ auto build_book_graph(const BookProject& project, SummaryDocument summary)
                 graph_error(entry.span, "summary page has no parent at the previous level"_str));
         auto parent =
             entry.depth == usize {} ? Option<usize> {} : Some(parents[entry.depth - usize(1)]);
-        auto identity = licrypto::sha256_hex(rstd::format("lito-book-page-v1\n{}\n{}",
-                                                          project.identity.as_str(),
-                                                          entry.source.as_str())
-                                                 .as_str());
+        auto identity = rstd_try(licrypto::sha256_hex(rstd::format("lito-book-page-v1\n{}\n{}",
+                                                                   project.identity.as_str(),
+                                                                   entry.source.as_str())
+                                                          .as_str())
+                                     .map_err([](licrypto::Error error) {
+                                         return rstd::format("SHA-256 failed: {}", error);
+                                     }));
         auto index    = graph.pages.len();
         graph.pages.push(BookPage {
             .identity    = rstd::move(identity),

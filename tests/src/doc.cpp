@@ -504,7 +504,7 @@ TEST(DocPublication, PublishesRelocatablePackageSitesFromOneDataset) {
         auto contents = rstd::fs::read_to_string(path.as_path());
         ASSERT_TRUE(contents.is_ok());
         EXPECT_EQ(contents->len(), file.size);
-        EXPECT_EQ(licrypto::sha256_hex(contents->as_str()).as_str(), file.sha256.as_str());
+        EXPECT_EQ(licrypto::sha256_hex(contents->as_str()).unwrap().as_str(), file.sha256.as_str());
         EXPECT_FALSE(file.path.as_str() == "publication.json"_str);
     }
     auto search =

@@ -1,3 +1,6 @@
+module;
+#include <rstd/macro.hpp>
+
 export module lito.doc:render;
 
 import rstd;
@@ -49,9 +52,11 @@ auto write_doc_file(ref<rstd::path::Path> root,
             "cannot write doc output '{}': {}", path.as_path(), rstd::move(written).unwrap_err()));
     if (publication != nullptr) {
         publication->push(PublicationFile {
-            .path       = String::make(relative),
-            .size       = contents.len(),
-            .sha256     = licrypto::sha256_hex(contents),
+            .path   = String::make(relative),
+            .size   = contents.len(),
+            .sha256 = rstd_try(licrypto::sha256_hex(contents).map_err([](licrypto::Error error) {
+                return rstd::format("SHA-256 failed: {}", error);
+            })),
             .media_type = String::make(publication_media_type(relative)),
             .cache      = String::make("immutable"_str),
         });

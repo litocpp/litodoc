@@ -11,7 +11,7 @@ authors = ["hypengw <hypengwip@gmail.com>"]
 [workspace.dependencies]
 litodoc-core = { path = "core" }
 litodoc-web = { path = "web" }
-licrypto = "0.1.0"
+licrypto = "0.2.0"
 rstd-std = "0.1.0"
 rstd-json = "0.1.0"
 rstd-serde = "0.1.0"

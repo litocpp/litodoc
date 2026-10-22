@@ -292,8 +292,11 @@ auto load_book_project(ref<rstd::path::Path>              requested,
                                                                      manifest.as_path(),
                                                                      "output.html.frontend"_str)));
     }
-    auto identity =
-        licrypto::sha256_hex(rstd::format("lito-book-project-v1\n{}", name->as_str()).as_str());
+    auto identity = rstd_try(
+        licrypto::sha256_hex(rstd::format("lito-book-project-v1\n{}", name->as_str()).as_str())
+            .map_err([](licrypto::Error error) {
+                return rstd::format("SHA-256 failed: {}", error);
+            }));
     return Ok(BookProject {
         .root        = rstd::move(root),
         .manifest    = rstd::move(manifest),

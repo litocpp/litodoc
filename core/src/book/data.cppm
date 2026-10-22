@@ -335,7 +335,9 @@ auto load_book_dataset(ref<rstd::path::Path> root) -> Result<BookDataset, String
         if (! data_paths.insert(data.clone()))
             return Err(rstd::format("duplicate Book page data path '{}'", data.as_str()));
         auto page_text = rstd_try(read_book_data(root, data.as_str()));
-        if (licrypto::sha256_hex(page_text.as_str()).as_str() != digest.as_str())
+        if (rstd_try(licrypto::sha256_hex(page_text.as_str()).map_err([](licrypto::Error error) {
+                return rstd::format("SHA-256 failed: {}", error);
+            })).as_str() != digest.as_str())
             return Err(rstd::format("Book page '{}' digest mismatch", identity.as_str()));
         auto document = rstd_try(parse_book_data(page_text.as_str(), "Book page data"_str));
         auto page     = rstd_try(decode_book_page(document));
@@ -364,8 +366,12 @@ auto publish_book_dataset(ref<rstd::path::Path> root, const BookDataset& dataset
         entry.insert(String::make("title"_str), book_json_string(page.title.as_str()));
         entry.insert(String::make("url"_str), book_json_string(page.url.as_str()));
         entry.insert(String::make("data"_str), book_json_string(relative.as_str()));
-        entry.insert(String::make("digest"_str),
-                     book_json_string(licrypto::sha256_hex(text.as_str()).as_str()));
+        entry.insert(
+            String::make("digest"_str),
+            book_json_string(
+                rstd_try(licrypto::sha256_hex(text.as_str()).map_err([](licrypto::Error error) {
+                    return rstd::format("SHA-256 failed: {}", error);
+                })).as_str()));
         pages.push(BookJson::Object(rstd::move(entry)));
         summary.pages.push(BookDataPageSummary {
             .identity = page.identity.clone(),
@@ -385,8 +391,11 @@ auto publish_book_dataset(ref<rstd::path::Path> root, const BookDataset& dataset
     book.insert(String::make("roots"_str), BookJson::Array(rstd::move(roots)));
     manifest.insert(String::make("book"_str), BookJson::Object(rstd::move(book)));
     manifest.insert(String::make("pages"_str), BookJson::Array(rstd::move(pages)));
-    auto text        = book_json_text(BookJson::Object(rstd::move(manifest)));
-    summary.digest   = licrypto::sha256_hex(text.as_str());
+    auto text = book_json_text(BookJson::Object(rstd::move(manifest)));
+    summary.digest =
+        rstd_try(licrypto::sha256_hex(text.as_str()).map_err([](licrypto::Error error) {
+            return rstd::format("SHA-256 failed: {}", error);
+        }));
     summary.manifest = rstd_try(write_book_data_file(root, "data/book.json"_str, text.as_str()));
     auto validated   = rstd_try(load_book_dataset(root));
     if (validated.identity.as_str() != dataset.identity.as_str() ||

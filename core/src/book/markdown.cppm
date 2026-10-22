@@ -152,7 +152,7 @@ auto inline_plain_text(const Vec<MarkdownInline>& inlines) -> String {
     return text;
 }
 
-auto heading_slug(ref<str> text) -> String {
+auto heading_slug(ref<str> text) -> Result<String, String> {
     auto result    = String::make();
     auto separator = false;
     for (auto character : text) {
@@ -170,10 +170,12 @@ auto heading_slug(ref<str> text) -> String {
         }
     }
     if (result.is_empty()) {
-        auto digest = licrypto::sha256_hex(text);
+        auto digest = rstd_try(licrypto::sha256_hex(text).map_err([](licrypto::Error error) {
+            return rstd::format("SHA-256 failed: {}", error);
+        }));
         result      = rstd::format("section-{}", digest.as_str().get(usize {}, usize(12)).unwrap());
     }
-    return result;
+    return Ok(rstd::move(result));
 }
 
 auto list_item(ref<str> line) -> Option<rstd::tuple<usize, bool, usize>> {
@@ -407,7 +409,7 @@ auto parse_markdown(ref<rstd::path::Path> path, ref<str> source)
                 auto inlines =
                     rstd_try(parse_inlines(text, path, line, heading + usize(2), document.links));
                 auto plain = inline_plain_text(inlines);
-                auto slug  = heading_slug(plain.as_str());
+                auto slug  = rstd_try(heading_slug(plain.as_str()));
                 auto count = slugs.get_mut(slug.as_str());
                 if (count.is_some()) {
                     ++(**count);
@@ -597,8 +599,11 @@ auto resolve_book_content(const BookProject&    project,
                         if (name.is_none() || name->to_str().is_none())
                             return Err(markdown_error(item.span,
                                                       "local image has no UTF-8 file name"_str));
-                        auto digest =
-                            licrypto::sha256_hex(local.as_path().to_string_lossy().as_str());
+                        auto digest = rstd_try(
+                            licrypto::sha256_hex(local.as_path().to_string_lossy().as_str())
+                                .map_err([](licrypto::Error error) {
+                                    return rstd::format("SHA-256 failed: {}", error);
+                                }));
                         output = rstd::format("assets/{}-{}",
                                               digest.as_str().get(usize {}, usize(16)).unwrap(),
                                               *name->to_str());
