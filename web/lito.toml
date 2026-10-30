@@ -32,10 +32,7 @@ visibility = "private"
 
 [dependencies.liresto]
 version = "0.1.0"
-
-[dependencies.liresto-pack]
-version = "0.1.0"
-usage = "tool"
+usage = ["compile", "link", "tool"]
 
 [dependencies.lito-resource]
 version = "0.1.0"
