@@ -565,20 +565,30 @@ auto package_context(const Dataset& dataset,
     package_value.insert("module_count"_str, template_number(modules.count));
     context.insert("package"_str, rstd::move(package_value));
     context.insert("modules"_str, rstd::move(modules.items));
-    auto symbols = TemplateValue::array_value();
+    auto symbols      = TemplateValue::array_value();
+    auto symbol_count = usize();
     for (const auto& symbol : package.symbols) {
         if (! is_published_symbol_kind(symbol.kind)) continue;
+        if (package.root_module.is_empty() && is_record_member(symbol)) continue;
         auto item = TemplateValue::object_value();
         item.insert("kind"_str, template_text(declaration_kind_name(symbol.kind)));
         item.insert("qualified_name"_str, template_text(symbol.qualified_name.as_str()));
         auto href = symbol_href(symbol);
         item.insert("href"_str, template_text(href.as_str()));
         symbols.array.push(rstd::move(item));
+        ++symbol_count;
     }
+    if (package.root_module.is_empty())
+        context.object.get_mut("package"_str)
+            .unwrap()
+            ->insert("symbol_count"_str, template_number(symbol_count));
     context.insert("symbols"_str, rstd::move(symbols));
     auto page = context.object.get_mut("page"_str).unwrap();
     if (has_documentation) append_outline(*page, "#documentation"_str, "Documentation"_str);
-    append_outline(*page, "#modules"_str, "Modules"_str);
+    if (package.root_module.is_empty())
+        append_outline(*page, "#symbols"_str, "Symbols"_str);
+    else
+        append_outline(*page, "#modules"_str, "Modules"_str);
     return context;
 }
 
@@ -925,6 +935,7 @@ auto render_package_site(ref<rstd::path::Path>   root,
     if (written.is_err()) return written;
     auto target_index = declaration_target_index(dataset);
     for (const auto& module : package.modules) {
+        if (module.name.is_empty()) continue;
         auto context = module_context(dataset, package, module, RenderLayout::Package);
         written      = render_page(root,
                                    module.page.as_str(),
@@ -997,6 +1008,7 @@ auto render_site(ref<rstd::path::Path>   root,
                                  package_json(package).as_str());
         if (written.is_err()) return written;
         for (const auto& module : package.modules) {
+            if (module.name.is_empty()) continue;
             auto context = module_context(dataset, package, module);
             written =
                 render_page(root,

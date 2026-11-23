@@ -742,6 +742,130 @@ TEST(DocPublication, PublishesRelocatablePackageSitesFromOneDataset) {
     EXPECT_FALSE(module_navigation_page.as_str().contains("<li><a href=\"../module/"_str));
 }
 
+TEST(DocPublication, PublishesOrdinaryTranslationUnitsWithoutAModule) {
+    auto temporary = rstd::test::TempDir::make();
+    ASSERT_TRUE(temporary.is_ok());
+    auto root   = temporary->path();
+    auto source = child(root, "src/plain.c"_str);
+    auto unit   = lito::doc::DocumentationUnit {
+        .source          = source.clone(),
+        .source_contents = String::make("\n\nint value(void) { return 7; }\n"_str),
+        .kind            = lito::doc::DocumentationUnitKind::Ordinary,
+    };
+    unit.declarations.push(lito::doc::DeclarationOutline {
+        .semantic_identity = "plain-value"_Str,
+        .kind              = lito::doc::DeclarationKind::Function,
+        .name              = "value"_Str,
+        .qualified_name    = "value"_Str,
+        .signature         = "int value(void);"_Str,
+        .scope_signature   = "int value(void);"_Str,
+        .is_definition     = true,
+        .origin            = lito::doc::DeclarationOrigin::Ordinary,
+        .spelling_span     = source_span(source),
+        .expansion_span    = source_span(source),
+    });
+    unit.diagnostics.push(lito::doc::DocumentationDiagnostic {
+        .code    = "external-warning"_Str,
+        .message = "Warning in an external header."_Str,
+        .span = { .path = PathBuf::from("/system/include/foreign.h"_str), .begin_line = usize(8) },
+    });
+    unit.diagnostics.push(lito::doc::DocumentationDiagnostic {
+        .code    = "locationless-warning"_Str,
+        .message = "Warning without a source location."_Str,
+    });
+    unit.diagnostics.push(lito::doc::DocumentationDiagnostic {
+        .code    = "local-warning"_Str,
+        .message = "Warning in this package."_Str,
+        .span    = source_span(source),
+    });
+    auto package = lito::doc::PackageInput {
+        .name              = "plain"_Str,
+        .version           = "1.2.3"_Str,
+        .source_identity   = "registry+https://registry.example.test/"_Str,
+        .profile           = "release"_Str,
+        .root              = PathBuf::from(root),
+        .toolchain_version = "clang 22"_Str,
+        .toolchain_target  = "x86_64-unknown-linux-gnu"_Str,
+        .language_standard = "c17"_Str,
+    };
+    package.units.push(rstd::move(unit));
+    auto input = lito::doc::SiteInput {
+        .title       = "Ordinary package"_Str,
+        .output      = child(root, "publication"_str),
+        .data_output = child(root, "data"_str),
+        .publication = lito::doc::PublicationKind::PackageSet,
+    };
+    input.packages.push(rstd::move(package));
+    auto frontend = lito::doc::web::load_default_frontend();
+    ASSERT_TRUE(frontend.is_ok());
+    auto generated = lito::doc::generate(rstd::move(input), Some(rstd::move(frontend).unwrap()));
+    ASSERT_TRUE(generated.is_ok());
+    ASSERT_TRUE(generated->publication_set.is_some());
+    ASSERT_EQ(generated->publication_set->packages.len(), usize(1));
+    auto manifest =
+        rstd::fs::read_to_string(child(root, "publication/plain/publication.json"_str).as_path());
+    ASSERT_TRUE(manifest.is_ok());
+    EXPECT_TRUE(manifest->as_str().contains("\"root_module\": \"\""_str));
+    auto index =
+        rstd::fs::read_to_string(child(root, "publication/plain/index.html"_str).as_path());
+    ASSERT_TRUE(index.is_ok());
+    EXPECT_TRUE(index->as_str().contains("id=\"symbols\""_str));
+    EXPECT_FALSE(index->as_str().contains("id=\"modules\""_str));
+    auto data = rstd::fs::read_to_string(child(root, "publication/plain/doc.json"_str).as_path());
+    ASSERT_TRUE(data.is_ok());
+    EXPECT_TRUE(data->as_str().contains("/system/include/foreign.h"_str));
+    EXPECT_TRUE(data->as_str().contains("locationless-warning"_str));
+    EXPECT_TRUE(data->as_str().contains("\"path\": \"src/plain.c\""_str));
+    auto symbols = usize();
+    for (const auto& file : generated->publication_set->packages[usize()].files) {
+        EXPECT_FALSE(file.path.as_str().starts_with("module/"_str));
+        auto path     = child(root, rstd::format("publication/plain/{}", file.path).as_str());
+        auto contents = rstd::fs::read_to_string(path.as_path());
+        ASSERT_TRUE(contents.is_ok());
+        EXPECT_EQ(contents->len(), file.size);
+        EXPECT_EQ(licrypto::sha256_hex(contents->as_str()).unwrap().as_str(), file.sha256.as_str());
+        if (! file.path.as_str().starts_with("symbol/"_str)) continue;
+        ++symbols;
+        EXPECT_TRUE(index->as_str().contains(rstd::format("href=\"{}\"", file.path).as_str()));
+        EXPECT_TRUE(contents->as_str().contains("href=\"../index.html\">plain</a>"_str));
+        EXPECT_FALSE(contents->as_str().contains("href=\"../index.html\"></a>"_str));
+    }
+    EXPECT_EQ(symbols, usize(1));
+    frontend = lito::doc::web::load_default_frontend();
+    ASSERT_TRUE(frontend.is_ok());
+    auto rendered =
+        lito::doc::render({ .data = child(root, "data"_str), .output = child(root, "site"_str) },
+                          Some(rstd::move(frontend).unwrap()));
+    ASSERT_TRUE(rendered.is_ok());
+    auto workspace =
+        rstd::fs::read_to_string(child(root, "site/package/plain/index.html"_str).as_path());
+    ASSERT_TRUE(workspace.is_ok());
+    EXPECT_TRUE(workspace->as_str().contains("id=\"symbols\""_str));
+    EXPECT_TRUE(workspace->as_str().contains(">value</code></a>"_str));
+}
+
+TEST(DocPublication, RejectsSourceSnapshotsOutsidePackageRoot) {
+    auto temporary = rstd::test::TempDir::make();
+    ASSERT_TRUE(temporary.is_ok());
+    auto root                     = temporary->path();
+    auto package                  = publication_package(root, "plain"_str, "plain"_str);
+    package.units[usize()].source = PathBuf::from("/system/include/foreign.h"_str);
+    auto input                    = lito::doc::SiteInput {
+        .title       = "Source boundary"_Str,
+        .output      = child(root, "publication"_str),
+        .data_output = child(root, "data"_str),
+        .publication = lito::doc::PublicationKind::PackageSet,
+    };
+    input.packages.push(rstd::move(package));
+    auto frontend = lito::doc::web::load_default_frontend();
+    ASSERT_TRUE(frontend.is_ok());
+    auto generated = lito::doc::generate(rstd::move(input), Some(rstd::move(frontend).unwrap()));
+    ASSERT_TRUE(generated.is_err());
+    EXPECT_TRUE(generated.unwrap_err().as_str().contains("outside package root"_str));
+    EXPECT_FALSE(
+        rstd::fs::exists(child(root, "publication/publication-set.json"_str).as_path()).unwrap());
+}
+
 TEST(DocPublication, PackageManifestDoesNotDependOnSiblingPackages) {
     auto temporary = rstd::test::TempDir::make();
     ASSERT_TRUE(temporary.is_ok());

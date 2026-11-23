@@ -56,6 +56,15 @@ auto package_path(ref<rstd::path::Path> root, ref<rstd::path::Path> source)
     return Ok(String::make(*path));
 }
 
+auto diagnostic_path(ref<rstd::path::Path> root, ref<rstd::path::Path> source)
+    -> Result<String, String> {
+    auto relative = source.strip_prefix(root);
+    auto path     = relative.is_some() ? relative->to_str() : source.to_str();
+    if (path.is_none())
+        return Err(rstd::format("diagnostic location '{}' is not valid UTF-8", source));
+    return Ok(String::make(*path));
+}
+
 auto stable_key(ref<str> package, ref<str> module, const DeclarationOutline& declaration)
     -> String {
     return rstd::format("{}|{}|{}",
@@ -191,9 +200,12 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
                         if (previous.is_none() && unit.module_comment.is_some())
                             (**existing_module).comment = Some(unit.module_comment->text.clone());
                     } else {
-                        auto module_page = rstd::format(
-                            "module/mod-{}.html",
-                            identity_hash("lito-doc-module-v1"_str, module_name).as_str());
+                        auto module_page =
+                            module_name.is_empty()
+                                ? String::make("index.html"_str)
+                                : rstd::format("module/mod-{}.html",
+                                               identity_hash("lito-doc-module-v1"_str, module_name)
+                                                   .as_str());
                         modules.insert(String::make(module_name),
                                        Module {
                                            .name    = String::make(module_name),
@@ -218,15 +230,14 @@ auto make_database(Vec<PackageInput> packages) -> Result<Database, String> {
                     }
                     package.unsupported += unit.unsupported;
                     for (const auto& diagnostic : unit.diagnostics) {
-                        auto diagnostic_path = package_path(source_package.root.as_path(),
-                                                            diagnostic.span.path.as_path());
-                        if (diagnostic_path.is_err())
-                            return Err(rstd::move(diagnostic_path).unwrap_err());
+                        auto location = diagnostic_path(source_package.root.as_path(),
+                                                        diagnostic.span.path.as_path());
+                        if (location.is_err()) return Err(rstd::move(location).unwrap_err());
                         package.diagnostics.push(Diagnostic {
                             .severity = diagnostic.severity,
                             .code     = diagnostic.code.clone(),
                             .message  = diagnostic.message.clone(),
-                            .path     = rstd::move(diagnostic_path).unwrap(),
+                            .path     = rstd::move(location).unwrap(),
                             .line     = diagnostic.span.begin_line,
                         });
                     }
