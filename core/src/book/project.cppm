@@ -6,6 +6,7 @@ export module lito.book:project;
 import rstd;
 import rstd.toml;
 import licrypto;
+import lito.site;
 import :model;
 
 using namespace rstd::prelude;
@@ -198,8 +199,79 @@ auto output_path(ref<rstd::path::Path> root, ref<rstd::path::Path> value)
 export namespace lito::book
 {
 
-auto discover_book_manifest(ref<rstd::path::Path> requested)
+auto normalize_book_path(ref<rstd::path::Path> root, ref<rstd::path::Path> value)
     -> Result<rstd::path::PathBuf, String> {
+    auto requested = value.is_absolute() ? rstd::path::PathBuf::from(value)
+                                         : rstd::path::PathBuf::from(root).join(value);
+    auto candidate = requested.clone();
+    Vec<rstd::ffi::OsString> suffix;
+    while (true) {
+        auto metadata = rstd::fs::symlink_metadata(candidate.as_path());
+        if (metadata.is_ok()) {
+            auto canonical = rstd::fs::canonicalize(candidate.as_path());
+            if (canonical.is_err())
+                return Err(rstd::format("cannot resolve Book path '{}': {}",
+                                        requested.as_path(),
+                                        rstd::move(canonical).unwrap_err()));
+            if (! suffix.is_empty()) {
+                auto directory = rstd::fs::metadata(canonical->as_path());
+                if (directory.is_err() || ! directory->is_dir())
+                    return Err(rstd::format("Book path '{}' has a non-directory parent",
+                                            requested.as_path()));
+            }
+            auto path = rstd::move(canonical).unwrap();
+            while (! suffix.is_empty())
+                path.push(rstd::path::PathBuf::from(suffix.pop().unwrap()).as_path());
+            auto normalized = path.as_path().normalize_lexically();
+            if (normalized.is_err())
+                return Err(rstd::format("invalid Book path '{}'", requested.as_path()));
+            return Ok(rstd::move(normalized).unwrap());
+        }
+        auto error = rstd::move(metadata).unwrap_err();
+        if (error.kind() != rstd::io::ErrorKind { rstd::io::ErrorKind::NotFound })
+            return Err(
+                rstd::format("cannot inspect Book path '{}': {}", requested.as_path(), error));
+        auto name   = candidate.as_path().file_name();
+        auto parent = candidate.as_path().parent();
+        if (name.is_none() || parent.is_none())
+            return Err(rstd::format("cannot resolve Book path '{}'", requested.as_path()));
+        suffix.push(rstd::ffi::OsString::from(*name));
+        candidate = rstd::path::PathBuf::from(*parent);
+    }
+}
+
+auto validate_book_output(const BookProject& project, ref<rstd::path::Path> requested)
+    -> Result<rstd::path::PathBuf, String> {
+    auto output      = rstd_try(normalize_book_path(project.root.as_path(), requested));
+    auto publication = rstd_try(lito::site::publication_layout(output.as_path(), "book-site"_str));
+    const auto targets = array<ref<rstd::path::Path>, 3> { publication.output.as_path(),
+                                                           publication.staging.as_path(),
+                                                           publication.backup.as_path() };
+    for (auto target : targets) {
+        auto contains = [target](ref<rstd::path::Path> input) {
+            return input.strip_prefix(target).is_some();
+        };
+        if (contains(project.root.as_path()) || contains(project.source_root.as_path()) ||
+            contains(project.summary.as_path()) ||
+            (project.icon.is_some() && contains(project.icon->asset.source.as_path())) ||
+            (project.frontend.is_some() &&
+             (contains(project.frontend->as_path()) ||
+              target.strip_prefix(project.frontend->as_path()).is_some())))
+            return Err(rstd::format("Book publication path '{}' overlaps its inputs", target));
+        auto exists = rstd_try(rstd::fs::exists(target).map_err([](rstd::io::Error error) {
+            return rstd::format("cannot inspect Book output: {}", error);
+        }));
+        if (exists) {
+            auto metadata = rstd::fs::metadata(target);
+            if (metadata.is_err() || ! metadata->is_dir())
+                return Err(rstd::format("Book publication path '{}' must be a directory", target));
+        }
+    }
+    return Ok(rstd::move(output));
+}
+
+auto find_book_manifest(ref<rstd::path::Path> requested)
+    -> Result<Option<rstd::path::PathBuf>, String> {
     auto directory = rstd::fs::canonicalize(requested);
     if (directory.is_err())
         return Err(rstd::format("cannot resolve Book working directory '{}': {}",
@@ -217,12 +289,20 @@ auto discover_book_manifest(ref<rstd::path::Path> requested)
             return Err(rstd::format("cannot inspect Book manifest '{}': {}",
                                     candidate.as_path(),
                                     rstd::move(exists).unwrap_err()));
-        if (*exists) return Ok(rstd::move(candidate));
+        if (*exists) return Ok(Some(rstd::move(candidate)));
         auto parent = current.as_path().parent();
         if (parent.is_none() || *parent == current.as_path()) break;
         current = rstd::path::PathBuf::from(*parent);
     }
-    return Err(rstd::format("cannot find book.toml from '{}' or its ancestors", requested));
+    return Ok(Option<rstd::path::PathBuf> {});
+}
+
+auto discover_book_manifest(ref<rstd::path::Path> requested)
+    -> Result<rstd::path::PathBuf, String> {
+    auto found = rstd_try(find_book_manifest(requested));
+    if (found.is_none())
+        return Err(rstd::format("cannot find book.toml from '{}' or its ancestors", requested));
+    return Ok(rstd::move(found).unwrap());
 }
 
 auto load_book_project(ref<rstd::path::Path>              requested,
@@ -324,7 +404,7 @@ auto load_book_project(ref<rstd::path::Path>              requested,
     if (icon_text.is_some())
         icon = Some(
             rstd_try(resolve_book_icon(root.as_path(), icon_text->as_str(), manifest.as_path())));
-    return Ok(BookProject {
+    auto project = BookProject {
         .root        = rstd::move(root),
         .manifest    = rstd::move(manifest),
         .identity    = rstd::move(identity),
@@ -337,7 +417,9 @@ auto load_book_project(ref<rstd::path::Path>              requested,
         .output      = rstd::move(resolved_output),
         .frontend    = rstd::move(resolved_frontend),
         .icon        = rstd::move(icon),
-    });
+    };
+    project.output = rstd_try(validate_book_output(project, project.output.as_path()));
+    return Ok(rstd::move(project));
 }
 
 } // namespace lito::book

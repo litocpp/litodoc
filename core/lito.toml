@@ -30,6 +30,7 @@ sources = [
   "src/book/graph.cppm",
   "src/book/data.cppm",
   "src/book/render.cppm",
+  "src/book/watch.cppm",
   "src/book/lib.cppm",
 ]
 

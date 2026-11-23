@@ -40,7 +40,7 @@ auto remove_publication_directory(ref<rstd::path::Path> path) -> Result<empty, S
     return Ok(empty {});
 }
 
-auto begin_publication(ref<rstd::path::Path> output, ref<str> owner)
+auto publication_layout(ref<rstd::path::Path> output, ref<str> owner)
     -> Result<Publication, String> {
     auto staging_suffix = rstd::format(".lito-{}-staging", owner);
     auto backup_suffix  = rstd::format(".lito-{}-backup", owner);
@@ -48,20 +48,27 @@ auto begin_publication(ref<rstd::path::Path> output, ref<str> owner)
     auto backup         = publication_sibling(output, backup_suffix.as_str());
     if (staging.is_err()) return Err(rstd::move(staging).unwrap_err());
     if (backup.is_err()) return Err(rstd::move(backup).unwrap_err());
-    auto cleaned = remove_publication_directory(staging->as_path());
-    if (cleaned.is_err()) return Err(rstd::move(cleaned).unwrap_err());
-    cleaned = remove_publication_directory(backup->as_path());
-    if (cleaned.is_err()) return Err(rstd::move(cleaned).unwrap_err());
-    auto created = rstd::fs::create_dir_all(staging->as_path());
-    if (created.is_err())
-        return Err(rstd::format("cannot create doc staging directory '{}': {}",
-                                staging->as_path(),
-                                rstd::move(created).unwrap_err()));
     return Ok(Publication {
         .output  = rstd::path::PathBuf::from(output),
         .staging = rstd::move(staging).unwrap(),
         .backup  = rstd::move(backup).unwrap(),
     });
+}
+
+auto begin_publication(ref<rstd::path::Path> output, ref<str> owner)
+    -> Result<Publication, String> {
+    auto layout = publication_layout(output, owner);
+    if (layout.is_err()) return Err(rstd::move(layout).unwrap_err());
+    auto cleaned = remove_publication_directory(layout->staging.as_path());
+    if (cleaned.is_err()) return Err(rstd::move(cleaned).unwrap_err());
+    cleaned = remove_publication_directory(layout->backup.as_path());
+    if (cleaned.is_err()) return Err(rstd::move(cleaned).unwrap_err());
+    auto created = rstd::fs::create_dir_all(layout->staging.as_path());
+    if (created.is_err())
+        return Err(rstd::format("cannot create doc staging directory '{}': {}",
+                                layout->staging.as_path(),
+                                rstd::move(created).unwrap_err()));
+    return Ok(rstd::move(layout).unwrap());
 }
 
 auto abort_publication(const Publication& publication) -> Result<empty, String> {

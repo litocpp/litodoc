@@ -92,3 +92,16 @@ embed.embed({
   target = target, module = "lito.doc.web", namespace = "lito::doc::web",
   name = "embedded_resources", files = files,
 })
+
+local preview = lito.run({
+  tool = esbuild,
+  cwd = "src",
+  args = { "preview.ts", "--bundle", "--minify", "--target=es2020", "--outfile=@OUTPUT@" },
+  inputs = { "preview.ts" },
+  outputs = { "preview/client.js" },
+})
+embed.embed({
+  target = target, module = "lito.doc.web", namespace = "lito::doc::web",
+  name = "embedded_preview_resources", output = "resources/preview",
+  files = { { input = preview.outputs[1], path = "client.js" } },
+})

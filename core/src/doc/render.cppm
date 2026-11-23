@@ -102,6 +102,7 @@ auto page_value(ref<str> title, ref<str> kind, ref<str> asset_prefix) -> Templat
 auto site_value(const Dataset& dataset) -> TemplateValue {
     auto site = TemplateValue::object_value();
     site.insert("title"_str, template_text(dataset.title.as_str()));
+    site.insert("language"_str, template_text("en"_str));
     site.insert("package_count"_str, template_number(dataset.packages.len()));
     return site;
 }
@@ -109,6 +110,7 @@ auto site_value(const Dataset& dataset) -> TemplateValue {
 auto package_site_value(const Package& package) -> TemplateValue {
     auto site = TemplateValue::object_value();
     site.insert("title"_str, template_text(package.name.as_str()));
+    site.insert("language"_str, template_text("en"_str));
     site.insert("package_count"_str, template_number(usize(1)));
     return site;
 }

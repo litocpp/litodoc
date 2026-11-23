@@ -2,6 +2,7 @@ export module lito.book:model;
 
 import rstd;
 export import limarkto;
+import lito.site;
 
 using namespace rstd::prelude;
 
@@ -166,6 +167,24 @@ struct BookCheckSummary {
     usize       pages {};
     usize       headings {};
     usize       links {};
+};
+
+struct PreparedBook {
+    BookProject                project;
+    BookGraph                  graph;
+    BookContent                content;
+    BookDataset                dataset;
+    lito::site::FrontendBundle frontend;
+};
+
+struct BookWatchLayout {
+    rstd::path::PathBuf      root;
+    Vec<rstd::path::PathBuf> roots;
+    Vec<rstd::path::PathBuf> excluded;
+};
+
+struct BookWatchSnapshot {
+    String digest;
 };
 
 } // namespace lito::book

@@ -4,6 +4,7 @@ import rstd;
 import rstd.argparse;
 import lito.book;
 import lito.doc.web;
+import :runner;
 
 using namespace rstd::prelude;
 using namespace rstd::literals;
@@ -21,14 +22,55 @@ auto litobook_version() noexcept -> ref<str> {
                                               usize(LITOBOOK_VERSION_SIZE));
 }
 
+struct RebuildCommand {
+    CommandKey             command;
+    Option<ArgKey<String>> output;
+    ArgKey<String>         frontend;
+    ArgKey<u64>            interval;
+    Option<ArgKey<u16>>    port;
+};
+
 struct CliSchema {
     Parser         parser;
     CommandKey     build;
     CommandKey     check;
+    RebuildCommand watch;
+    RebuildCommand serve;
     ArgKey<String> directory;
     ArgKey<String> output;
     ArgKey<String> frontend;
 };
+
+auto add_rebuild_command(Command& root, bool serve) -> RebuildCommand {
+    auto command = Command::make(serve ? "serve"_str : "watch"_str);
+    command.about(serve ? "Preview a Book locally and reload after successful rebuilds"_str
+                        : "Rebuild a Book when its inputs change"_str);
+    auto                   key = command.key();
+    Option<ArgKey<String>> output;
+    if (! serve)
+        output.insert(command.add_arg(Arg<String>::value("output"_str, string_parser())
+                                          .long_name("out"_str)
+                                          .value_name("DIRECTORY"_str)
+                                          .help("Override the output directory"_str)));
+    auto frontend = command.add_arg(Arg<String>::value("frontend"_str, string_parser())
+                                        .long_name("frontend"_str)
+                                        .value_name("DIRECTORY"_str)
+                                        .help("Use a local frontend bundle"_str));
+    auto interval = command.add_arg(Arg<u64>::value("interval"_str, from_str_parser<u64>())
+                                        .long_name("interval-ms"_str)
+                                        .value_name("MILLISECONDS"_str)
+                                        .default_value("250"_str)
+                                        .help("Input scan interval, 50 to 60000 ms"_str));
+    Option<ArgKey<u16>> port;
+    if (serve)
+        port.insert(command.add_arg(Arg<u16>::value("port"_str, from_str_parser<u16>())
+                                        .long_name("port"_str)
+                                        .value_name("PORT"_str)
+                                        .default_value("3000"_str)
+                                        .help("Loopback port; 0 selects an available port"_str)));
+    root.add_subcommand(rstd::move(command));
+    return RebuildCommand { key, rstd::move(output), frontend, interval, rstd::move(port) };
+}
 
 auto make_cli() -> Result<CliSchema, String> {
     auto build = Command::make("build"_str);
@@ -59,6 +101,8 @@ auto make_cli() -> Result<CliSchema, String> {
                                       .global());
     root.add_subcommand(rstd::move(build));
     root.add_subcommand(rstd::move(check));
+    auto watch  = add_rebuild_command(root, false);
+    auto serve  = add_rebuild_command(root, true);
     auto parser = rstd::move(root).build();
     if (parser.is_err())
         return Err(rstd::format("invalid command definition: {}", rstd::move(parser).unwrap_err()));
@@ -66,6 +110,8 @@ auto make_cli() -> Result<CliSchema, String> {
         .parser    = rstd::move(parser).unwrap(),
         .build     = build_key,
         .check     = check_key,
+        .watch     = watch,
+        .serve     = serve,
         .directory = directory,
         .output    = output,
         .frontend  = frontend,
@@ -126,6 +172,42 @@ auto run() -> int {
     auto matches   = rstd::move(outcome).as_Parsed().value;
     auto directory = argument(matches, schema->directory);
     if (directory.is_err()) return fail(directory.unwrap_err().as_str());
+    auto serve = matches.subcommand_matches(schema->serve.command);
+    auto watch = matches.subcommand_matches(schema->watch.command);
+    if (serve.is_some() || watch.is_some()) {
+        const auto& options  = serve.is_some() ? schema->serve : schema->watch;
+        const auto& child    = serve.is_some() ? **serve : **watch;
+        auto        frontend = argument(child, options.frontend);
+        if (frontend.is_err()) return fail(frontend.unwrap_err().as_str());
+        auto output =
+            Result<Option<rstd::path::PathBuf>, String>(Ok(Option<rstd::path::PathBuf> {}));
+        if (watch.is_some()) output = argument(child, *options.output);
+        if (output.is_err()) return fail(output.unwrap_err().as_str());
+        auto interval = child.get_one(options.interval);
+        if (interval.is_err()) return fail("cannot read scan interval"_str);
+        auto interval_ms = ***interval;
+        if (interval_ms < u64(50) || interval_ms > u64(60000))
+            return fail("--interval-ms must be between 50 and 60000"_str, i32(2));
+        auto port = u16(3000);
+        if (serve.is_some()) {
+            auto value = child.get_one(*options.port);
+            if (value.is_err()) return fail("cannot read preview port"_str);
+            port = ***value;
+        }
+        auto result = run_watch(RunnerInput {
+            .input =
+                BookBuildInput {
+                    .directory = rstd::move(directory).unwrap().unwrap(),
+                    .output    = rstd::move(output).unwrap(),
+                    .frontend  = rstd::move(frontend).unwrap(),
+                },
+            .serve       = serve.is_some(),
+            .port        = port,
+            .interval_ms = interval_ms,
+        });
+        if (result.is_err()) return fail(result.unwrap_err().as_str());
+        return 0;
+    }
     if (matches.subcommand_matches(schema->check).is_some()) {
         auto checked = lito::book::check(BookCheckInput {
             .directory = rstd::move(directory).unwrap().unwrap(),
@@ -139,7 +221,7 @@ auto run() -> int {
         return 0;
     }
     auto child = matches.subcommand_matches(schema->build);
-    if (child.is_none()) return fail("expected build or check"_str, i32(2));
+    if (child.is_none()) return fail("expected build, check, watch or serve"_str, i32(2));
     auto output   = argument(**child, schema->output);
     auto frontend = argument(**child, schema->frontend);
     if (output.is_err()) return fail(output.unwrap_err().as_str());
