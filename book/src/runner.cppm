@@ -46,6 +46,7 @@ auto rebuild(BookWatchSession&                    session,
     if (frontend.is_err()) return Err(BuildFailure { rstd::move(frontend).unwrap_err() });
     auto prepared = session.prepare(rstd::move(output), Some(rstd::move(frontend).unwrap()));
     if (prepared.is_err()) return Err(BuildFailure { rstd::move(prepared).unwrap_err() });
+    if (preview.is_some()) prepared->html.not_found_base = "/"_Str;
     auto built = lito::book::publish(*prepared);
     if (built.is_err()) return Err(BuildFailure { rstd::move(built).unwrap_err() });
     if (preview.is_some()) {

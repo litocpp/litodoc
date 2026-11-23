@@ -14,6 +14,7 @@ import :summary;
 import :graph;
 import :markdown;
 import :render;
+import :publication;
 
 using namespace rstd::prelude;
 using namespace rstd::literals;
@@ -61,11 +62,13 @@ auto prepare_book_content(BookProject project) -> Result<PreparedBook, String> {
     }
     auto content  = rstd_try(resolve_book_content(project, graph, rstd::move(documents)));
     auto dataset  = rstd_try(make_book_dataset(project, graph, content));
+    auto html     = rstd_try(prepare_html_publication(project, graph, content));
     auto prepared = PreparedBook {
         .project = rstd::move(project),
         .graph   = rstd::move(graph),
         .content = rstd::move(content),
         .dataset = rstd::move(dataset),
+        .html    = rstd::move(html),
     };
     rstd_try(validate_prepared_output(prepared));
     return Ok(rstd::move(prepared));
@@ -92,6 +95,7 @@ auto prepare_book_project(BookProject project, Option<FrontendBundle> default_fr
     auto prepared = rstd_try(prepare_book_content(rstd::move(project)));
     prepared.frontend =
         rstd_try(load_book_frontend(prepared.project, rstd::move(default_frontend)));
+    rstd_try(validate_html_publication(prepared));
     return Ok(rstd::move(prepared));
 }
 
@@ -109,8 +113,13 @@ auto prepare(BookBuildInput input, Option<FrontendBundle> default_frontend = {})
 
 auto publish(const PreparedBook& prepared) -> Result<BookSummary, String> {
     rstd_try(validate_prepared_output(prepared));
-    return publish_book_site(
-        prepared.project, prepared.graph, prepared.content, prepared.dataset, prepared.frontend);
+    rstd_try(validate_html_publication(prepared));
+    return publish_book_site(prepared.project,
+                             prepared.graph,
+                             prepared.content,
+                             prepared.dataset,
+                             prepared.frontend,
+                             prepared.html);
 }
 
 auto BookWatchSession::prepare(Option<rstd::path::PathBuf> output_override,
@@ -129,9 +138,14 @@ auto BookWatchSession::prepare(Option<rstd::path::PathBuf> output_override,
     return Ok(rstd::move(prepared));
 }
 
-auto check(BookCheckInput input) -> Result<BookCheckSummary, String> {
+auto check(BookCheckInput input, Option<FrontendBundle> default_frontend = {})
+    -> Result<BookCheckSummary, String> {
     auto project  = rstd_try(load_book_project(input.directory.as_path()));
     auto prepared = rstd_try(prepare_book_content(rstd::move(project)));
+    if (prepared.project.frontend.is_some() || default_frontend.is_some())
+        prepared.frontend =
+            rstd_try(load_book_frontend(prepared.project, rstd::move(default_frontend)));
+    rstd_try(validate_html_publication(prepared));
     auto headings = usize {};
     auto links    = usize {};
     for (const auto& page : prepared.content.pages) {

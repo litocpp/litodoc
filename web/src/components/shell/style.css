@@ -89,7 +89,83 @@ lito-doc-shell {
 
 .desktop-search {
   width: min(420px, 40%);
+  flex-shrink: 1;
+  min-width: 8rem;
+}
+
+.brand-home {
+  max-width: min(16rem, 35vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.site-top-navigation {
+  display: flex;
+  max-width: 28%;
+  gap: 1rem;
+  overflow-x: auto;
+}
+
+.site-top-navigation a,
+.site-repository {
   flex-shrink: 0;
+  color: var(--header-muted);
+  font-size: .875rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.site-top-navigation a:hover,
+.site-repository:hover {
+  color: var(--header-accent);
+}
+
+.site-mobile-links:empty {
+  display: none;
+}
+
+.site-mobile-links nav {
+  display: grid;
+  gap: .5rem;
+}
+
+.site-mobile-links a {
+  display: block;
+  padding-block: .375rem;
+  overflow-wrap: anywhere;
+}
+
+.site-footer {
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: .875rem;
+}
+
+.site-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem 1rem;
+}
+
+.site-footer p {
+  overflow-wrap: anywhere;
+}
+
+.book-edit {
+  margin-block: .5rem 1.5rem;
+  color: var(--muted);
+  font-size: .875rem;
+}
+
+@media (min-width: 70rem) {
+  .site-mobile-links { display: none; }
+}
+
+@media (max-width: 69.999rem) {
+  .site-top-navigation, .site-repository { display: none; }
 }
 
 :root[data-theme="dark"] .topbar {

@@ -202,7 +202,9 @@ auto serve_preview(Arc<PreviewData> state, liserveto::Request request)
     if (served.is_err()) co_return Err(rstd::move(served).unwrap_err());
     auto response = rstd::move(served).unwrap();
     no_store(response);
-    if ((get || head) && response.head.status.value() == u16(200) && is_html(response)) {
+    if ((get || head) &&
+        (response.head.status.value() == u16(200) || response.head.status.value() == u16(404)) &&
+        is_html(response)) {
         auto tag = script_tag(generation->number);
         response.head.headers.remove("etag"_str);
         response.head.headers.remove("last-modified"_str);
@@ -300,7 +302,9 @@ public:
         auto root = liserveto::ConfinedDir::open(path.as_path());
         if (root.is_err())
             return Err(rstd::format("cannot open preview site: {}", root.unwrap_err()));
-        auto files = liserveto::StaticFiles::make(rstd::move(root).unwrap());
+        liserveto::StaticFilesOptions options;
+        options.not_found.insert("404.html"_Str);
+        auto files = liserveto::StaticFiles::make(rstd::move(root).unwrap(), rstd::move(options));
         if (files.is_err())
             return Err(rstd::format("cannot prepare preview site: {}", files.unwrap_err()));
         auto next =

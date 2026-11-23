@@ -15,6 +15,7 @@ litobook = { path = "book" }
 licrypto = "0.2.0"
 limarkto = "0.1.0"
 liserveto = "0.1.2"
+lihttpto = "0.1.4"
 rstd-std = "0.1.0"
 rstd-json = "0.1.0"
 rstd-serde = "0.1.0"

@@ -209,9 +209,13 @@ auto run() -> int {
         return 0;
     }
     if (matches.subcommand_matches(schema->check).is_some()) {
-        auto checked = lito::book::check(BookCheckInput {
-            .directory = rstd::move(directory).unwrap().unwrap(),
-        });
+        auto frontend = lito::doc::web::load_default_frontend();
+        if (frontend.is_err()) return fail(frontend.unwrap_err().as_str());
+        auto checked = lito::book::check(
+            BookCheckInput {
+                .directory = rstd::move(directory).unwrap().unwrap(),
+            },
+            Some(rstd::move(frontend).unwrap()));
         if (checked.is_err()) return fail(checked.unwrap_err().as_str());
         rstd::io::println("checked {}: {} pages, {} headings, {} links",
                           checked->project.title.as_str(),

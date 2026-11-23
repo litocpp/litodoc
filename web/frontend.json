@@ -11,7 +11,8 @@
     "module": "templates/module.html",
     "symbol": "templates/symbol.html",
     "book-root": "templates/book-root.html",
-    "book-page": "templates/book-page.html"
+    "book-page": "templates/book-page.html",
+    "book-not-found": "templates/book-not-found.html"
   },
   "partials": [
     "templates/partials/head.html",

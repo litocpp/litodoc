@@ -48,6 +48,7 @@ struct FrontendBundle {
     String             symbol_template;
     String             book_root_template;
     String             book_page_template;
+    String             book_not_found_template;
     TemplateSet        templates;
     Vec<FrontendAsset> assets;
 };
@@ -200,6 +201,10 @@ auto frontend_manifest_paths(const FrontendManifest& manifest) -> Result<Vec<Str
         if (appended.is_err()) return Err(rstd::move(appended).unwrap_err());
         appended = append_template(templates.book_page, "book-page"_str);
         if (appended.is_err()) return Err(rstd::move(appended).unwrap_err());
+        if (templates.book_not_found.is_some()) {
+            appended = append_template(templates.book_not_found, "book-not-found"_str);
+            if (appended.is_err()) return Err(rstd::move(appended).unwrap_err());
+        }
     }
     for (const auto& partial : *manifest.partials) {
         if (! safe_frontend_path(partial.as_str()))
@@ -246,15 +251,16 @@ auto make_frontend_bundle(String                                                
         return Err(String::make("frontend manifest is missing 'partials'"_str));
     if (manifest.assets.is_none())
         return Err(String::make("frontend manifest is missing 'assets'"_str));
-    auto supports_api       = frontend_capability(manifest, "api"_str);
-    auto supports_book      = frontend_capability(manifest, "book"_str);
-    auto root_template      = String::make();
-    auto package_template   = String::make();
-    auto module_template    = String::make();
-    auto symbol_template    = String::make();
-    auto book_root_template = String::make();
-    auto book_page_template = String::make();
-    auto read_template      = [](Option<String>& value, ref<str> name) -> Result<String, String> {
+    auto supports_api            = frontend_capability(manifest, "api"_str);
+    auto supports_book           = frontend_capability(manifest, "book"_str);
+    auto root_template           = String::make();
+    auto package_template        = String::make();
+    auto module_template         = String::make();
+    auto symbol_template         = String::make();
+    auto book_root_template      = String::make();
+    auto book_page_template      = String::make();
+    auto book_not_found_template = String::make();
+    auto read_template = [](Option<String>& value, ref<str> name) -> Result<String, String> {
         if (value.is_none()) return Err(rstd::format("frontend templates is missing '{}'", name));
         return Ok(rstd::move(value).unwrap());
     };
@@ -268,6 +274,9 @@ auto make_frontend_bundle(String                                                
     if (supports_book) {
         book_root_template = rstd_try(read_template(templates.book_root, "book-root"_str));
         book_page_template = rstd_try(read_template(templates.book_page, "book-page"_str));
+        if (templates.book_not_found.is_some())
+            book_not_found_template =
+                rstd_try(read_template(templates.book_not_found, "book-not-found"_str));
     }
 
     auto set = TemplateSet {
@@ -284,6 +293,8 @@ auto make_frontend_bundle(String                                                
     if (supports_book) {
         template_paths.push(book_root_template.clone());
         template_paths.push(book_page_template.clone());
+        if (! book_not_found_template.is_empty())
+            template_paths.push(book_not_found_template.clone());
     }
     for (const auto& partial : *manifest.partials) {
         template_paths.push(partial.clone());
@@ -314,18 +325,19 @@ auto make_frontend_bundle(String                                                
         });
     }
     return Ok(FrontendBundle {
-        .identity           = rstd::move(identity),
-        .digest             = rstd::move(digest),
-        .supports_api       = supports_api,
-        .supports_book      = supports_book,
-        .root_template      = rstd::move(root_template),
-        .package_template   = rstd::move(package_template),
-        .module_template    = rstd::move(module_template),
-        .symbol_template    = rstd::move(symbol_template),
-        .book_root_template = rstd::move(book_root_template),
-        .book_page_template = rstd::move(book_page_template),
-        .templates          = rstd::move(set),
-        .assets             = rstd::move(frontend_assets),
+        .identity                = rstd::move(identity),
+        .digest                  = rstd::move(digest),
+        .supports_api            = supports_api,
+        .supports_book           = supports_book,
+        .root_template           = rstd::move(root_template),
+        .package_template        = rstd::move(package_template),
+        .module_template         = rstd::move(module_template),
+        .symbol_template         = rstd::move(symbol_template),
+        .book_root_template      = rstd::move(book_root_template),
+        .book_page_template      = rstd::move(book_page_template),
+        .book_not_found_template = rstd::move(book_not_found_template),
+        .templates               = rstd::move(set),
+        .assets                  = rstd::move(frontend_assets),
     });
 }
 

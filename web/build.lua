@@ -47,6 +47,7 @@ local resources = {
   { path = "static/theme-icons.svg", source = "src/static/theme-icons.svg" },
   { path = "templates/book-page.html", source = "src/templates/book-page.html" },
   { path = "templates/book-root.html", source = "src/templates/book-root.html" },
+  { path = "templates/book-not-found.html", source = "src/templates/book-not-found.html" },
   { path = "templates/module.html", source = "src/templates/module.html" },
   { path = "templates/package.html", source = "src/templates/package.html" },
   { path = "templates/partials/foot.html", source = "src/templates/partials/foot.html" },

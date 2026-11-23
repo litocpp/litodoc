@@ -271,4 +271,45 @@ TEST(BookPreview, FailedPublishKeepsSiteAndDoesNotNotifySubscribers) {
     EXPECT_TRUE(runtime.block_on(response.close()).is_ok());
     EXPECT_TRUE(runtime.block_on(late.close()).is_ok());
 }
+
+TEST(BookPreview, BrandedNotFoundKeepsStatusAndInjectsReloadForGetAndHead) {
+    auto reclaimer = PreviewReclaimer::create().unwrap();
+    auto state     = PreviewState::create("preview"_Str, reclaimer).unwrap();
+    auto directory = preview_directory("home"_str);
+    auto error     = rstd::path::PathBuf::from(directory.path()).join("site/404.html"_str);
+    rstd::fs::write(error.as_path(),
+                    "<html><head><base href=\"/\"></head><body>Branded missing</body></html>"_bytes)
+        .unwrap();
+    ASSERT_TRUE(state.publish(rstd::move(directory)).is_ok());
+    auto endpoint = state.endpoint();
+    auto runtime  = rstd::async::RuntimeBuilder::current_thread().enable_all().build().unwrap();
+    auto page     = preview_exchange(runtime,
+                                     endpoint,
+                                     "/deep/unknown/page"_str,
+                                     "GET"_str,
+                                     "If-None-Match: *\r\nRange: bytes=0-3\r\n"_str);
+    EXPECT_TRUE(page.as_str().contains("HTTP/1.1 404 "_str));
+    EXPECT_TRUE(page.as_str().contains("Branded missing"_str));
+    EXPECT_TRUE(page.as_str().contains("data-generation=\"1\""_str));
+    auto head = preview_exchange(runtime, endpoint, "/deep/unknown/page"_str, "HEAD"_str);
+    EXPECT_TRUE(head.as_str().contains("HTTP/1.1 404 "_str));
+    EXPECT_TRUE(head.as_str().ends_with("\r\n\r\n"_str));
+    auto get_length  = page.as_str()
+                           .split_once("Content-Length: "_str)
+                           .unwrap()
+                           .get<1>()
+                           .split_once("\r\n"_str)
+                           .unwrap()
+                           .get<0>();
+    auto head_length = head.as_str()
+                           .split_once("Content-Length: "_str)
+                           .unwrap()
+                           .get<1>()
+                           .split_once("\r\n"_str)
+                           .unwrap()
+                           .get<0>();
+    EXPECT_EQ(get_length, head_length);
+    EXPECT_FALSE(
+        preview_exchange(runtime, endpoint, "/link"_str).as_str().contains("Branded missing"_str));
+}
 #endif

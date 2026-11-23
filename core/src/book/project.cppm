@@ -94,6 +94,115 @@ auto string_at(const TomlTable&      table,
     return Ok(Some(String::make(*text)));
 }
 
+auto config_table(const TomlTable& table, ref<str> key, ref<rstd::path::Path> path)
+    -> Result<Option<ref<TomlTable>>, String> {
+    auto value = table.get(key);
+    if (value.is_none()) return Ok(Option<ref<TomlTable>> {});
+    auto nested = (**value).as_table();
+    if (nested.is_none()) return Err(rstd::format("{}: output.html.{} must be a table", path, key));
+    return Ok(Some(*nested));
+}
+
+auto configured_link(const TomlTable& table, ref<rstd::path::Path> path)
+    -> Result<BookSiteLink, String> {
+    const auto allowed = array<ref<str>, 2> { "label"_str, "href"_str };
+    rstd_try(reject_keys(table, allowed.as_slice(), "site link"_str, path));
+    auto label  = rstd_try(string_at(table, "label"_str, "site link"_str, path, true));
+    auto href   = rstd_try(string_at(table, "href"_str, "site link"_str, path, true));
+    auto target = lito::site::site_link(href->as_str());
+    if (target.is_err())
+        return Err(rstd::format("{}: invalid site link: {}", path, target.unwrap_err()));
+    return Ok(BookSiteLink { rstd::move(label).unwrap(), rstd::move(target).unwrap() });
+}
+
+auto configured_links(const TomlTable& table, ref<str> key, ref<rstd::path::Path> path)
+    -> Result<Vec<BookSiteLink>, String> {
+    Vec<BookSiteLink> result;
+    auto              value = table.get(key);
+    if (value.is_none()) return Ok(rstd::move(result));
+    auto entries = (**value).as_array();
+    if (entries.is_none())
+        return Err(rstd::format("{}: {} must be an array of link tables", path, key));
+    for (const auto& entry : **entries) {
+        auto link = entry.as_table();
+        if (link.is_none()) return Err(rstd::format("{}: {} must contain link tables", path, key));
+        result.push(rstd_try(configured_link(**link, path)));
+    }
+    return Ok(rstd::move(result));
+}
+
+auto configured_html(const TomlTable& table, ref<rstd::path::Path> path)
+    -> Result<BookHtmlConfig, String> {
+    const auto allowed = array<ref<str>, 10> { "frontend"_str,       "icon"_str,     "site-url"_str,
+                                               "repository-url"_str, "edit-url"_str, "brand"_str,
+                                               "navigation"_str,     "footer"_str,   "pages"_str,
+                                               "redirects"_str };
+    rstd_try(reject_keys(table, allowed.as_slice(), "output.html"_str, path));
+    BookHtmlConfig result;
+    auto base = rstd_try(string_at(table, "site-url"_str, "output.html"_str, path, false));
+    if (base.is_some()) result.site_url.insert(rstd_try(lito::site::site_base_url(base->as_str())));
+    auto repository =
+        rstd_try(string_at(table, "repository-url"_str, "output.html"_str, path, false));
+    if (repository.is_some()) {
+        auto target = rstd_try(lito::site::site_link(repository->as_str()));
+        if (target.output.is_some()) return Err("repository-url must be an absolute HTTP URL"_Str);
+        result.repository.insert(rstd::move(target));
+    }
+    auto edit = rstd_try(string_at(table, "edit-url"_str, "output.html"_str, path, false));
+    if (edit.is_some()) {
+        auto parts = edit->as_str().split_once("{path}"_str);
+        if (parts.is_none()) return Err("edit-url requires exactly one {path} in its URL path"_Str);
+        auto prefix = parts->template get<0>();
+        auto suffix = parts->template get<1>();
+        if (prefix.contains("{"_str) || prefix.contains("}"_str) || suffix.contains("{"_str) ||
+            suffix.contains("}"_str))
+            return Err("edit-url has an unknown or repeated placeholder"_Str);
+        auto probe = rstd_try(lito::site::absolute_site_url(
+            rstd::format("{}litobook-edit-probe.md{}", prefix, suffix).as_str()));
+        if (! probe.path().contains("litobook-edit-probe.md"_str))
+            return Err("edit-url {path} must be in the URL path"_Str);
+        result.edit.insert(BookEditUrl { String::make(prefix), String::make(suffix) });
+    }
+    auto brand = rstd_try(config_table(table, "brand"_str, path));
+    if (brand.is_some()) result.brand.insert(rstd_try(configured_link(**brand, path)));
+    result.navigation = rstd_try(configured_links(table, "navigation"_str, path));
+    auto footer       = rstd_try(config_table(table, "footer"_str, path));
+    if (footer.is_some()) {
+        const auto keys = array<ref<str>, 2> { "text"_str, "links"_str };
+        rstd_try(reject_keys(**footer, keys.as_slice(), "output.html.footer"_str, path));
+        result.footer_text =
+            rstd_try(string_at(**footer, "text"_str, "output.html.footer"_str, path, false));
+        result.footer_links = rstd_try(configured_links(**footer, "links"_str, path));
+    }
+    auto pages = rstd_try(config_table(table, "pages"_str, path));
+    if (pages.is_some()) {
+        auto keys = (**pages).keys();
+        for (auto key = keys.next(); key.is_some(); key = keys.next()) {
+            auto source   = (**key).as_str();
+            auto value    = (**pages).get(source).unwrap();
+            auto metadata = value->as_table();
+            if (metadata.is_none())
+                return Err(rstd::format("page metadata '{}' must be a table", source));
+            const auto allowed_page = array<ref<str>, 1> { "description"_str };
+            rstd_try(reject_keys(**metadata, allowed_page.as_slice(), "page metadata"_str, path));
+            auto description =
+                rstd_try(string_at(**metadata, "description"_str, "page metadata"_str, path, true));
+            result.pages.push(
+                BookPageMetadata { String::make(source), rstd::move(description).unwrap() });
+        }
+    }
+    auto redirects = rstd_try(config_table(table, "redirects"_str, path));
+    if (redirects.is_some()) {
+        auto keys = (**redirects).keys();
+        for (auto key = keys.next(); key.is_some(); key = keys.next()) {
+            auto from = (**key).as_str();
+            auto to   = rstd_try(string_at(**redirects, from, "redirects"_str, path, true));
+            result.redirects.push(BookRedirect { String::make(from), rstd::move(to).unwrap() });
+        }
+    }
+    return Ok(rstd::move(result));
+}
+
 auto resolve_existing_directory(ref<rstd::path::Path> root,
                                 ref<str>              value,
                                 ref<rstd::path::Path> manifest,
@@ -326,9 +435,10 @@ auto load_book_project(ref<rstd::path::Path>              requested,
         return project_error<BookProject>(manifest.as_path(), "manifest must be a table"_str);
     const auto root_keys = array<ref<str>, 3> { "book"_str, "build"_str, "output"_str };
     rstd_try(reject_keys(**root_table, root_keys.as_slice(), "manifest"_str, manifest.as_path()));
-    auto       book      = rstd_try(table_at(*parsed, "book"_str, manifest.as_path(), true));
-    const auto book_keys = array<ref<str>, 6> { "name"_str,     "title"_str, "version"_str,
-                                                "language"_str, "src"_str,   "summary"_str };
+    auto       book = rstd_try(table_at(*parsed, "book"_str, manifest.as_path(), true));
+    const auto book_keys =
+        array<ref<str>, 7> { "name"_str, "title"_str,   "version"_str,    "language"_str,
+                             "src"_str,  "summary"_str, "description"_str };
     rstd_try(reject_keys(**book, book_keys.as_slice(), "book"_str, manifest.as_path()));
     auto name  = rstd_try(string_at(**book, "name"_str, "book"_str, manifest.as_path(), true));
     auto title = rstd_try(string_at(**book, "title"_str, "book"_str, manifest.as_path(), true));
@@ -336,6 +446,8 @@ auto load_book_project(ref<rstd::path::Path>              requested,
         rstd_try(string_at(**book, "version"_str, "book"_str, manifest.as_path(), false));
     auto language =
         rstd_try(string_at(**book, "language"_str, "book"_str, manifest.as_path(), false));
+    auto description =
+        rstd_try(string_at(**book, "description"_str, "book"_str, manifest.as_path(), false));
     auto source =
         rstd_try(string_at(**book, "src"_str, "book"_str, manifest.as_path(), false, "src"_str));
     auto summary = rstd_try(
@@ -353,9 +465,10 @@ auto load_book_project(ref<rstd::path::Path>              requested,
             rstd_try(string_at(**build, "output"_str, "build"_str, manifest.as_path(), false));
         if (configured.is_some()) output_text = rstd::move(configured).unwrap();
     }
-    auto frontend_text = String::make("default"_str);
-    auto icon_text     = Option<String> {};
-    auto output        = rstd_try(table_at(*parsed, "output"_str, manifest.as_path(), false));
+    auto           frontend_text = String::make("default"_str);
+    auto           icon_text     = Option<String> {};
+    BookHtmlConfig html_config;
+    auto           output = rstd_try(table_at(*parsed, "output"_str, manifest.as_path(), false));
     if (output.is_some()) {
         const auto output_keys = array<ref<str>, 1> { "html"_str };
         rstd_try(reject_keys(**output, output_keys.as_slice(), "output"_str, manifest.as_path()));
@@ -365,9 +478,11 @@ auto load_book_project(ref<rstd::path::Path>              requested,
             if (table.is_none())
                 return project_error<BookProject>(manifest.as_path(),
                                                   "output.html must be a table"_str);
-            const auto html_keys = array<ref<str>, 2> { "frontend"_str, "icon"_str };
-            rstd_try(
-                reject_keys(**table, html_keys.as_slice(), "output.html"_str, manifest.as_path()));
+            auto configured_site = configured_html(**table, manifest.as_path());
+            if (configured_site.is_err())
+                return project_error<BookProject>(
+                    manifest.as_path(), rstd::move(configured_site).unwrap_err().as_str());
+            html_config     = rstd::move(configured_site).unwrap();
             auto configured = rstd_try(
                 string_at(**table, "frontend"_str, "output.html"_str, manifest.as_path(), false));
             if (configured.is_some()) frontend_text = rstd::move(configured).unwrap();
@@ -404,19 +519,26 @@ auto load_book_project(ref<rstd::path::Path>              requested,
     if (icon_text.is_some())
         icon = Some(
             rstd_try(resolve_book_icon(root.as_path(), icon_text->as_str(), manifest.as_path())));
+    auto source_prefix =
+        rstd::path::PathBuf::from(source->as_str()).as_path().normalize_lexically();
+    if (source_prefix.is_err())
+        return project_error<BookProject>(manifest.as_path(), "book.src cannot be normalized"_str);
     auto project = BookProject {
-        .root        = rstd::move(root),
-        .manifest    = rstd::move(manifest),
-        .identity    = rstd::move(identity),
-        .name        = rstd::move(name).unwrap(),
-        .title       = rstd::move(title).unwrap(),
-        .version     = rstd::move(version),
-        .language    = rstd::move(language),
-        .source_root = rstd::move(source_root),
-        .summary     = rstd::move(summary_path),
-        .output      = rstd::move(resolved_output),
-        .frontend    = rstd::move(resolved_frontend),
-        .icon        = rstd::move(icon),
+        .root          = rstd::move(root),
+        .manifest      = rstd::move(manifest),
+        .identity      = rstd::move(identity),
+        .name          = rstd::move(name).unwrap(),
+        .title         = rstd::move(title).unwrap(),
+        .version       = rstd::move(version),
+        .language      = rstd::move(language),
+        .source_root   = rstd::move(source_root),
+        .summary       = rstd::move(summary_path),
+        .output        = rstd::move(resolved_output),
+        .frontend      = rstd::move(resolved_frontend),
+        .icon          = rstd::move(icon),
+        .description   = rstd::move(description),
+        .source_prefix = String::make(source_prefix->as_path().to_str().unwrap()),
+        .html          = rstd::move(html_config),
     };
     project.output = rstd_try(validate_book_output(project, project.output.as_path()));
     return Ok(rstd::move(project));

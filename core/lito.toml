@@ -10,7 +10,9 @@ module = "lito.doc"
 archive = "lito.doc"
 sources = [
   "src/site/html.cppm",
+  "src/site/links.cppm",
   "src/site/templates/mod.cppm",
+  "src/site/shell.cppm",
   "src/site/frontend_manifest.cppm",
   "src/site/frontend/mod.cppm",
   "src/site/publication.cppm",
@@ -30,6 +32,7 @@ sources = [
   "src/book/graph.cppm",
   "src/book/data.cppm",
   "src/book/render.cppm",
+  "src/book/publication.cppm",
   "src/book/watch.cppm",
   "src/book/lib.cppm",
 ]
@@ -55,5 +58,9 @@ workspace = true
 visibility = "private"
 
 [dependencies.limarkto]
+workspace = true
+visibility = "public"
+
+[dependencies.lihttpto]
 workspace = true
 visibility = "public"

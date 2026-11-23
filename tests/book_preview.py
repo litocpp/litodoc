@@ -65,7 +65,16 @@ def main():
     with tempfile.TemporaryDirectory(prefix="litobook-loopback-") as temporary:
         logs = Path(temporary)
         root = logs / "book"
-        manifest = '[book]\nname="preview"\ntitle="Preview"\nlanguage="zh-CN"\n'
+        manifest = ('[book]\nname="preview"\ntitle="Preview"\nlanguage="zh-CN"\n'
+                    'description="Default description"\n'
+                    '[output.html]\nsite-url="https://example.org/manual/"\n'
+                    'repository-url="https://forge.example.org/project"\n'
+                    'edit-url="https://forge.example.org/edit/main/{path}"\n'
+                    '[output.html.brand]\nlabel="Project"\nhref="https://example.org/"\n'
+                    '[[output.html.navigation]]\nlabel="Home"\nhref="index.html"\n'
+                    '[output.html.footer]\ntext="Preview footer"\n'
+                    '[output.html.pages."index.md"]\ndescription="Home description"\n'
+                    '[output.html.redirects]\n"old.html"="index.md"\n')
         write(root, "book.toml", manifest)
         write(root, "src/SUMMARY.md", "# Summary\n\n- [Home](index.md)\n- [Guide](guide/start.md)\n")
         write(root, "src/index.md", "# Hello\n\nVersion alpha.\n")
@@ -101,6 +110,10 @@ def main():
                 write(root, "book.toml", manifest)
                 body = wait_for(lambda: page_when(generation))
                 assert b'lang="zh-CN"' in body
+                assert b'content="Home description"' in body
+                assert b'href="https://example.org/manual/index.html"' in body
+                assert b'https://forge.example.org/edit/main/src/index.md' in body
+                assert b'Preview footer' in body
                 current = generation(body)
                 time.sleep(0.35)
                 assert generation(request(port)[2]) == current, "preview must not rebuild its own output"
@@ -110,6 +123,14 @@ def main():
                 status, head, data = request(port, method="HEAD")
                 assert status == 200 and not data and int(head["content-length"]) == len(body)
                 assert request(port, "/__litobook/client.js")[0] == 200
+                status, error_headers, missing = request(port, "/deep/missing/page")
+                assert status == 404 and b"Page not found" in missing
+                assert b'<base href="/">' in missing and generation(missing) == current
+                assert b'Preview footer' in missing and b'rel="canonical"' not in missing
+                status, error_head, data = request(port, "/deep/missing/page", method="HEAD")
+                assert status == 404 and not data and int(error_head["content-length"]) == len(missing)
+                status, _, alias = request(port, "/old.html")
+                assert status == 200 and b'http-equiv="refresh"' in alias
                 assert not (root / "build/book").exists(), "serve must not replace build output"
 
                 events = http.client.HTTPConnection("127.0.0.1", port, timeout=3)
@@ -173,6 +194,7 @@ def main():
                 wait_for(output.exists)
                 initial = output.read_bytes()
                 assert b"/__litobook/" not in initial
+                assert b'<base href="/manual/">' in (root / "build/book/404.html").read_bytes()
                 time.sleep(0.35)
                 assert output.read_bytes() == initial
                 write(root, "src/index.md", "# Watch\n\nOther version.\n")

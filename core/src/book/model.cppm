@@ -27,6 +27,34 @@ struct BookIcon {
     String    media_type;
 };
 
+struct BookSiteLink {
+    String               label;
+    lito::site::SiteLink target;
+};
+struct BookEditUrl {
+    String prefix;
+    String suffix;
+};
+struct BookPageMetadata {
+    String source;
+    String description;
+};
+struct BookRedirect {
+    String from;
+    String to;
+};
+struct BookHtmlConfig {
+    Option<lito::site::SiteBaseUrl> site_url;
+    Option<lito::site::SiteLink>    repository;
+    Option<BookEditUrl>             edit;
+    Option<BookSiteLink>            brand;
+    Vec<BookSiteLink>               navigation;
+    Option<String>                  footer_text;
+    Vec<BookSiteLink>               footer_links;
+    Vec<BookPageMetadata>           pages;
+    Vec<BookRedirect>               redirects;
+};
+
 struct BookProject {
     rstd::path::PathBuf         root;
     rstd::path::PathBuf         manifest;
@@ -40,6 +68,9 @@ struct BookProject {
     rstd::path::PathBuf         output;
     Option<rstd::path::PathBuf> frontend;
     Option<BookIcon>            icon;
+    Option<String>              description;
+    String                      source_prefix;
+    BookHtmlConfig              html;
 };
 
 struct SummaryEntry {
@@ -175,6 +206,20 @@ struct PreparedBook {
     BookContent                content;
     BookDataset                dataset;
     lito::site::FrontendBundle frontend;
+    struct HtmlPage {
+        String                       output;
+        Option<usize>                chapter;
+        bool                         not_found {};
+        Option<String>               description;
+        Option<String>               canonical;
+        Option<String>               edit_url;
+        Option<lito::site::SiteLink> redirect;
+    };
+    struct HtmlPublication {
+        Vec<HtmlPage> pages;
+        Vec<String>   outputs;
+        String        not_found_base;
+    } html;
 };
 
 struct BookWatchLayout {

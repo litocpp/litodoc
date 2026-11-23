@@ -3,6 +3,7 @@
 <nav class="book-breadcrumbs" aria-label="Breadcrumb">{{#each book.breadcrumbs}}<a href="{{href}}">{{title}}</a>{{/each}}</nav>
 {{/if}}
 <h1 class="page-title">{{book.title}}</h1>
+{{#if page.has_edit_url}}<p class="book-edit"><a href="{{page.edit_url}}">Edit this page</a></p>{{/if}}
 {{#if book.has_page}}<lito-doc-prose><article class="book-content prose">{{{book.content}}}</article></lito-doc-prose>{{/if}}
 {{#if book.has_page}}
 <lito-doc-page-navigation><nav class="book-pagination" aria-label="Chapter navigation">

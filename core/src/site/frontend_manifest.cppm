@@ -17,6 +17,7 @@ struct FrontendManifestTemplates {
     Option<String> source;
     Option<String> book_root;
     Option<String> book_page;
+    Option<String> book_not_found;
 };
 
 struct FrontendManifestAsset {
@@ -46,14 +47,15 @@ struct Impl<serde::Deserialize, lito::site::FrontendManifestTemplates> {
     template<typename Deserializer>
     static auto deserialize(Deserializer& deserializer)
         -> Result<lito::site::FrontendManifestTemplates, typename Deserializer::error_type> {
-        auto root      = serde::OptionalField<String>("root"_str);
-        auto package   = serde::OptionalField<String>("package"_str);
-        auto module    = serde::OptionalField<String>("module"_str);
-        auto symbol    = serde::OptionalField<String>("symbol"_str);
-        auto source    = serde::OptionalField<String>("source"_str);
-        auto book_root = serde::OptionalField<String>("book-root"_str);
-        auto book_page = serde::OptionalField<String>("book-page"_str);
-        auto result    = serde::deserialize_record(
+        auto root           = serde::OptionalField<String>("root"_str);
+        auto package        = serde::OptionalField<String>("package"_str);
+        auto module         = serde::OptionalField<String>("module"_str);
+        auto symbol         = serde::OptionalField<String>("symbol"_str);
+        auto source         = serde::OptionalField<String>("source"_str);
+        auto book_root      = serde::OptionalField<String>("book-root"_str);
+        auto book_page      = serde::OptionalField<String>("book-page"_str);
+        auto book_not_found = serde::OptionalField<String>("book-not-found"_str);
+        auto result         = serde::deserialize_record(
             deserializer,
             [&](ref<str> name, auto& input) -> Result<empty, typename Deserializer::error_type> {
                 if (root.matches(name)) return root.assign(deserializer, input);
@@ -63,17 +65,19 @@ struct Impl<serde::Deserialize, lito::site::FrontendManifestTemplates> {
                 if (source.matches(name)) return source.assign(deserializer, input);
                 if (book_root.matches(name)) return book_root.assign(deserializer, input);
                 if (book_page.matches(name)) return book_page.assign(deserializer, input);
+                if (book_not_found.matches(name)) return book_not_found.assign(deserializer, input);
                 return Err(deserializer.unknown_field(name));
             });
         if (result.is_err()) return Err(rstd::move(result).unwrap_err_unchecked());
         return Ok(lito::site::FrontendManifestTemplates {
-            .root      = root.take(),
-            .package   = package.take(),
-            .module    = module.take(),
-            .symbol    = symbol.take(),
-            .source    = source.take(),
-            .book_root = book_root.take(),
-            .book_page = book_page.take(),
+            .root           = root.take(),
+            .package        = package.take(),
+            .module         = module.take(),
+            .symbol         = symbol.take(),
+            .source         = source.take(),
+            .book_root      = book_root.take(),
+            .book_page      = book_page.take(),
+            .book_not_found = book_not_found.take(),
         });
     }
 };
