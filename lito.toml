@@ -12,6 +12,7 @@ authors = ["hypengw <hypengwip@gmail.com>"]
 litodoc-core = { path = "core" }
 litodoc-web = { path = "web" }
 licrypto = "0.2.0"
+limarkto = "0.1.0"
 rstd-std = "0.1.0"
 rstd-json = "0.1.0"
 rstd-serde = "0.1.0"

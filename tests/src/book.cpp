@@ -68,8 +68,8 @@ auto make_book_project() -> rstd::io::Result<rstd::test::TempDir> {
                          "> Keep the setup local.\n"
                          "\n"
                          "1. Build and\n"
-                         "  keep the output local\n"
-                         "  - Keep it local\n"
+                         "   keep the output local\n"
+                         "   - Keep it local\n"
                          "2. Open the [reference](../reference.md).\n"
                          "\n"
                          "![Diagram](image.svg)\n"_str);
@@ -181,6 +181,138 @@ TEST(Book, ChecksAndPublishesAnInlineProject) {
         rstd::fs::read_to_string(child(project.path(), "build/book/index.html"_str).as_path());
     ASSERT_TRUE(preserved.is_ok());
     EXPECT_EQ(preserved->as_str(), index->as_str());
+}
+
+TEST(Book, RendersLimarktoCommonMarkAndGfmNodes) {
+    auto created = make_book_project();
+    ASSERT_TRUE(created.is_ok());
+    auto project = rstd::move(created).unwrap();
+    ASSERT_TRUE(write_text(project.path(),
+                           "src/index.md"_str,
+                           "# Welcome\n\n"
+                           "_emphasis_ **outer *inner*** ~~removed~~ &amp; &#65;.\n\n"
+                           "Read [**reference**][ref].\n\n"
+                           "| Link | Image |\n| :--- | ---: |\n"
+                           "| [reference][ref] | ![*diagram* ![nested](missing.svg)][pic] |\n\n"
+                           "5. First\n6. Second\n\n"
+                           "- [x] Done\n- [ ] Pending\n\n"
+                           "> Quote\n>\n> > Nested\n\n"
+                           "Line one  \nLine two\n\n"
+                           "<https://litocpp.org/> <author@example.com>\n\n"
+                           "~~~toml extra-info\n![ignored](missing.png)\n~~~\n\n"
+                           "````md\n```\n````\n\n"
+                           "[ref]: reference.md#reference \"A &amp; B\"\n"
+                           "[pic]: guide/image.svg \"diagram title\"\n"_str)
+                    .is_ok());
+    auto checked = lito::book::check({ .directory = PathBuf::from(project.path()) });
+    ASSERT_TRUE(checked.is_ok());
+    auto built = lito::book::build({ .directory = PathBuf::from(project.path()) });
+    ASSERT_TRUE(built.is_ok());
+    auto html =
+        rstd::fs::read_to_string(child(project.path(), "build/book/index.html"_str).as_path());
+    ASSERT_TRUE(html.is_ok());
+    EXPECT_TRUE(html->as_str().contains(
+        "<em>emphasis</em> <strong>outer <em>inner</em></strong> <del>removed</del> &amp; A."_str));
+    EXPECT_TRUE(html->as_str().contains(
+        "href=\"reference/index.html#reference\" title=\"A &amp; B\"><strong>reference</strong></a>"_str));
+    EXPECT_TRUE(
+        html->as_str().contains("<table><thead><tr><th style=\"text-align: left\">Link</th>"_str));
+    EXPECT_TRUE(html->as_str().contains("<tbody><tr><td style=\"text-align: left\">"_str));
+    EXPECT_TRUE(html->as_str().contains("alt=\"diagram nested\" title=\"diagram title\""_str));
+    EXPECT_FALSE(html->as_str().contains("src=\"missing.svg\""_str));
+    EXPECT_TRUE(html->as_str().contains("<ol start=\"5\"><li>First</li><li>Second</li></ol>"_str));
+    EXPECT_TRUE(html->as_str().contains("<input type=\"checkbox\" disabled checked> Done"_str));
+    EXPECT_TRUE(html->as_str().contains(
+        "<blockquote><p>Quote</p><blockquote><p>Nested</p></blockquote></blockquote>"_str));
+    EXPECT_TRUE(html->as_str().contains("Line one<br>Line two"_str));
+    EXPECT_TRUE(html->as_str().contains("href=\"mailto:author@example.com\""_str));
+    EXPECT_TRUE(
+        html->as_str().contains("class=\"language-toml\">![ignored](missing.png)\n</code>"_str));
+    EXPECT_TRUE(html->as_str().contains("class=\"language-md\">```\n</code>"_str));
+    auto assets = rstd::fs::read_dir(child(project.path(), "build/book/assets"_str).as_path());
+    ASSERT_TRUE(assets.is_ok());
+    auto count = usize {};
+    for (auto entry = assets->next(); entry.is_some(); entry = assets->next()) {
+        ASSERT_TRUE(entry->is_ok());
+        ++count;
+    }
+    EXPECT_EQ(count, usize(1));
+}
+
+TEST(Book, KeepsLimarktoReferenceUseLocationsAndSafeHtml) {
+    auto created = make_book_project();
+    ASSERT_TRUE(created.is_ok());
+    auto project = rstd::move(created).unwrap();
+    ASSERT_TRUE(
+        write_text(
+            project.path(),
+            "src/index.md"_str,
+            "# Welcome\r\n\r\n> 中文 [bad][target]\r\n\r\n[target]: reference.md#missing\r\n"_str)
+            .is_ok());
+    auto checked = lito::book::check({ .directory = PathBuf::from(project.path()) });
+    ASSERT_TRUE(checked.is_err());
+    auto error = rstd::move(checked).unwrap_err();
+    EXPECT_TRUE(error.as_str().contains("index.md:3:10:"_str));
+    EXPECT_TRUE(error.as_str().contains("target page has no heading '#missing'"_str));
+    ASSERT_TRUE(write_text(project.path(),
+                           "src/index.md"_str,
+                           "# Welcome\n\n<script>\n![not a resource](missing.png)\n</script>\n\n"
+                           "<img src=x onerror=alert(1)>\n\n"
+                           "<a href=\"javascript:alert(1)\">raw</a>\n"_str)
+                    .is_ok());
+    auto built = lito::book::build({ .directory = PathBuf::from(project.path()) });
+    ASSERT_TRUE(built.is_ok());
+    auto html =
+        rstd::fs::read_to_string(child(project.path(), "build/book/index.html"_str).as_path());
+    ASSERT_TRUE(html.is_ok());
+    EXPECT_TRUE(html->as_str().contains("&lt;script&gt;"_str));
+    EXPECT_TRUE(html->as_str().contains("&lt;img src=x onerror=alert(1)&gt;"_str));
+    EXPECT_FALSE(html->as_str().contains("<script>"_str));
+    EXPECT_FALSE(html->as_str().contains("<img src=x"_str));
+    EXPECT_FALSE(html->as_str().contains("<a href=\"javascript:"_str));
+}
+
+TEST(Book, RejectsUnsafeLimarktoDestinationsAfterEntityDecoding) {
+    auto created = make_book_project();
+    ASSERT_TRUE(created.is_ok());
+    auto project = rstd::move(created).unwrap();
+    for (auto source : array<ref<str>, 3> {
+             "[bad](jav&#x61;script:alert%281%29)\n"_str,
+             "[bad][target]\n\n[target]: data:text/html,evil\n"_str,
+             "![bad](javascript:alert%281%29)\n"_str,
+         }) {
+        ASSERT_TRUE(write_text(project.path(), "src/index.md"_str, source).is_ok());
+        auto checked = lito::book::check({ .directory = PathBuf::from(project.path()) });
+        ASSERT_TRUE(checked.is_err());
+        EXPECT_TRUE(rstd::move(checked).unwrap_err().as_str().contains("unsafe link scheme"_str));
+    }
+}
+
+TEST(Book, PreservesLegacyAnchorsAndAvoidsGeneratedCollisions) {
+    auto created = make_book_project();
+    ASSERT_TRUE(created.is_ok());
+    auto project = rstd::move(created).unwrap();
+    ASSERT_TRUE(
+        write_text(
+            project.path(),
+            "src/index.md"_str,
+            "# Welcome\n\n## Repeat\n\n## Repeat\n\n## Repeat-2\n\n## Repeat\n\n"
+            "## [**A** &amp; `B`](reference.md)\n\n"
+            "[first](#repeat) [second](#repeat-2) [third](#repeat-2-2) [fourth](#repeat-3) [last](#a-b)\n"_str)
+            .is_ok());
+    auto built = lito::book::build({ .directory = PathBuf::from(project.path()) });
+    ASSERT_TRUE(built.is_ok());
+    auto html =
+        rstd::fs::read_to_string(child(project.path(), "build/book/index.html"_str).as_path());
+    ASSERT_TRUE(html.is_ok());
+    EXPECT_TRUE(html->as_str().contains("id=\"repeat\""_str));
+    EXPECT_TRUE(html->as_str().contains("id=\"repeat-2\""_str));
+    EXPECT_TRUE(html->as_str().contains("id=\"repeat-2-2\""_str));
+    EXPECT_TRUE(html->as_str().contains("id=\"repeat-3\""_str));
+    EXPECT_TRUE(html->as_str().contains("id=\"a-b\""_str));
+    auto loaded = lito::book::load_book_dataset(child(project.path(), "build/book"_str).as_path());
+    ASSERT_TRUE(loaded.is_ok());
+    EXPECT_EQ(loaded->pages[usize {}].headings[usize(5)].text.as_str(), "A & B"_str);
 }
 
 TEST(Book, ReportsSummaryAndLinkDiagnosticsWithLocations) {

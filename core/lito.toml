@@ -52,3 +52,7 @@ visibility = "private"
 [dependencies.licrypto]
 workspace = true
 visibility = "private"
+
+[dependencies.limarkto]
+workspace = true
+visibility = "public"

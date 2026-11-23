@@ -1,155 +1,40 @@
 module;
 #include <rstd/macro.hpp>
-
 export module lito.book:markdown;
 
 import rstd;
 import licrypto;
+import limarkto;
 import lito.site;
 import :model;
 
 using namespace rstd::prelude;
 using namespace rstd::literals;
 using namespace lito::site;
+using limarkto::NodeId;
+using limarkto::NodeKind;
 
 namespace lito::book
 {
-
-auto markdown_span(ref<rstd::path::Path> path, usize line, usize column) -> SourceSpan {
-    return SourceSpan {
-        .path   = rstd::path::PathBuf::from(path),
-        .line   = line,
-        .column = column,
-    };
-}
-
 auto markdown_error(const SourceSpan& span, ref<str> message) -> String {
     return rstd::format("{}:{}:{}: {}", span.path.as_path(), span.line, span.column, message);
 }
-
-auto find_marker(ref<str> text, usize begin, ref<str> marker) -> Option<usize> {
-    if (marker.is_empty() || marker.len() > text.len()) return None();
-    for (auto index = begin; index + marker.len() <= text.len(); ++index) {
-        auto matches = true;
-        for (auto offset = usize {}; offset < marker.len(); ++offset) {
-            if (text[index + offset] != marker[offset]) {
-                matches = false;
-                break;
-            }
-        }
-        if (matches) return Some(index);
-    }
-    return None();
+auto syntax_node(const MarkdownDocument& document, NodeId id) -> const limarkto::Node& {
+    return document.syntax.node(document.syntax.handle(id)).unwrap().get();
 }
-
-auto push_inline_text(Vec<MarkdownInline>&  output,
-                      ref<str>              text,
-                      ref<rstd::path::Path> path,
-                      usize                 line,
-                      usize                 column) -> void {
-    if (text.is_empty()) return;
-    output.push(MarkdownInline {
-        .kind = MarkdownInlineKind::Text,
-        .text = String::make(text),
-        .span = markdown_span(path, line, column),
-    });
+auto source_span(const MarkdownDocument& document, usize offset) -> SourceSpan {
+    const auto position = document.syntax.position(offset).unwrap();
+    return { .path = document.path.clone(), .line = position.line, .column = position.column };
 }
-
-auto parse_inlines(ref<str>              text,
-                   ref<rstd::path::Path> path,
-                   usize                 line,
-                   usize                 column,
-                   Vec<MarkdownLink>&    links) -> Result<Vec<MarkdownInline>, String> {
-    auto output = Vec<MarkdownInline>::make();
-    auto cursor = usize {};
-    auto plain  = usize {};
-    while (cursor < text.len()) {
-        auto marker   = text[cursor];
-        auto image    = marker == u8('!') && cursor + usize(1) < text.len() &&
-                        text[cursor + usize(1)] == u8('[');
-        auto link     = marker == u8('[');
-        auto code     = marker == u8('`');
-        auto strong   = marker == u8('*') && cursor + usize(1) < text.len() &&
-                        text[cursor + usize(1)] == u8('*');
-        auto emphasis = marker == u8('*') && ! strong;
-        if (! image && ! link && ! code && ! strong && ! emphasis) {
-            ++cursor;
-            continue;
-        }
-        push_inline_text(output, text.get(plain, cursor).unwrap(), path, line, column + plain);
-        if (code || strong || emphasis) {
-            auto token = code ? "`"_str : (strong ? "**"_str : "*"_str);
-            auto close = find_marker(text, cursor + token.len(), token);
-            if (close.is_none()) {
-                push_inline_text(output,
-                                 text.get(cursor, cursor + token.len()).unwrap(),
-                                 path,
-                                 line,
-                                 column + cursor);
-                cursor += token.len();
-                plain = cursor;
-                continue;
-            }
-            output.push(MarkdownInline {
-                .kind = code ? MarkdownInlineKind::Code
-                             : (strong ? MarkdownInlineKind::Strong : MarkdownInlineKind::Emphasis),
-                .text = String::make(text.get(cursor + token.len(), *close).unwrap()),
-                .span = markdown_span(path, line, column + cursor),
-            });
-            cursor = *close + token.len();
-            plain  = cursor;
-            continue;
-        }
-        auto label_begin = cursor + (image ? usize(2) : usize(1));
-        auto label_end   = find_marker(text, label_begin, "]("_str);
-        if (label_end.is_none()) {
-            push_inline_text(
-                output, text.get(cursor, cursor + usize(1)).unwrap(), path, line, column + cursor);
-            ++cursor;
-            plain = cursor;
-            continue;
-        }
-        auto destination_end = find_marker(text, *label_end + usize(2), ")"_str);
-        if (destination_end.is_none()) {
-            push_inline_text(
-                output, text.get(cursor, cursor + usize(1)).unwrap(), path, line, column + cursor);
-            ++cursor;
-            plain = cursor;
-            continue;
-        }
-        auto label       = text.get(label_begin, *label_end).unwrap();
-        auto destination = text.get(*label_end + usize(2), *destination_end).unwrap().trim_ascii();
-        if (label.is_empty() || destination.is_empty())
-            return Err(markdown_error(markdown_span(path, line, column + cursor),
-                                      "Markdown link label and destination are required"_str));
-        auto span = markdown_span(path, line, column + cursor);
-        output.push(MarkdownInline {
-            .kind        = image ? MarkdownInlineKind::Image : MarkdownInlineKind::Link,
-            .text        = String::make(label),
-            .destination = String::make(destination),
-            .span =
-                SourceSpan {
-                    .path   = span.path.clone(),
-                    .line   = span.line,
-                    .column = span.column,
-                },
-        });
-        links.push(MarkdownLink {
-            .destination = String::make(destination),
-            .image       = image,
-            .span        = rstd::move(span),
-        });
-        cursor = *destination_end + usize(1);
-        plain  = cursor;
-    }
-    push_inline_text(output, text.get(plain, text.len()).unwrap(), path, line, column + plain);
-    return Ok(rstd::move(output));
-}
-
-auto inline_plain_text(const Vec<MarkdownInline>& inlines) -> String {
-    auto text = String::make();
-    for (const auto& item : inlines) text.push_str(item.text.as_str());
-    return text;
+auto append_plain_text(const MarkdownDocument& document, NodeId id, String& text) -> void {
+    const auto& node = syntax_node(document, id);
+    if (node.kind == NodeKind::Text || node.kind == NodeKind::Code ||
+        node.kind == NodeKind::HtmlInline)
+        text.push_str(node.literal.as_str());
+    else if (node.kind == NodeKind::SoftBreak || node.kind == NodeKind::HardBreak)
+        text.push_ascii(' ');
+    else
+        for (auto child : node.children) append_plain_text(document, child, text);
 }
 
 auto heading_slug(ref<str> text) -> Result<String, String> {
@@ -176,98 +61,6 @@ auto heading_slug(ref<str> text) -> Result<String, String> {
         result      = rstd::format("section-{}", digest.as_str().get(usize {}, usize(12)).unwrap());
     }
     return Ok(rstd::move(result));
-}
-
-auto list_item(ref<str> line) -> Option<rstd::tuple<usize, bool, usize>> {
-    auto spaces = usize {};
-    while (spaces < line.len() && line[spaces] == u8(' ')) ++spaces;
-    if (spaces % usize(2) != usize {}) return None();
-    auto marker  = spaces;
-    auto ordered = false;
-    if (marker < line.len() &&
-        (line[marker] == u8('-') || line[marker] == u8('*') || line[marker] == u8('+'))) {
-        ++marker;
-    } else {
-        ordered = true;
-        while (marker < line.len() && line[marker] >= u8('0') && line[marker] <= u8('9')) ++marker;
-        if (marker == spaces || marker >= line.len() || line[marker] != u8('.')) return None();
-        ++marker;
-    }
-    if (marker >= line.len() || line[marker] != u8(' ')) return None();
-    return Some(rstd::tuple<usize, bool, usize> { spaces / usize(2), ordered, marker + usize(1) });
-}
-
-auto list_continuation(ref<str> line, usize depth) -> Option<usize> {
-    auto spaces = usize {};
-    while (spaces < line.len() && line[spaces] == u8(' ')) ++spaces;
-    if (spaces < (depth + usize(1)) * usize(2) || spaces == line.len()) return None();
-    return Some(spaces);
-}
-
-auto heading_level(ref<str> line) -> usize {
-    auto level = usize {};
-    while (level < line.len() && level < usize(6) && line[level] == u8('#')) ++level;
-    if (level == usize {} || level >= line.len() || line[level] != u8(' ')) return usize {};
-    return level;
-}
-
-auto starts_block(ref<str> line) -> bool {
-    auto trimmed = line.trim_ascii();
-    return trimmed.is_empty() || line.starts_with("```"_str) || heading_level(line) != usize {} ||
-           list_item(line).is_some() || line.starts_with("> "_str);
-}
-
-auto append_inline_html(String& output, const MarkdownInline& item) -> void {
-    auto escaped = escape_html(item.text.as_str());
-    switch (item.kind) {
-    case MarkdownInlineKind::Text: output.push_str(escaped.as_str()); break;
-    case MarkdownInlineKind::Emphasis:
-        output.push_str("<em>"_str);
-        output.push_str(escaped.as_str());
-        output.push_str("</em>"_str);
-        break;
-    case MarkdownInlineKind::Strong:
-        output.push_str("<strong>"_str);
-        output.push_str(escaped.as_str());
-        output.push_str("</strong>"_str);
-        break;
-    case MarkdownInlineKind::Code:
-        output.push_str("<code>"_str);
-        output.push_str(escaped.as_str());
-        output.push_str("</code>"_str);
-        break;
-    case MarkdownInlineKind::Link:
-        output.push_str("<a href=\""_str);
-        output.push_str(escape_html(item.resolved_destination.as_str()).as_str());
-        output.push_str("\">"_str);
-        output.push_str(escaped.as_str());
-        output.push_str("</a>"_str);
-        break;
-    case MarkdownInlineKind::Image:
-        output.push_str("<img src=\""_str);
-        output.push_str(escape_html(item.resolved_destination.as_str()).as_str());
-        output.push_str("\" alt=\""_str);
-        output.push_str(escaped.as_str());
-        output.push_str("\">"_str);
-        break;
-    }
-}
-
-auto append_inlines_html(String& output, const Vec<MarkdownInline>& inlines) -> void {
-    for (const auto& item : inlines) append_inline_html(output, item);
-}
-
-auto close_lists(String& output, Vec<bool>& lists, bool& item_open, usize keep = usize {}) -> void {
-    while (lists.len() > keep) {
-        if (item_open) {
-            output.push_str("</li>"_str);
-            item_open = false;
-        }
-        output.push_str(lists.pop().unwrap() ? "</ol>"_str : "</ul>"_str);
-        if (! lists.is_empty()) {
-            output.push_str("</li>"_str);
-        }
-    }
 }
 
 auto path_segments(ref<str> path, bool directory) -> Vec<String> {
@@ -351,207 +144,219 @@ auto dangerous_scheme(ref<str> value) -> bool {
     return false;
 }
 
-} // namespace lito::book
+class BookMarkdownRenderer {
+    const MarkdownDocument&                    document_;
+    rstd::collections::BTreeMap<usize, String> destinations_;
+    String                                     output_;
+    auto literal(ref<str> text) -> void { output_.push_str(escape_html(text).as_str()); }
+    auto children(const limarkto::Node& node, bool tight = false) -> Result<empty, String> {
+        for (auto child : node.children) rstd_try(append(child, tight));
+        return Ok(empty {});
+    }
+    auto wrap(const limarkto::Node& node, ref<str> tag) -> Result<empty, String> {
+        output_.push_str(rstd::format("<{}>", tag).as_str());
+        rstd_try(children(node));
+        output_.push_str(rstd::format("</{}>", tag).as_str());
+        return Ok(empty {});
+    }
+    auto append(NodeId id, bool tight = false) -> Result<empty, String> {
+        const auto& node = syntax_node(document_, id);
+        switch (node.kind) {
+        case NodeKind::Document: return children(node);
+        case NodeKind::Text:
+        case NodeKind::HtmlInline:
+        case NodeKind::HtmlBlock:
+        case NodeKind::InlineMath:
+        case NodeKind::Math: literal(node.literal.as_str()); break;
+        case NodeKind::Paragraph:
+            if (tight) return children(node);
+            return wrap(node, "p"_str);
+        case NodeKind::Heading: {
+            const auto anchor = document_.heading_anchors.get(id.index);
+            if (anchor.is_none()) return Err(String::make("Markdown heading has no anchor"_str));
+            output_.push_str(
+                rstd::format("<h{} id=\"{}\">", node.heading_level, **anchor).as_str());
+            rstd_try(children(node));
+            output_.push_str(rstd::format("</h{}>", node.heading_level).as_str());
+            break;
+        }
+        case NodeKind::ThematicBreak: output_.push_str("<hr>"_str); break;
+        case NodeKind::Code:
+            output_.push_str("<code>"_str);
+            literal(node.literal.as_str());
+            output_.push_str("</code>"_str);
+            break;
+        case NodeKind::CodeBlock: {
+            output_.push_str("<pre><code"_str);
+            auto info = node.info.as_str();
+            auto end  = usize {};
+            while (end < info.len() && info[end] != u8(' ') && info[end] != u8('\t')) ++end;
+            if (end != usize {}) {
+                output_.push_str(" class=\"language-"_str);
+                literal(info.get(usize {}, end).unwrap());
+                output_.push_ascii('"');
+            }
+            output_.push_ascii('>');
+            literal(node.literal.as_str());
+            output_.push_str("</code></pre>"_str);
+            break;
+        }
+        case NodeKind::BlockQuote: return wrap(node, "blockquote"_str);
+        case NodeKind::List:
+            if (node.ordered && node.list_start != 1)
+                output_.push_str(rstd::format("<ol start=\"{}\">", node.list_start).as_str());
+            else
+                output_.push_str(node.ordered ? "<ol>"_str : "<ul>"_str);
+            rstd_try(children(node, node.tight));
+            output_.push_str(node.ordered ? "</ol>"_str : "</ul>"_str);
+            break;
+        case NodeKind::Item:
+            output_.push_str("<li>"_str);
+            if (node.checked.is_some())
+                output_.push_str(*node.checked ? "<input type=\"checkbox\" disabled checked> "_str
+                                               : "<input type=\"checkbox\" disabled> "_str);
+            rstd_try(children(node, tight));
+            output_.push_str("</li>"_str);
+            break;
+        case NodeKind::SoftBreak: output_.push_ascii(' '); break;
+        case NodeKind::HardBreak: output_.push_str("<br>"_str); break;
+        case NodeKind::Emphasis: return wrap(node, "em"_str);
+        case NodeKind::Strong: return wrap(node, "strong"_str);
+        case NodeKind::Strikethrough: return wrap(node, "del"_str);
+        case NodeKind::Link:
+        case NodeKind::Image: {
+            const auto destination = destinations_.get(id.index);
+            if (destination.is_none())
+                return Err(markdown_error(source_span(document_, node.span.begin),
+                                          "Markdown link has no resolved destination"_str));
+            auto image = node.kind == NodeKind::Image;
+            output_.push_str(image ? "<img src=\""_str : "<a href=\""_str);
+            literal((**destination).as_str());
+            output_.push_ascii('"');
+            if (image) {
+                String alt;
+                append_plain_text(document_, id, alt);
+                output_.push_str(" alt=\""_str);
+                literal(alt.as_str());
+                output_.push_ascii('"');
+            }
+            if (! node.title.is_empty()) {
+                output_.push_str(" title=\""_str);
+                literal(node.title.as_str());
+                output_.push_ascii('"');
+            }
+            output_.push_ascii('>');
+            if (! image) {
+                rstd_try(children(node));
+                output_.push_str("</a>"_str);
+            }
+            break;
+        }
+        case NodeKind::Table: {
+            output_.push_str("<table>"_str);
+            auto group = Option<bool> {};
+            for (auto child : node.children) {
+                auto header = syntax_node(document_, child).table_header;
+                if (group.is_none() || *group != header) {
+                    if (group.is_some()) output_.push_str(*group ? "</thead>"_str : "</tbody>"_str);
+                    output_.push_str(header ? "<thead>"_str : "<tbody>"_str);
+                    group = Some(header);
+                }
+                rstd_try(append(child));
+            }
+            if (group.is_some()) output_.push_str(*group ? "</thead>"_str : "</tbody>"_str);
+            output_.push_str("</table>"_str);
+            break;
+        }
+        case NodeKind::TableRow: return wrap(node, "tr"_str);
+        case NodeKind::TableCell: {
+            auto tag = node.table_header ? "th"_str : "td"_str;
+            output_.push_str(rstd::format("<{}", tag).as_str());
+            if (node.alignment != limarkto::TableAlignment::None) {
+                auto alignment = node.alignment == limarkto::TableAlignment::Left    ? "left"_str
+                                 : node.alignment == limarkto::TableAlignment::Right ? "right"_str
+                                                                                     : "center"_str;
+                output_.push_str(rstd::format(" style=\"text-align: {}\"", alignment).as_str());
+            }
+            output_.push_ascii('>');
+            rstd_try(children(node));
+            output_.push_str(rstd::format("</{}>", tag).as_str());
+            break;
+        }
+        }
+        return Ok(empty {});
+    }
 
+public:
+    explicit BookMarkdownRenderer(const MarkdownDocument& document)
+        : document_(document), destinations_(rstd::collections::BTreeMap<usize, String>::make()) {
+        for (const auto& link : document.links)
+            if (! link.resolved_destination.is_empty())
+                destinations_.insert(usize(link.node.index.to_primitive()),
+                                     link.resolved_destination.clone());
+    }
+    auto render() -> Result<String, String> {
+        rstd_try(append(document_.syntax.root().id()));
+        return Ok(rstd::move(output_));
+    }
+};
+
+} // namespace lito::book
 export namespace lito::book
 {
 
-auto parse_markdown(ref<rstd::path::Path> path, ref<str> source)
-    -> Result<MarkdownDocument, String> {
-    auto document                  = MarkdownDocument { .path = rstd::path::PathBuf::from(path) };
-    auto slugs                     = rstd::collections::BTreeMap<String, usize>::make();
-    auto begin                     = usize {};
-    auto line                      = usize(1);
-    auto code                      = Option<MarkdownBlock> {};
-    auto paragraph                 = Option<MarkdownBlock> {};
-    auto list_continuation_allowed = false;
-    auto flush_paragraph           = [&document, &paragraph]() {
-        if (paragraph.is_some()) document.blocks.push(paragraph.take().unwrap());
+auto parse_markdown(ref<rstd::path::Path> path, String source) -> Result<MarkdownDocument, String> {
+    auto options       = limarkto::ParseOptions {};
+    options.extensions = limarkto::Extensions::gfm();
+    auto parsed        = limarkto::parse(rstd::move(source), options);
+    if (parsed.is_err()) return Err(rstd::format("{}: {}", path, rstd::move(parsed).unwrap_err()));
+    auto document = MarkdownDocument {
+        .path            = rstd::path::PathBuf::from(path),
+        .syntax          = rstd::move(parsed).unwrap(),
+        .heading_anchors = rstd::collections::BTreeMap<usize, String>::make(),
     };
-    while (begin <= source.len()) {
-        auto end = begin;
-        while (end < source.len() && source[end] != u8('\n') && source[end] != u8('\r')) ++end;
-        auto current = source.get(begin, end).unwrap();
-        if (code.is_some()) {
-            if (current.starts_with("```"_str)) {
-                document.blocks.push(code.take().unwrap());
-                list_continuation_allowed = false;
-            } else {
-                if (! code->literal.is_empty()) code->literal.push_ascii('\n');
-                code->literal.push_str(current);
-            }
-        } else if (current.starts_with("```"_str)) {
-            flush_paragraph();
-            list_continuation_allowed = false;
-            code                      = Some(MarkdownBlock {
-                .kind = MarkdownBlockKind::Code,
-                .language =
-                    String::make(current.get(usize(3), current.len()).unwrap().trim_ascii()),
-                .span = markdown_span(path, line, usize(1)),
+    auto        slugs  = rstd::collections::BTreeSet<String>::make();
+    auto        counts = rstd::collections::BTreeMap<String, usize>::make();
+    Vec<NodeId> pending;
+    pending.push(document.syntax.root().id());
+    while (! pending.is_empty()) {
+        auto        id   = pending.pop().unwrap();
+        const auto& node = syntax_node(document, id);
+        if (node.kind == NodeKind::Heading) {
+            String text;
+            append_plain_text(document, id, text);
+            auto base = rstd_try(heading_slug(text.as_str()));
+            if (! counts.contains_key(base.as_str())) counts.insert(base.clone(), usize(1));
+            auto& suffix = **counts.get_mut(base.as_str());
+            auto  anchor = suffix == usize(1) ? base.clone() : rstd::format("{}-{}", base, suffix);
+            while (slugs.contains(anchor.as_str())) anchor = rstd::format("{}-{}", base, ++suffix);
+            ++suffix;
+            slugs.insert(anchor.clone());
+            document.heading_anchors.insert(usize(id.index.to_primitive()), anchor.clone());
+            document.headings.push({
+                .level  = usize(node.heading_level),
+                .text   = rstd::move(text),
+                .anchor = rstd::move(anchor),
+                .span   = source_span(document, node.span.begin),
             });
-        } else {
-            auto heading      = heading_level(current);
-            auto list         = list_item(current);
-            auto continuation = Option<usize> {};
-            if (list_continuation_allowed && ! document.blocks.is_empty() &&
-                document.blocks[document.blocks.len() - usize(1)].kind ==
-                    MarkdownBlockKind::ListItem) {
-                continuation = list_continuation(
-                    current, document.blocks[document.blocks.len() - usize(1)].depth);
-            }
-            if (current.trim_ascii().is_empty()) {
-                flush_paragraph();
-                list_continuation_allowed = false;
-            } else if (heading != usize {}) {
-                flush_paragraph();
-                list_continuation_allowed = false;
-                auto text = current.get(heading + usize(1), current.len()).unwrap().trim_ascii();
-                auto inlines =
-                    rstd_try(parse_inlines(text, path, line, heading + usize(2), document.links));
-                auto plain = inline_plain_text(inlines);
-                auto slug  = rstd_try(heading_slug(plain.as_str()));
-                auto count = slugs.get_mut(slug.as_str());
-                if (count.is_some()) {
-                    ++(**count);
-                    slug = rstd::format("{}-{}", slug.as_str(), **count);
-                } else {
-                    slugs.insert(slug.clone(), usize(1));
-                }
-                auto span = markdown_span(path, line, usize(1));
-                document.headings.push(MarkdownHeading {
-                    .level  = heading,
-                    .text   = rstd::move(plain),
-                    .anchor = slug.clone(),
-                    .span =
-                        SourceSpan {
-                            .path   = span.path.clone(),
-                            .line   = span.line,
-                            .column = span.column,
-                        },
-                });
-                document.blocks.push(MarkdownBlock {
-                    .kind    = MarkdownBlockKind::Heading,
-                    .level   = heading,
-                    .anchor  = rstd::move(slug),
-                    .inlines = rstd::move(inlines),
-                    .span    = rstd::move(span),
-                });
-            } else if (list.is_some()) {
-                flush_paragraph();
-                auto offset  = list->template get<2>();
-                auto inlines = rstd_try(parse_inlines(current.get(offset, current.len()).unwrap(),
-                                                      path,
-                                                      line,
-                                                      offset + usize(1),
-                                                      document.links));
-                document.blocks.push(MarkdownBlock {
-                    .kind    = MarkdownBlockKind::ListItem,
-                    .depth   = list->template get<0>(),
-                    .ordered = list->template get<1>(),
-                    .inlines = rstd::move(inlines),
-                    .span    = markdown_span(path, line, usize(1)),
-                });
-                list_continuation_allowed = true;
-            } else if (continuation.is_some()) {
-                auto& previous = document.blocks[document.blocks.len() - usize(1)];
-                auto  text     = current.get(*continuation, current.len()).unwrap();
-                auto  inlines  = rstd_try(
-                    parse_inlines(text, path, line, *continuation + usize(1), document.links));
-                push_inline_text(previous.inlines, " "_str, path, line, *continuation + usize(1));
-                for (auto& item : inlines) previous.inlines.push(rstd::move(item));
-            } else if (current.starts_with("> "_str)) {
-                flush_paragraph();
-                list_continuation_allowed = false;
-                auto inlines = rstd_try(parse_inlines(current.get(usize(2), current.len()).unwrap(),
-                                                      path,
-                                                      line,
-                                                      usize(3),
-                                                      document.links));
-                document.blocks.push(MarkdownBlock {
-                    .kind    = MarkdownBlockKind::Blockquote,
-                    .inlines = rstd::move(inlines),
-                    .span    = markdown_span(path, line, usize(1)),
-                });
-            } else {
-                list_continuation_allowed = false;
-                auto inlines              = rstd_try(
-                    parse_inlines(current.trim_ascii(), path, line, usize(1), document.links));
-                if (paragraph.is_none()) {
-                    paragraph = Some(MarkdownBlock {
-                        .kind    = MarkdownBlockKind::Paragraph,
-                        .inlines = rstd::move(inlines),
-                        .span    = markdown_span(path, line, usize(1)),
-                    });
-                } else {
-                    push_inline_text(paragraph->inlines, " "_str, path, line, usize(1));
-                    for (auto& item : inlines) paragraph->inlines.push(rstd::move(item));
-                }
-            }
         }
-        if (end == source.len()) break;
-        if (source[end] == u8('\r') && end + usize(1) < source.len() &&
-            source[end + usize(1)] == u8('\n'))
-            ++end;
-        begin = end + usize(1);
-        ++line;
+        if (node.kind == NodeKind::Link || node.kind == NodeKind::Image)
+            document.links.push({
+                .node        = id,
+                .destination = node.destination.clone(),
+                .image       = node.kind == NodeKind::Image,
+                .span        = source_span(document, node.span.begin),
+            });
+        // Image alt content is rendered as text, not independent links or resources.
+        if (node.kind == NodeKind::Image) continue;
+        for (auto i = node.children.len(); i > usize {}; --i)
+            pending.push(NodeId { node.children[i - usize(1)] });
     }
-    flush_paragraph();
-    if (code.is_some())
-        return Err(markdown_error(code->span, "unterminated fenced code block"_str));
     return Ok(rstd::move(document));
 }
-
-auto render_markdown_document(const MarkdownDocument& document) -> String {
-    auto output    = String::make();
-    auto lists     = Vec<bool>::make();
-    auto item_open = false;
-    for (const auto& block : document.blocks) {
-        if (block.kind != MarkdownBlockKind::ListItem) close_lists(output, lists, item_open);
-        if (block.kind == MarkdownBlockKind::Heading) {
-            output.push_str(rstd::format("<h{} id=\"{}\">", block.level, block.anchor).as_str());
-            append_inlines_html(output, block.inlines);
-            output.push_str(rstd::format("</h{}>", block.level).as_str());
-        } else if (block.kind == MarkdownBlockKind::Paragraph) {
-            output.push_str("<p>"_str);
-            append_inlines_html(output, block.inlines);
-            output.push_str("</p>"_str);
-        } else if (block.kind == MarkdownBlockKind::Code) {
-            output.push_str("<pre><code"_str);
-            if (! block.language.is_empty()) {
-                output.push_str(" class=\"language-"_str);
-                output.push_str(escape_html(block.language.as_str()).as_str());
-                output.push_ascii('"');
-            }
-            output.push_ascii('>');
-            output.push_str(escape_html(block.literal.as_str()).as_str());
-            output.push_str("</code></pre>"_str);
-        } else if (block.kind == MarkdownBlockKind::Blockquote) {
-            output.push_str("<blockquote><p>"_str);
-            append_inlines_html(output, block.inlines);
-            output.push_str("</p></blockquote>"_str);
-        } else {
-            auto desired = block.depth + usize(1);
-            if (lists.len() > desired) close_lists(output, lists, item_open, desired);
-            if (lists.len() == desired && lists[desired - usize(1)] != block.ordered) {
-                close_lists(output, lists, item_open, desired - usize(1));
-            }
-            if (lists.len() == desired && item_open) {
-                output.push_str("</li>"_str);
-                item_open = false;
-            }
-            while (lists.len() < desired) {
-                output.push_str(block.ordered ? "<ol>"_str : "<ul>"_str);
-                lists.emplace_back(block.ordered);
-            }
-            output.push_str("<li>"_str);
-            append_inlines_html(output, block.inlines);
-            item_open = true;
-        }
-    }
-    close_lists(output, lists, item_open);
-    return output;
+auto render_markdown_document(const MarkdownDocument& document) -> Result<String, String> {
+    return BookMarkdownRenderer(document).render();
 }
-
 auto resolve_book_content(const BookProject&    project,
                           const BookGraph&      graph,
                           Vec<MarkdownDocument> documents) -> Result<BookContent, String> {
@@ -567,87 +372,83 @@ auto resolve_book_content(const BookProject&    project,
     for (auto page_index = usize {}; page_index < documents.len(); ++page_index) {
         auto&       document = documents[page_index];
         const auto& page     = graph.pages[page_index];
-        for (auto& block : document.blocks) {
-            for (auto& item : block.inlines) {
-                if (item.kind != MarkdownInlineKind::Link && item.kind != MarkdownInlineKind::Image)
-                    continue;
-                auto destination = item.destination.as_str();
-                if (destination.starts_with("https://"_str) ||
-                    destination.starts_with("http://"_str)) {
-                    item.resolved_destination = item.destination.clone();
-                    continue;
-                }
-                if (dangerous_scheme(destination))
-                    return Err(markdown_error(item.span, "unsafe link scheme"_str));
-                auto split    = split_destination(destination);
-                auto path     = split.template get<0>();
-                auto fragment = split.template get<1>();
-                if (path.is_empty()) {
-                    if (fragment.is_empty() || ! heading_exists(document, fragment))
-                        return Err(markdown_error(
-                            item.span,
-                            rstd::format("page has no heading '#{}'", fragment).as_str()));
-                    item.resolved_destination = rstd::format("#{}", fragment);
-                    continue;
-                }
-                auto local = rstd_try(resolve_local_path(project, page, path, item.span));
-                if (item.kind == MarkdownInlineKind::Image) {
-                    if (! fragment.is_empty())
-                        return Err(
-                            markdown_error(item.span, "local image must not use a fragment"_str));
-                    auto existing = asset_outputs.get(local.as_path().to_string_lossy().as_str());
-                    auto output   = String::make();
-                    if (existing.is_some()) {
-                        output = (**existing).clone();
-                    } else {
-                        auto name = local.as_path().file_name();
-                        if (name.is_none() || name->to_str().is_none())
-                            return Err(markdown_error(item.span,
-                                                      "local image has no UTF-8 file name"_str));
-                        auto digest = rstd_try(
-                            licrypto::sha256_hex(local.as_path().to_string_lossy().as_str())
-                                .map_err([](licrypto::Error error) {
-                                    return rstd::format("SHA-256 failed: {}", error);
-                                }));
-                        output = rstd::format("assets/{}-{}",
-                                              digest.as_str().get(usize {}, usize(16)).unwrap(),
-                                              *name->to_str());
-                        asset_outputs.insert(local.as_path().to_string_lossy(), output.clone());
-                        content.assets.push(BookAsset {
-                            .source = local.clone(),
-                            .output = output.clone(),
-                        });
-                    }
-                    item.resolved_destination = relative_url(page.output.as_str(), output.as_str());
-                    continue;
-                }
-                if (! path.ends_with(".md"_str))
-                    return Err(markdown_error(item.span,
-                                              "local links must target a catalogued .md page"_str));
-                auto target = page_for_path(graph, local.as_path());
-                if (target.is_none())
-                    return Err(markdown_error(
-                        item.span,
-                        "local Markdown link targets a page not listed in SUMMARY.md"_str));
-                if (! fragment.is_empty() && ! heading_exists(documents[*target], fragment))
-                    return Err(markdown_error(
-                        item.span,
-                        rstd::format("target page has no heading '#{}'", fragment).as_str()));
-                auto resolved =
-                    *target == page_index
-                        ? String::make(fragment.is_empty() ? "#"_str : "#"_str)
-                        : relative_url(page.output.as_str(), graph.pages[*target].output.as_str());
-                if (*target == page_index && fragment.is_empty()) resolved = String::make("#"_str);
-                if (! fragment.is_empty()) {
-                    if (*target != page_index) resolved.push_ascii('#');
-                    resolved.push_str(fragment);
-                }
-                item.resolved_destination = rstd::move(resolved);
+        for (auto& item : document.links) {
+            auto destination = item.destination.as_str();
+            if (destination.starts_with("https://"_str) || destination.starts_with("http://"_str) ||
+                (! item.image && destination.starts_with("mailto:"_str))) {
+                item.resolved_destination = item.destination.clone();
+                continue;
             }
+            if (dangerous_scheme(destination))
+                return Err(markdown_error(item.span, "unsafe link scheme"_str));
+            auto split    = split_destination(destination);
+            auto path     = split.template get<0>();
+            auto fragment = split.template get<1>();
+            if (path.is_empty()) {
+                if (item.image)
+                    return Err(markdown_error(item.span, "local image must have a file path"_str));
+                if (! fragment.is_empty() && ! heading_exists(document, fragment))
+                    return Err(markdown_error(
+                        item.span, rstd::format("page has no heading '#{}'", fragment).as_str()));
+                item.resolved_destination =
+                    fragment.is_empty() ? String::make("#"_str) : rstd::format("#{}", fragment);
+                continue;
+            }
+            auto local = rstd_try(resolve_local_path(project, page, path, item.span));
+            if (item.image) {
+                if (! fragment.is_empty())
+                    return Err(
+                        markdown_error(item.span, "local image must not use a fragment"_str));
+                auto existing = asset_outputs.get(local.as_path().to_string_lossy().as_str());
+                auto output   = String::make();
+                if (existing.is_some()) {
+                    output = (**existing).clone();
+                } else {
+                    auto name = local.as_path().file_name();
+                    if (name.is_none() || name->to_str().is_none())
+                        return Err(
+                            markdown_error(item.span, "local image has no UTF-8 file name"_str));
+                    auto digest =
+                        rstd_try(licrypto::sha256_hex(local.as_path().to_string_lossy().as_str())
+                                     .map_err([](licrypto::Error error) {
+                                         return rstd::format("SHA-256 failed: {}", error);
+                                     }));
+                    output = rstd::format("assets/{}-{}",
+                                          digest.as_str().get(usize {}, usize(16)).unwrap(),
+                                          *name->to_str());
+                    asset_outputs.insert(local.as_path().to_string_lossy(), output.clone());
+                    content.assets.push(BookAsset {
+                        .source = local.clone(),
+                        .output = output.clone(),
+                    });
+                }
+                item.resolved_destination = relative_url(page.output.as_str(), output.as_str());
+                continue;
+            }
+            if (! path.ends_with(".md"_str))
+                return Err(markdown_error(
+                    item.span, "local links must target a .md page listed in SUMMARY.md"_str));
+            auto target = page_for_path(graph, local.as_path());
+            if (target.is_none())
+                return Err(markdown_error(
+                    item.span, "local Markdown link targets a page not listed in SUMMARY.md"_str));
+            if (! fragment.is_empty() && ! heading_exists(documents[*target], fragment))
+                return Err(markdown_error(
+                    item.span,
+                    rstd::format("target page has no heading '#{}'", fragment).as_str()));
+            auto resolved =
+                *target == page_index
+                    ? String::make("#"_str)
+                    : relative_url(page.output.as_str(), graph.pages[*target].output.as_str());
+            if (! fragment.is_empty()) {
+                if (*target != page_index) resolved.push_ascii('#');
+                resolved.push_str(fragment);
+            }
+            item.resolved_destination = rstd::move(resolved);
         }
     }
     for (auto page_index = usize {}; page_index < documents.len(); ++page_index) {
-        auto html = render_markdown_document(documents[page_index]);
+        auto html = rstd_try(render_markdown_document(documents[page_index]));
         content.pages.push(BookPageDocument {
             .page     = page_index,
             .document = rstd::move(documents[page_index]),

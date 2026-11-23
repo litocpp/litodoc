@@ -41,7 +41,8 @@ auto prepare_book(ref<rstd::path::Path>              directory,
             return Err(rstd::format("cannot read Book page '{}': {}",
                                     page.source_path.as_path(),
                                     rstd::move(source).unwrap_err()));
-        documents.push(rstd_try(parse_markdown(page.source_path.as_path(), source->as_str())));
+        documents.push(
+            rstd_try(parse_markdown(page.source_path.as_path(), rstd::move(source).unwrap())));
     }
     auto content = rstd_try(resolve_book_content(project, graph, rstd::move(documents)));
     auto dataset = rstd_try(make_book_dataset(project, graph, content));

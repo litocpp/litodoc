@@ -1,6 +1,7 @@
 export module lito.book:model;
 
 import rstd;
+export import limarkto;
 
 using namespace rstd::prelude;
 
@@ -72,45 +73,6 @@ struct BookGraph {
     Vec<usize>    roots;
 };
 
-enum class MarkdownInlineKind
-{
-    Text,
-    Emphasis,
-    Strong,
-    Code,
-    Link,
-    Image,
-};
-
-struct MarkdownInline {
-    MarkdownInlineKind kind { MarkdownInlineKind::Text };
-    String             text;
-    String             destination;
-    String             resolved_destination;
-    SourceSpan         span;
-};
-
-enum class MarkdownBlockKind
-{
-    Heading,
-    Paragraph,
-    Code,
-    ListItem,
-    Blockquote,
-};
-
-struct MarkdownBlock {
-    MarkdownBlockKind   kind { MarkdownBlockKind::Paragraph };
-    usize               level {};
-    usize               depth {};
-    bool                ordered { false };
-    String              language;
-    String              anchor;
-    String              literal;
-    Vec<MarkdownInline> inlines;
-    SourceSpan          span;
-};
-
 struct MarkdownHeading {
     usize      level {};
     String     text;
@@ -119,16 +81,19 @@ struct MarkdownHeading {
 };
 
 struct MarkdownLink {
-    String     destination;
-    bool       image { false };
-    SourceSpan span;
+    limarkto::NodeId node;
+    String           destination;
+    String           resolved_destination;
+    bool             image { false };
+    SourceSpan       span;
 };
 
 struct MarkdownDocument {
-    rstd::path::PathBuf  path;
-    Vec<MarkdownBlock>   blocks;
-    Vec<MarkdownHeading> headings;
-    Vec<MarkdownLink>    links;
+    rstd::path::PathBuf                        path;
+    limarkto::Document                         syntax;
+    rstd::collections::BTreeMap<usize, String> heading_anchors;
+    Vec<MarkdownHeading>                       headings;
+    Vec<MarkdownLink>                          links;
 };
 
 struct BookPageDocument {
