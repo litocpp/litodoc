@@ -171,6 +171,8 @@ auto publish_site(ref<rstd::path::Path>   output,
                   const FrontendBundle&   frontend,
                   const DataSummary&      data,
                   DeclarationHighlighter* highlighter) -> Result<Summary, String> {
+    auto valid = validate_doc_theme(frontend);
+    if (valid.is_err()) return Err(rstd::move(valid).unwrap_err());
     auto publication = begin_publication(output, "doc-site"_str);
     if (publication.is_err()) return Err(rstd::move(publication).unwrap_err());
     auto rendered = render_site(
@@ -191,6 +193,8 @@ auto publish_package_set(ref<rstd::path::Path>   output,
                          const FrontendBundle&   frontend,
                          const DataSummary&      data,
                          DeclarationHighlighter* highlighter) -> Result<Summary, String> {
+    auto valid = validate_doc_theme(frontend);
+    if (valid.is_err()) return Err(rstd::move(valid).unwrap_err());
     auto publication = begin_publication(output, "doc-package-set"_str);
     if (publication.is_err()) return Err(rstd::move(publication).unwrap_err());
     auto publication_summary = PublicationSetSummary {

@@ -5,6 +5,7 @@ import rstd.test;
 import licrypto;
 import lito.doc;
 import lito.doc.web;
+import lito.site;
 
 using namespace rstd::prelude;
 using namespace rstd::literals;
@@ -465,7 +466,191 @@ auto occurrences(ref<str> contents, ref<str> needle) -> usize {
     }
 }
 
+auto independent_doc_theme(ref<str> root_template = ""_str)
+    -> Result<lito::site::FrontendBundle, String> {
+    constexpr auto page =
+        "<!doctype html><html><head><link rel=\"stylesheet\" "
+        "href=\"{{page.asset_prefix}}skin.css\">"
+        "</head><body data-kind=\"{{page.kind}}\" data-output=\"{{page.output}}\" "
+        "data-url=\"{{page.url}}\">"
+        "<a href=\"{{page.root_url}}\">Own home</a><h1>{{page.title}}</h1>"
+        "{{#if site.brand}}{{site.brand.label}}{{else}}Own brand{{/if}}"
+        "{{#if page.icon_url}}Configured icon{{else}}No icon{{/if}}"
+        "{{#if page.package}}<p>Package {{page.package}}</p>{{/if}}"
+        "{{#if page.module}}<p>Module {{page.module}}</p>{{/if}}"
+        "{{#if navigation.module_index}}<a href=\"{{navigation.module_index.href}}\">Index</a>"
+        "<a href=\"{{navigation.module_index.fallback_href}}\">Package home</a>{{/if}}"
+        "{{#if symbol}}<article>{{#each symbol.signature_fragments}}"
+        "{{#if href}}<a href=\"{{href}}\">{{{html}}}</a>{{else}}{{{html}}}{{/if}}{{/each}}"
+        "{{#if symbol.documentation}}{{{symbol.documentation}}}{{/if}}"
+        "{{#if symbol.parent}}<a href=\"{{symbol.parent.href}}\">{{symbol.parent.name}}</a>{{/if}}"
+        "{{#each member_types}}{{#if inline}}{{#if alias_target}}"
+        "<p>{{name}} =&gt; "
+        "{{{alias_target.html}}}</p>{{else}}{{{signature_html}}}{{/if}}{{/if}}{{/each}}"
+        "</article>{{/if}}<footer>{{#each site.navigation}}"
+        "<a href=\"{{href}}\">{{label}}</a>{{/each}}"
+        "{{#if site.repository}}<a href=\"{{site.repository.href}}\">Source</a>{{/if}}</footer></body></html>"_str;
+    const lito::site::FrontendResourceInput resources[] = {
+        { .path       = "frontend.json"_str,
+          .media_type = "application/json"_str,
+          .contents =
+              "{\"format\":\"lito-doc-frontend\",\"version\":2,\"template-api\":1,"
+              "\"doc-template-api\":2,\"data-api\":4,\"capabilities\":[\"api\"],"
+              "\"templates\":{\"root\":\"root.html\",\"package\":\"package.html\","
+              "\"module\":\"module.html\",\"symbol\":\"symbol.html\"},"
+              "\"partials\":[],\"assets\":[{\"path\":\"skin.css\",\"media-type\":\"text/css\"}]}"_str
+                  .as_bytes() },
+        { .path       = "root.html"_str,
+          .media_type = "text/html"_str,
+          .contents   = (root_template.is_empty() ? page : root_template).as_bytes() },
+        { .path = "package.html"_str, .media_type = "text/html"_str, .contents = page.as_bytes() },
+        { .path = "module.html"_str, .media_type = "text/html"_str, .contents = page.as_bytes() },
+        { .path = "symbol.html"_str, .media_type = "text/html"_str, .contents = page.as_bytes() },
+        { .path       = "skin.css"_str,
+          .media_type = "text/css"_str,
+          .contents   = "body { color: navy; }"_str.as_bytes() },
+    };
+    return lito::site::load_frontend_resources(
+        "independent-doc"_str,
+        slice<lito::site::FrontendResourceInput>::from_raw_parts(
+            resources, usize(sizeof(resources) / sizeof(resources[0]))));
+}
+
 } // namespace
+
+TEST(DocPublication, UsesAnIndependentApiTwoThemeForEveryPageKind) {
+    auto temporary = rstd::test::TempDir::make();
+    ASSERT_TRUE(temporary.is_ok());
+    auto root  = temporary->path();
+    auto theme = independent_doc_theme();
+    ASSERT_TRUE(theme.is_ok());
+    auto input = lito::doc::SiteInput {
+        .title       = "Own documentation"_Str,
+        .output      = child(root, "site"_str),
+        .data_output = child(root, "data"_str),
+    };
+    input.packages.push(record_package(root));
+    auto generated = lito::doc::generate(rstd::move(input), Some(rstd::move(theme).unwrap()));
+    ASSERT_TRUE(generated.is_ok());
+    auto overview = rstd::fs::read_to_string(child(root, "site/index.html"_str).as_path()).unwrap();
+    EXPECT_TRUE(overview.as_str().contains(
+        "data-kind=\"root\" data-output=\"index.html\" data-url=\"index.html\""_str));
+    EXPECT_TRUE(overview.as_str().contains("Own brandNo icon"_str));
+    EXPECT_TRUE(overview.as_str().contains("href=\"index.html\">Own home"_str));
+    EXPECT_FALSE(overview.as_str().contains("Litocpp"_str));
+    EXPECT_FALSE(overview.as_str().contains("lito-doc-shell"_str));
+    EXPECT_FALSE(overview.as_str().contains("static/style.css"_str));
+    EXPECT_FALSE(rstd::fs::exists(child(root, "site/static/favicon.svg"_str).as_path()).unwrap());
+    EXPECT_TRUE(rstd::fs::exists(child(root, "site/skin.css"_str).as_path()).unwrap());
+    auto package =
+        rstd::fs::read_to_string(child(root, "site/package/records/index.html"_str).as_path())
+            .unwrap();
+    EXPECT_TRUE(package.as_str().contains("data-kind=\"package\""_str));
+    EXPECT_TRUE(package.as_str().contains("href=\"../../index.html\">Own home"_str));
+    auto modules =
+        rstd::fs::read_dir(child(root, "site/package/records/module"_str).as_path()).unwrap();
+    auto module_count = usize {};
+    for (auto entry = modules.next(); entry.is_some(); entry = modules.next()) {
+        ASSERT_TRUE(entry->is_ok());
+        auto html = rstd::fs::read_to_string(entry->unwrap().path().as_path()).unwrap();
+        EXPECT_TRUE(html.as_str().contains("data-kind=\"module\""_str));
+        EXPECT_TRUE(html.as_str().contains("href=\"../../../skin.css\""_str));
+        ++module_count;
+    }
+    EXPECT_TRUE(module_count > usize {});
+    auto symbol =
+        symbol_page_containing(generated->packages[usize {}].directory.as_path(), "class Box"_str);
+    ASSERT_TRUE(symbol.is_ok());
+    EXPECT_TRUE(symbol->as_str().contains("data-kind=\"symbol\""_str));
+    EXPECT_TRUE(symbol->as_str().contains("href=\"../../../index.html\">Own home"_str));
+    EXPECT_TRUE(symbol->as_str().contains("value_type =&gt; T"_str));
+    auto theme_again = independent_doc_theme();
+    ASSERT_TRUE(theme_again.is_ok());
+    auto rendered =
+        lito::doc::render({ .data = child(root, "data"_str), .output = child(root, "copy"_str) },
+                          Some(rstd::move(theme_again).unwrap()));
+    ASSERT_TRUE(rendered.is_ok());
+    auto copy = rstd::fs::read_to_string(child(root, "copy/index.html"_str).as_path()).unwrap();
+    EXPECT_EQ(copy.as_str(), overview.as_str());
+}
+
+TEST(DocPublication, RejectsOldContextFieldsWithoutReplacingTheSite) {
+    auto temporary = rstd::test::TempDir::make();
+    ASSERT_TRUE(temporary.is_ok());
+    auto root  = temporary->path();
+    auto theme = independent_doc_theme();
+    ASSERT_TRUE(theme.is_ok());
+    auto input = lito::doc::SiteInput {
+        .title       = "Own documentation"_Str,
+        .output      = child(root, "site"_str),
+        .data_output = child(root, "data"_str),
+    };
+    input.packages.push(record_package(root));
+    ASSERT_TRUE(lito::doc::generate(rstd::move(input), Some(rstd::move(theme).unwrap())).is_ok());
+    auto previous = rstd::fs::read_to_string(child(root, "site/index.html"_str).as_path()).unwrap();
+    for (auto field : array<ref<str>, 8> { "site.has_default_brand"_str,
+                                           "site.has_repository"_str,
+                                           "page.has_outline"_str,
+                                           "page.search_package"_str,
+                                           "navigation.show_modules"_str,
+                                           "navigation.has_packages"_str,
+                                           "navigation.scroll_state_url"_str,
+                                           "page.is_not_found"_str }) {
+        auto body = String::make("{{#if "_str);
+        body.push_str(field);
+        body.push_str("}}old{{/if}}"_str);
+        auto old_theme = independent_doc_theme(body.as_str());
+        ASSERT_TRUE(old_theme.is_ok());
+        auto rendered = lito::doc::render(
+            { .data = child(root, "data"_str), .output = child(root, "site"_str) },
+            Some(rstd::move(old_theme).unwrap()));
+        EXPECT_TRUE(rendered.is_err());
+        EXPECT_EQ(rstd::fs::read_to_string(child(root, "site/index.html"_str).as_path())
+                      .unwrap()
+                      .as_str(),
+                  previous.as_str());
+    }
+    for (auto field : array<ref<str>, 6> { "symbol.has_documentation"_str,
+                                           "symbol.has_namespace"_str,
+                                           "symbol.has_parent"_str,
+                                           "symbol.parent_name"_str,
+                                           "symbol.has_methods"_str,
+                                           "symbol.has_fields"_str }) {
+        auto old_theme = independent_doc_theme();
+        ASSERT_TRUE(old_theme.is_ok());
+        auto body = String::make("{{#if "_str);
+        body.push_str(field);
+        body.push_str("}}old{{/if}}"_str);
+        auto document = lito::site::parse_template("symbol.html"_str, body.as_str());
+        ASSERT_TRUE(document.is_ok());
+        old_theme->templates.documents.insert("symbol.html"_Str, rstd::move(document).unwrap());
+        EXPECT_TRUE(lito::doc::render(
+                        { .data = child(root, "data"_str), .output = child(root, "site"_str) },
+                        Some(rstd::move(old_theme).unwrap()))
+                        .is_err());
+        EXPECT_EQ(rstd::fs::read_to_string(child(root, "site/index.html"_str).as_path()).unwrap(),
+                  previous);
+    }
+    auto incomplete = independent_doc_theme();
+    ASSERT_TRUE(incomplete.is_ok());
+    incomplete->symbol_template = "absent.html"_Str;
+    EXPECT_TRUE(
+        lito::doc::render({ .data = child(root, "data"_str), .output = child(root, "site"_str) },
+                          Some(rstd::move(incomplete).unwrap()))
+            .is_err());
+    EXPECT_EQ(rstd::fs::read_to_string(child(root, "site/index.html"_str).as_path()).unwrap(),
+              previous);
+    auto mutated = independent_doc_theme();
+    ASSERT_TRUE(mutated.is_ok());
+    mutated->doc_template_api = usize(1);
+    EXPECT_TRUE(
+        lito::doc::render({ .data = child(root, "data"_str), .output = child(root, "site"_str) },
+                          Some(rstd::move(mutated).unwrap()))
+            .is_err());
+    EXPECT_EQ(
+        rstd::fs::read_to_string(child(root, "site/index.html"_str).as_path()).unwrap().as_str(),
+        previous.as_str());
+}
 
 TEST(DocPublication, PublishesRelocatablePackageSitesFromOneDataset) {
     auto temporary = rstd::test::TempDir::make();
@@ -521,6 +706,7 @@ TEST(DocPublication, PublishesRelocatablePackageSitesFromOneDataset) {
     EXPECT_TRUE(navigation->as_str().contains("\"url\": \"module/"_str));
     EXPECT_FALSE(navigation->as_str().contains("package/alpha/"_str));
     auto module_navigation_page = String::make();
+    auto root_module_count      = usize {};
     for (const auto& file : alpha.files) {
         if (! file.path.as_str().starts_with("module/"_str) ||
             ! file.path.as_str().ends_with(".html"_str))
@@ -528,9 +714,15 @@ TEST(DocPublication, PublishesRelocatablePackageSitesFromOneDataset) {
         auto contents = rstd::fs::read_to_string(
             child(root, rstd::format("publication/alpha/{}", file.path).as_str()).as_path());
         ASSERT_TRUE(contents.is_ok());
+        if (contents->as_str().contains("<h1 class=\"page-title\"><code>alpha</code></h1>"_str)) {
+            ++root_module_count;
+            EXPECT_FALSE(contents->as_str().contains("module-navigation-url"_str));
+            EXPECT_FALSE(contents->as_str().contains("data-has-sidebar"_str));
+        }
         if (contents->as_str().contains("module-navigation-url"_str))
             module_navigation_page = rstd::move(contents).unwrap();
     }
+    EXPECT_EQ(root_module_count, usize(1));
     ASSERT_TRUE(! module_navigation_page.is_empty());
     EXPECT_TRUE(module_navigation_page.as_str().contains(
         "module-navigation-url=\"../navigation.json\""_str));

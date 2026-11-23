@@ -1,9 +1,9 @@
-      {{#if site.has_footer}}<footer class="site-footer">
-        {{#if site.has_footer_text}}<p>{{site.footer_text}}</p>{{/if}}
-        {{#if site.has_footer_links}}<nav aria-label="Footer links">{{#each site.footer_links}}<a href="{{href}}">{{label}}</a>{{/each}}</nav>{{/if}}
+      {{#if site.footer}}<footer class="site-footer">
+        {{#if site.footer.text}}<p>{{site.footer.text}}</p>{{/if}}
+        {{#if site.footer.links}}<nav aria-label="Footer links">{{#each site.footer.links}}<a href="{{href}}">{{label}}</a>{{/each}}</nav>{{/if}}
       </footer>{{/if}}
     </main>
-    {{#if page.has_outline}}
+    {{#if page.outline}}
     <aside class="page-outline" aria-label="On this page">
       <lito-doc-navigation>
         <div class="sidebar-section" data-navigation-section>

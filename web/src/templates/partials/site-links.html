@@ -1,0 +1,9 @@
+<lito-doc-site-links>
+  <details class="site-links">
+    <summary class="site-links-toggle">Site links</summary>
+    <nav class="site-links-panel" aria-label="Site links">
+      {{#each site.navigation}}<a href="{{href}}">{{label}}</a>{{/each}}
+      {{#if site.repository}}<a href="{{site.repository.href}}">Repository</a>{{/if}}
+    </nav>
+  </details>
+</lito-doc-site-links>

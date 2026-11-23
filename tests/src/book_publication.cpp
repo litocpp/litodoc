@@ -174,11 +174,10 @@ TEST(BookPublication, RejectsRedirectCollisionsAndInvalidTargetsBeforePublicatio
     }
 }
 
-TEST(BookPublication, PreservesDefaultsAndUsesSafeLegacyNotFoundFallback) {
+TEST(BookPublication, PreservesDefaultsAndRequiresThemeNotFoundTemplate) {
     auto book     = publication_book();
     auto prepared = publication_prepare(book.path());
     ASSERT_TRUE(prepared.is_ok());
-    prepared->frontend.book_not_found_template = String {};
     ASSERT_TRUE(lito::book::publish(*prepared).is_ok());
     auto root = publication_read(book.path(), "build/book/index.html"_str);
     EXPECT_TRUE(root.as_str().contains("href=\"https://litocpp.org/\""_str));
@@ -190,6 +189,10 @@ TEST(BookPublication, PreservesDefaultsAndUsesSafeLegacyNotFoundFallback) {
     EXPECT_TRUE(error.as_str().contains("<base href=\"/\">"_str));
     EXPECT_TRUE(error.as_str().contains("Book &amp; Docs"_str));
     EXPECT_FALSE(error.as_str().contains("rel=\"canonical\""_str));
+    prepared->frontend.book_not_found_template = String {};
+    EXPECT_TRUE(lito::book::publish(*prepared).is_err());
+    EXPECT_EQ(publication_read(book.path(), "build/book/index.html"_str), root);
+    EXPECT_EQ(publication_read(book.path(), "build/book/404.html"_str), error);
 }
 
 TEST(BookPublication, PreparedModelPublishesWithoutReopeningConfiguration) {

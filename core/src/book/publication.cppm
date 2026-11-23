@@ -84,14 +84,15 @@ auto prepare_html_publication(const BookProject& project,
         if (project.html.site_url.is_some())
             page.canonical.insert(
                 rstd_try(canonical_site_url(*project.html.site_url, page.output.as_str())));
+        auto source =
+            (project.source_prefix.is_empty() || project.source_prefix.as_str() == "."_str)
+                ? chapter.source.clone()
+                : rstd::format("{}/{}", project.source_prefix, chapter.source);
+        page.source.insert(rstd::move(source));
         if (project.html.edit.is_some()) {
-            auto source =
-                (project.source_prefix.is_empty() || project.source_prefix.as_str() == "."_str)
-                    ? chapter.source.clone()
-                    : rstd::format("{}/{}", project.source_prefix, chapter.source);
             auto target = rstd::format("{}{}{}",
                                        project.html.edit->prefix,
-                                       encode_site_path(source.as_str()),
+                                       encode_site_path(page.source->as_str()),
                                        project.html.edit->suffix);
             auto url    = rstd_try(absolute_site_url(target.as_str()));
             page.edit_url.insert(String::make(url.as_ref()));
@@ -138,6 +139,7 @@ auto prepare_html_publication(const BookProject& project,
 }
 
 auto validate_html_publication(const PreparedBook& prepared) -> Result<empty, String> {
+    if (prepared.frontend.supports_book) rstd_try(validate_book_theme(prepared.frontend));
     Vec<String> outputs;
     for (const auto& output : prepared.html.outputs)
         rstd_try(add_html_output(outputs, output.as_str()));

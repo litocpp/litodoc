@@ -31,6 +31,8 @@ auto selected_frontend(const Option<rstd::path::PathBuf>& path,
     if (! frontend->supports_api)
         return Err(rstd::format("frontend '{}' does not support API documentation",
                                 frontend->identity.as_str()));
+    auto valid = validate_doc_theme(*frontend);
+    if (valid.is_err()) return Err(rstd::move(valid).unwrap_err());
     return Ok(rstd::move(frontend).unwrap());
 }
 

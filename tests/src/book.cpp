@@ -96,10 +96,13 @@ auto make_book_project() -> rstd::io::Result<rstd::test::TempDir> {
                          "  \"version\": 2,\n"
                          "  \"template-api\": 1,\n"
                          "  \"book-data-api\": 1,\n"
+                         "  \"book-template-api\": 2,\n"
                          "  \"capabilities\": [\"book\"],\n"
                          "  \"templates\": {\n"
                          "    \"book-root\": \"templates/root.html\",\n"
-                         "    \"book-page\": \"templates/page.html\"\n"
+                         "    \"book-page\": \"templates/page.html\",\n"
+                         "    \"book-not-found\": \"templates/missing.html\",\n"
+                         "    \"book-redirect\": \"templates/moved.html\"\n"
                          "  },\n"
                          "  \"partials\": [],\n"
                          "  \"assets\": []\n"
@@ -110,11 +113,19 @@ auto make_book_project() -> rstd::io::Result<rstd::test::TempDir> {
                          "<!doctype html><title>{{site.title}}</title>"
                          "{{#each page.outline}}<a class=\"outline\" "
                          "href=\"{{href}}\">{{label}}</a>{{/each}}"
-                         "{{{book.content}}}"_str);
+                         "{{{page.content}}}"_str);
     if (written.is_err()) return Err(rstd::move(written).unwrap_err());
     written = write_text(root,
                          "frontend/templates/page.html"_str,
-                         "<!doctype html><title>{{book.title}}</title>{{{book.content}}}"_str);
+                         "<!doctype html><title>{{page.title}}</title>{{{page.content}}}"_str);
+    if (written.is_err()) return Err(rstd::move(written).unwrap_err());
+    written = write_text(root,
+                         "frontend/templates/missing.html"_str,
+                         "<!doctype html><base href=\"{{page.base_href}}\"><p>Missing</p>"_str);
+    if (written.is_err()) return Err(rstd::move(written).unwrap_err());
+    written = write_text(root,
+                         "frontend/templates/moved.html"_str,
+                         "<!doctype html><a href=\"{{page.redirect.href}}\">Moved</a>"_str);
     if (written.is_err()) return Err(rstd::move(written).unwrap_err());
     return Ok(rstd::move(temporary).unwrap());
 }
@@ -539,7 +550,7 @@ TEST(Book, RejectsIconAssetCollisionsWithoutReplacingTheSite) {
     EXPECT_EQ(previous->as_str(), "previous site"_str);
 }
 
-TEST(Book, PreservesVersionOneApiFrontendCompatibility) {
+TEST(Frontend, RejectsVersionOneApiFrontend) {
     auto temporary = rstd::test::TempDir::make();
     ASSERT_TRUE(temporary.is_ok());
     auto root = temporary->path();
@@ -554,8 +565,7 @@ TEST(Book, PreservesVersionOneApiFrontendCompatibility) {
                            "    \"root\": \"root.html\",\n"
                            "    \"package\": \"package.html\",\n"
                            "    \"module\": \"module.html\",\n"
-                           "    \"symbol\": \"symbol.html\",\n"
-                           "    \"source\": \"source.html\"\n"
+                           "    \"symbol\": \"symbol.html\"\n"
                            "  },\n"
                            "  \"partials\": [],\n"
                            "  \"assets\": []\n"
@@ -565,15 +575,12 @@ TEST(Book, PreservesVersionOneApiFrontendCompatibility) {
     ASSERT_TRUE(write_text(root, "package.html"_str, "{{site.title}}"_str).is_ok());
     ASSERT_TRUE(write_text(root, "module.html"_str, "{{site.title}}"_str).is_ok());
     ASSERT_TRUE(write_text(root, "symbol.html"_str, "{{site.title}}"_str).is_ok());
-    ASSERT_TRUE(write_text(root, "source.html"_str, "{{site.title}}"_str).is_ok());
-
     auto frontend = lito::site::load_frontend_directory(root);
-    ASSERT_TRUE(frontend.is_ok());
-    EXPECT_TRUE(frontend->supports_api);
-    EXPECT_FALSE(frontend->supports_book);
+    ASSERT_TRUE(frontend.is_err());
+    EXPECT_TRUE(rstd::move(frontend).unwrap_err().as_str().contains("version"_str));
 }
 
-TEST(Frontend, RejectsVersionTwoApiFrontends) {
+TEST(Frontend, RejectsUnsupportedDocDataApi) {
     auto temporary = rstd::test::TempDir::make();
     ASSERT_TRUE(temporary.is_ok());
     auto root = temporary->path();
@@ -581,8 +588,10 @@ TEST(Frontend, RejectsVersionTwoApiFrontends) {
                            "frontend.json"_str,
                            "{\n"
                            "  \"format\": \"lito-doc-frontend\",\n"
-                           "  \"version\": 1,\n"
+                           "  \"version\": 2,\n"
                            "  \"template-api\": 1,\n"
+                           "  \"capabilities\": [\"api\"],\n"
+                           "  \"doc-template-api\": 2,\n"
                            "  \"data-api\": 2\n"
                            "}\n"_str)
                     .is_ok());
@@ -592,29 +601,118 @@ TEST(Frontend, RejectsVersionTwoApiFrontends) {
         rstd::move(frontend).unwrap_err().as_str().contains("unsupported doc data API 2"_str));
 }
 
+TEST(Frontend, RejectsMissingOldAndMismatchedContextDeclarationsForAllSources) {
+    auto temporary = rstd::test::TempDir::make();
+    ASSERT_TRUE(temporary.is_ok());
+    auto root = temporary->path();
+    for (
+        auto declaration : array<ref<str>, 10> {
+            "\"capabilities\":[\"api\"],\"data-api\":4"_str,
+            "\"capabilities\":[\"api\"],\"data-api\":4,\"doc-template-api\":1"_str,
+            "\"capabilities\":[\"api\"],\"data-api\":4,\"doc-template-api\":99"_str,
+            "\"capabilities\":[\"book\"],\"book-data-api\":1"_str,
+            "\"capabilities\":[\"book\"],\"book-data-api\":1,\"book-template-api\":1"_str,
+            "\"capabilities\":[\"book\"],\"book-data-api\":1,\"book-template-api\":99"_str,
+            "\"capabilities\":[\"api\",\"book\"],\"data-api\":4,\"book-data-api\":1,\"doc-template-api\":2"_str,
+            "\"capabilities\":[\"api\",\"book\"],\"data-api\":4,\"book-data-api\":1,\"book-template-api\":2"_str,
+            "\"capabilities\":[\"api\"],\"data-api\":4,\"doc-template-api\":2,\"book-template-api\":2"_str,
+            "\"capabilities\":[\"book\"],\"book-data-api\":1,\"book-template-api\":2,\"doc-template-api\":2"_str }) {
+        auto manifest =
+            rstd::format("{{\"format\":\"lito-doc-frontend\",\"version\":2,\"template-api\":1,{},"
+                         "\"templates\":{{}},\"partials\":[],\"assets\":[]}}",
+                         declaration);
+        ASSERT_TRUE(write_text(root, "frontend.json"_str, manifest.as_str()).is_ok());
+        auto directory = lito::site::load_frontend_directory(root);
+        ASSERT_TRUE(directory.is_err());
+        auto directory_error = rstd::move(directory).unwrap_err();
+        EXPECT_TRUE(directory_error.as_str().contains("template-api"_str));
+        const lito::site::FrontendResourceInput resources[] = {
+            { .path       = "frontend.json"_str,
+              .media_type = "application/json"_str,
+              .contents   = manifest.as_str().as_bytes() },
+        };
+        auto embedded = lito::site::load_frontend_resources(
+            "embedded:invalid"_str,
+            slice<lito::site::FrontendResourceInput>::from_raw_parts(resources, usize(1)));
+        ASSERT_TRUE(embedded.is_err());
+        EXPECT_EQ(embedded.unwrap_err().as_str(), directory_error.as_str());
+    }
+}
+
+TEST(Frontend, RejectsDeprecatedSourceTemplateEntry) {
+    auto temporary = rstd::test::TempDir::make();
+    ASSERT_TRUE(temporary.is_ok());
+    ASSERT_TRUE(
+        write_text(
+            temporary->path(),
+            "frontend.json"_str,
+            "{\"format\":\"lito-doc-frontend\",\"version\":2,\"template-api\":1,"
+            "\"capabilities\":[\"api\"],\"doc-template-api\":2,\"data-api\":4,\"templates\":{"
+            "\"root\":\"root.html\",\"package\":\"package.html\",\"module\":\"module.html\","
+            "\"symbol\":\"symbol.html\",\"source\":\"source.html\"},\"partials\":[],\"assets\":[]}"_str)
+            .is_ok());
+    auto frontend = lito::site::load_frontend_directory(temporary->path());
+    ASSERT_TRUE(frontend.is_err());
+    EXPECT_TRUE(frontend.unwrap_err().as_str().contains("source"_str));
+}
+
+TEST(Frontend, DirectConstructionValidatesParsedManifestBeforeReadingOptionalVersions) {
+    for (
+        auto source : array<ref<str>, 2> {
+            "{\"format\":\"lito-doc-frontend\",\"version\":2,\"template-api\":1,\"capabilities\":[\"book\"],\"book-data-api\":1,\"book-template-api\":2}"_str,
+            "{\"format\":\"lito-doc-frontend\",\"version\":2,\"template-api\":1,\"capabilities\":[\"api\"],\"data-api\":4,\"doc-template-api\":2}"_str }) {
+        auto manifest = lito::site::parse_frontend_manifest(source);
+        ASSERT_TRUE(manifest.is_ok());
+        if (lito::site::frontend_capability(*manifest, "book"_str))
+            manifest->book_template_api = None();
+        else
+            manifest->doc_template_api = None();
+        auto valid = lito::site::validate_frontend_manifest(*manifest);
+        ASSERT_TRUE(valid.is_err());
+        auto validation_error = rstd::move(valid).unwrap_err();
+        auto paths            = lito::site::frontend_manifest_paths(*manifest);
+        ASSERT_TRUE(paths.is_err());
+        EXPECT_EQ(paths.unwrap_err().as_str(), validation_error.as_str());
+        auto bundle = lito::site::make_frontend_bundle(
+            "direct"_Str,
+            "digest"_Str,
+            rstd::collections::BTreeMap<String, lito::site::FrontendResource>::make(),
+            rstd::move(manifest).unwrap());
+        ASSERT_TRUE(bundle.is_err());
+        EXPECT_EQ(bundle.unwrap_err().as_str(), validation_error.as_str());
+    }
+}
+
 TEST(Frontend, DirectoryAndEmbeddedResourcesShareValidation) {
     auto temporary = rstd::test::TempDir::make();
     ASSERT_TRUE(temporary.is_ok());
-    auto           root          = temporary->path();
-    constexpr auto manifest      = R"json({
+    auto           root             = temporary->path();
+    constexpr auto manifest         = R"json({
   "format": "lito-doc-frontend",
   "version": 2,
   "template-api": 1,
   "book-data-api": 1,
+  "book-template-api": 2,
   "capabilities": ["book"],
   "templates": {
     "book-root": "templates/root.html",
-    "book-page": "templates/page.html"
+    "book-page": "templates/page.html",
+    "book-not-found": "templates/missing.html",
+    "book-redirect": "templates/moved.html"
   },
   "partials": [],
   "assets": []
 }
 )json"_str;
-    constexpr auto root_template = "{{site.title}}"_str;
-    constexpr auto page_template = "{{book.title}}"_str;
+    constexpr auto root_template    = "{{site.title}}"_str;
+    constexpr auto page_template    = "{{page.title}}"_str;
+    constexpr auto missing_template = "<base href=\"{{page.base_href}}\">Missing"_str;
+    constexpr auto moved_template   = "<a href=\"{{page.redirect.href}}\">Moved</a>"_str;
     ASSERT_TRUE(write_text(root, "frontend.json"_str, manifest).is_ok());
     ASSERT_TRUE(write_text(root, "templates/root.html"_str, root_template).is_ok());
     ASSERT_TRUE(write_text(root, "templates/page.html"_str, page_template).is_ok());
+    ASSERT_TRUE(write_text(root, "templates/missing.html"_str, missing_template).is_ok());
+    ASSERT_TRUE(write_text(root, "templates/moved.html"_str, moved_template).is_ok());
 
     auto directory = lito::site::load_frontend_directory(root);
     ASSERT_TRUE(directory.is_ok());
@@ -628,6 +726,12 @@ TEST(Frontend, DirectoryAndEmbeddedResourcesShareValidation) {
         { .path       = "templates/root.html"_str,
           .media_type = "text/html"_str,
           .contents   = root_template.as_bytes() },
+        { .path       = "templates/missing.html"_str,
+          .media_type = "text/html"_str,
+          .contents   = missing_template.as_bytes() },
+        { .path       = "templates/moved.html"_str,
+          .media_type = "text/html"_str,
+          .contents   = moved_template.as_bytes() },
     };
     auto embedded = lito::site::load_frontend_resources(
         "embedded:test"_str,
@@ -644,6 +748,8 @@ TEST(Frontend, LoadsEmbeddedDefaultBundle) {
     ASSERT_TRUE(frontend.is_ok());
     EXPECT_TRUE(frontend->supports_api);
     EXPECT_TRUE(frontend->supports_book);
+    EXPECT_EQ(frontend->doc_template_api, usize(2));
+    EXPECT_EQ(frontend->book_template_api, usize(2));
     EXPECT_EQ(frontend->assets.len(), usize(7));
     EXPECT_FALSE(frontend->digest.is_empty());
     auto bootstrap_gates_document        = false;

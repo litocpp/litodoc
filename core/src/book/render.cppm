@@ -96,58 +96,46 @@ auto book_configured_link(const BookSiteLink& link, ref<str> output) -> Template
 
 auto book_site_value(const BookProject& project, usize page_count, ref<str> output)
     -> TemplateValue {
-    auto site = site_shell_context();
+    auto site = site_data_context();
     site.insert("title"_str, book_template_text(project.title.as_str()));
     site.insert("page_count"_str, book_template_number(page_count));
-    site.insert("has_version"_str, TemplateValue::boolean_value(project.version.is_some()));
-    site.insert(
-        "version"_str,
-        book_template_text(project.version.is_some() ? project.version->as_str() : ref<str> {}));
-    site.insert("has_language"_str, TemplateValue::boolean_value(project.language.is_some()));
+    if (project.version.is_some())
+        site.insert("version"_str, book_template_text(project.version->as_str()));
+    if (project.description.is_some())
+        site.insert("description"_str, book_template_text(project.description->as_str()));
     site.insert(
         "language"_str,
         book_template_text(project.language.is_some() ? project.language->as_str() : "en"_str));
     const auto& html = project.html;
-    site.insert("has_custom_brand"_str, TemplateValue::boolean_value(html.brand.is_some()));
-    site.insert("has_default_brand"_str, TemplateValue::boolean_value(html.brand.is_none()));
     if (html.brand.is_some()) site.insert("brand"_str, book_configured_link(*html.brand, output));
-    site.insert("has_repository"_str, TemplateValue::boolean_value(html.repository.is_some()));
-    site.insert(
-        "has_site_links"_str,
-        TemplateValue::boolean_value(html.repository.is_some() || ! html.navigation.is_empty()));
-    if (html.repository.is_some())
-        site.insert("repository_url"_str, book_template_text(html.repository->href.as_str()));
+    if (html.repository.is_some()) {
+        auto repository = TemplateValue::object_value();
+        repository.insert("href"_str, book_template_text(html.repository->href.as_str()));
+        site.insert("repository"_str, rstd::move(repository));
+    }
     auto navigation = TemplateValue::array_value();
     for (const auto& link : html.navigation)
         navigation.array.push(book_configured_link(link, output));
-    site.insert("has_navigation"_str, TemplateValue::boolean_value(! html.navigation.is_empty()));
     site.insert("navigation"_str, rstd::move(navigation));
-    site.insert(
-        "has_footer"_str,
-        TemplateValue::boolean_value(html.footer_text.is_some() || ! html.footer_links.is_empty()));
-    site.insert("has_footer_text"_str, TemplateValue::boolean_value(html.footer_text.is_some()));
-    if (html.footer_text.is_some())
-        site.insert("footer_text"_str, book_template_text(html.footer_text->as_str()));
-    site.insert("has_footer_links"_str,
-                TemplateValue::boolean_value(! html.footer_links.is_empty()));
-    auto footer_links = TemplateValue::array_value();
-    for (const auto& link : html.footer_links)
-        footer_links.array.push(book_configured_link(link, output));
-    site.insert("footer_links"_str, rstd::move(footer_links));
+    if (html.footer_text.is_some() || ! html.footer_links.is_empty()) {
+        auto footer = TemplateValue::object_value();
+        footer.insert("text"_str,
+                      html.footer_text.is_some() ? book_template_text(html.footer_text->as_str())
+                                                 : TemplateValue::null());
+        auto links = TemplateValue::array_value();
+        for (const auto& link : html.footer_links)
+            links.array.push(book_configured_link(link, output));
+        footer.insert("links"_str, rstd::move(links));
+        site.insert("footer"_str, rstd::move(footer));
+    }
     return site;
 }
 
 auto book_navigation(const BookGraph& graph, ref<str> current_output) -> TemplateValue {
     auto navigation = TemplateValue::object_value();
-    navigation.insert("has_packages"_str, TemplateValue::boolean_value(false));
-    navigation.insert("packages"_str, TemplateValue::array_value());
-    navigation.insert("show_modules"_str, TemplateValue::boolean_value(false));
-    navigation.insert("modules"_str, TemplateValue::array_value());
-    navigation.insert("has_scroll_state"_str, TemplateValue::boolean_value(true));
     navigation.insert(
-        "scroll_state_url"_str,
+        "data_url"_str,
         TemplateValue::text_value(relative_url(current_output, "data/book.json"_str)));
-    navigation.insert("has_pages"_str, TemplateValue::boolean_value(! graph.pages.is_empty()));
     auto pages = TemplateValue::array_value();
     for (const auto& page : graph.pages) {
         auto item = TemplateValue::object_value();
@@ -171,21 +159,27 @@ auto book_page_context(const BookProject&     project,
                        ref<str>               digest) -> TemplateValue {
     auto context = TemplateValue::object_value();
     context.insert("site"_str, book_site_value(project, graph.pages.len(), output));
-    auto page_value = page_shell_context();
+    auto page_value = page_data_context();
     auto title      = page == nullptr ? project.title.as_str() : page->title.as_str();
     page_value.insert("title"_str, book_template_text(title));
-    page_value.insert("kind"_str, book_template_text("book"_str));
+    page_value.insert(
+        "kind"_str,
+        book_template_text(output == "index.html"_str ? "book-root"_str : "book-page"_str));
+    page_value.insert("output"_str, book_template_text(output));
+    page_value.insert("url"_str, TemplateValue::text_value(encode_site_path(output)));
+    page_value.insert("root_url"_str,
+                      TemplateValue::text_value(relative_url(output, "index.html"_str)));
+    page_value.insert(
+        "content"_str,
+        TemplateValue::trusted_html(page == nullptr ? String {} : page->html.clone()));
     page_value.insert("asset_prefix"_str, TemplateValue::text_value(book_asset_prefix(output)));
-    page_value.insert("icon_url"_str,
-                      TemplateValue::text_value(
-                          relative_url(output,
-                                       project.icon.is_some() ? project.icon->asset.output.as_str()
-                                                              : "static/favicon.svg"_str)));
-    page_value.insert("icon_media_type"_str,
-                      book_template_text(project.icon.is_some() ? project.icon->media_type.as_str()
-                                                                : "image/svg+xml"_str));
-    page_value.insert("search_package"_str, book_template_text(ref<str> {}));
-    page_value.insert("search_module"_str, book_template_text(ref<str> {}));
+    if (project.icon.is_some()) {
+        page_value.insert(
+            "icon_url"_str,
+            TemplateValue::text_value(relative_url(output, project.icon->asset.output.as_str())));
+        page_value.insert("icon_media_type"_str,
+                          book_template_text(project.icon->media_type.as_str()));
+    }
     page_value.insert("is_api"_str, TemplateValue::boolean_value(false));
     page_value.insert("is_book"_str, TemplateValue::boolean_value(true));
     auto outline = TemplateValue::array_value();
@@ -200,25 +194,24 @@ auto book_page_context(const BookProject&     project,
             outline.array.push(rstd::move(item));
         }
     }
-    page_value.insert("has_outline"_str, TemplateValue::boolean_value(! outline.array.is_empty()));
     page_value.insert("outline"_str, rstd::move(outline));
     context.insert("page"_str, rstd::move(page_value));
     context.insert("navigation"_str, book_navigation(graph, output));
     auto book = TemplateValue::object_value();
     book.insert("data_digest"_str, book_template_text(digest));
-    book.insert("has_page"_str, TemplateValue::boolean_value(page != nullptr));
-    book.insert("title"_str, book_template_text(title));
-    book.insert("content"_str,
-                TemplateValue::trusted_html(page == nullptr ? String::make() : page->html.clone()));
+    book.insert("title"_str, book_template_text(project.title.as_str()));
     auto breadcrumbs = TemplateValue::array_value();
+    auto ancestors   = TemplateValue::array_value();
     if (page != nullptr) {
         for (auto item : graph.pages[page_index].breadcrumb) {
+            if (item != page_index)
+                ancestors.array.push(
+                    book_page_link(graph, item, output, graph.pages[item].title.as_str()));
             breadcrumbs.array.push(
                 book_page_link(graph, item, output, graph.pages[item].title.as_str()));
         }
     }
-    book.insert("has_breadcrumbs"_str,
-                TemplateValue::boolean_value(breadcrumbs.array.len() > usize(1)));
+    book.insert("ancestors"_str, rstd::move(ancestors));
     book.insert("breadcrumbs"_str, rstd::move(breadcrumbs));
     auto roots = TemplateValue::array_value();
     for (auto root : graph.roots)
@@ -226,15 +219,13 @@ auto book_page_context(const BookProject&     project,
     book.insert("roots"_str, rstd::move(roots));
     auto has_previous = page != nullptr && graph.pages[page_index].previous.is_some();
     auto has_next     = page != nullptr && graph.pages[page_index].next.is_some();
-    book.insert("has_previous"_str, TemplateValue::boolean_value(has_previous));
-    book.insert("has_next"_str, TemplateValue::boolean_value(has_next));
     book.insert("previous"_str,
                 has_previous ? book_page_link(
                                    graph, *graph.pages[page_index].previous, output, "Previous"_str)
-                             : TemplateValue::object_value());
+                             : TemplateValue::null());
     book.insert("next"_str,
                 has_next ? book_page_link(graph, *graph.pages[page_index].next, output, "Next"_str)
-                         : TemplateValue::object_value());
+                         : TemplateValue::null());
     context.insert("book"_str, rstd::move(book));
     return context;
 }
@@ -274,6 +265,8 @@ auto publish_book_site(const BookProject&                   project,
     if (! frontend.supports_book)
         return Err(rstd::format("frontend '{}' does not support Book documentation",
                                 frontend.identity.as_str()));
+    auto valid = validate_book_theme(frontend);
+    if (valid.is_err()) return Err(rstd::move(valid).unwrap_err());
     auto publication = begin_publication(project.output.as_path(), "book-site"_str);
     if (publication.is_err()) return Err(rstd::move(publication).unwrap_err());
     auto fail = [&publication](String error) -> Result<BookSummary, String> {
@@ -298,64 +291,37 @@ auto publish_book_site(const BookProject&                   project,
         auto context = book_page_context(
             project, graph, page, index, entry.output.as_str(), data->digest.as_str());
         auto values = context.object.get_mut("page"_str).unwrap();
-        values->insert("has_description"_str,
-                       TemplateValue::boolean_value(entry.description.is_some()));
+        if (entry.source.is_some())
+            values->insert("source"_str, book_template_text(entry.source->as_str()));
         if (entry.description.is_some())
             values->insert("description"_str, book_template_text(entry.description->as_str()));
-        values->insert("has_canonical"_str,
-                       TemplateValue::boolean_value(entry.canonical.is_some()));
         if (entry.canonical.is_some())
             values->insert("canonical_url"_str, book_template_text(entry.canonical->as_str()));
-        values->insert("has_edit_url"_str, TemplateValue::boolean_value(entry.edit_url.is_some()));
         if (entry.edit_url.is_some())
             values->insert("edit_url"_str, book_template_text(entry.edit_url->as_str()));
-        auto   template_path = entry.output.as_str() == "index.html"_str
-                                   ? frontend.book_root_template.as_str()
-                                   : frontend.book_page_template.as_str();
-        String rendered;
+        auto template_path = entry.output.as_str() == "index.html"_str
+                                 ? frontend.book_root_template.as_str()
+                                 : frontend.book_page_template.as_str();
         if (entry.redirect.is_some()) {
-            auto target =
-                escape_html(relative_site_link(entry.output.as_str(), *entry.redirect).as_str());
-            rendered = rstd::format(
-                "<!doctype html><html lang=\"{}\"><head><meta charset=\"utf-8\"><meta "
-                "name=\"robots\" content=\"noindex\"><title>Page moved</title><meta "
-                "http-equiv=\"refresh\" content=\"0;url={}\">",
-                escape_html(project.language.is_some() ? project.language->as_str() : "en"_str),
-                target);
-            if (entry.canonical.is_some())
-                rendered.push_str(rstd::format("<link rel=\"canonical\" href=\"{}\">",
-                                               escape_html(entry.canonical->as_str()))
-                                      .as_str());
-            rendered.push_str(
-                rstd::format("</head><body><p>This page has moved. <a href=\"{}\">Continue to the "
-                             "current page</a>.</p></body></html>\n",
-                             target)
-                    .as_str());
-        } else {
-            if (entry.not_found) {
-                values->insert("title"_str, book_template_text("Page not found"_str));
-                values->insert("is_not_found"_str, TemplateValue::boolean_value(true));
-                values->insert("noindex"_str, TemplateValue::boolean_value(true));
-                values->insert("base_href"_str, book_template_text(html.not_found_base.as_str()));
-                template_path = frontend.book_not_found_template.as_str();
-            }
-            if (entry.not_found && template_path.is_empty()) {
-                rendered = rstd::format(
-                    "<!doctype html><html lang=\"{}\"><head><meta charset=\"utf-8\"><base "
-                    "href=\"{}\"><meta name=\"robots\" content=\"noindex\"><title>Page not "
-                    "found</title></head><body><h1>Page not found</h1><p><a "
-                    "href=\"index.html\">Return to {}</a></p></body></html>\n",
-                    escape_html(project.language.is_some() ? project.language->as_str() : "en"_str),
-                    escape_html(html.not_found_base.as_str()),
-                    escape_html(project.title.as_str()));
-            } else {
-                auto result = render_template(frontend.templates, template_path, context);
-                if (result.is_err()) return fail(rstd::move(result).unwrap_err());
-                rendered = rstd::move(result).unwrap();
-            }
+            auto redirect = TemplateValue::object_value();
+            redirect.insert("href"_str,
+                            TemplateValue::text_value(
+                                relative_site_link(entry.output.as_str(), *entry.redirect)));
+            values->insert("redirect"_str, rstd::move(redirect));
+            values->insert("kind"_str, book_template_text("redirect"_str));
+            values->insert("noindex"_str, TemplateValue::boolean_value(true));
+            template_path = frontend.book_redirect_template.as_str();
+        } else if (entry.not_found) {
+            values->insert("kind"_str, book_template_text("not-found"_str));
+            values->insert("not_found"_str, TemplateValue::boolean_value(true));
+            values->insert("noindex"_str, TemplateValue::boolean_value(true));
+            values->insert("base_href"_str, book_template_text(html.not_found_base.as_str()));
+            template_path = frontend.book_not_found_template.as_str();
         }
+        auto rendered = render_template(frontend.templates, template_path, context);
+        if (rendered.is_err()) return fail(rstd::move(rendered).unwrap_err());
         auto written = book_write_text(
-            publication->staging.as_path(), entry.output.as_str(), rendered.as_str());
+            publication->staging.as_path(), entry.output.as_str(), rendered->as_str());
         if (written.is_err()) return fail(rstd::move(written).unwrap_err());
     }
     auto committed = commit_publication(*publication);

@@ -5,24 +5,27 @@ using namespace rstd::prelude;
 using namespace rstd::literals;
 export namespace lito::site
 {
-auto site_shell_context() -> TemplateValue {
+auto site_data_context() -> TemplateValue {
     auto value = TemplateValue::object_value();
-    value.insert("has_custom_brand"_str, TemplateValue::boolean_value(false));
-    value.insert("has_default_brand"_str, TemplateValue::boolean_value(true));
-    value.insert("has_repository"_str, TemplateValue::boolean_value(false));
-    value.insert("has_navigation"_str, TemplateValue::boolean_value(false));
-    value.insert("has_site_links"_str, TemplateValue::boolean_value(false));
-    value.insert("has_footer"_str, TemplateValue::boolean_value(false));
+    for (auto key : array<ref<str>, 5> {
+             "brand"_str, "repository"_str, "footer"_str, "description"_str, "version"_str })
+        value.insert(key, TemplateValue::null());
+    value.insert("navigation"_str, TemplateValue::array_value());
     return value;
 }
-auto page_shell_context() -> TemplateValue {
+auto page_data_context() -> TemplateValue {
     auto value = TemplateValue::object_value();
-    for (auto key : array<ref<str>, 5> { "has_description"_str,
-                                         "has_canonical"_str,
-                                         "has_edit_url"_str,
-                                         "is_not_found"_str,
-                                         "noindex"_str })
-        value.insert(key, TemplateValue::boolean_value(false));
+    for (auto key : array<ref<str>, 8> { "description"_str,
+                                         "canonical_url"_str,
+                                         "edit_url"_str,
+                                         "source"_str,
+                                         "redirect"_str,
+                                         "base_href"_str,
+                                         "icon_url"_str,
+                                         "icon_media_type"_str })
+        value.insert(key, TemplateValue::null());
+    value.insert("noindex"_str, TemplateValue::boolean_value(false));
+    value.insert("not_found"_str, TemplateValue::boolean_value(false));
     return value;
 }
 } // namespace lito::site

@@ -5,11 +5,13 @@ import { LitoDocProseElement } from "./prose/element";
 import { LitoDocSearchElement } from "./search/element";
 import { LitoDocShellElement } from "./shell/element";
 import { LitoDocThemePickerElement } from "./theme-picker/element";
+import { LitoDocSiteLinksElement } from "./site-links/element";
 
 const definitions: ReadonlyArray<readonly [string, CustomElementConstructor]> = [
   ["lito-doc-shell", LitoDocShellElement],
   ["lito-doc-search", LitoDocSearchElement],
   ["lito-doc-theme-picker", LitoDocThemePickerElement],
+  ["lito-doc-site-links", LitoDocSiteLinksElement],
   ["lito-doc-module-identity", LitoDocModuleIdentityElement],
   ["lito-doc-navigation", LitoDocNavigationElement],
   ["lito-doc-page-navigation", LitoDocPageNavigationElement],

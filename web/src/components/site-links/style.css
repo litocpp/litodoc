@@ -1,0 +1,71 @@
+lito-doc-site-links {
+  position: relative;
+  flex: 0 0 auto;
+  color: var(--header-muted);
+  font-size: .875rem;
+}
+
+.site-links-toggle {
+  display: flex;
+  min-height: 2.25rem;
+  align-items: center;
+  gap: .5rem;
+  padding: .375rem .5rem;
+  border-radius: var(--radius-small);
+  cursor: pointer;
+  list-style: none;
+  white-space: nowrap;
+}
+
+.site-links-toggle::-webkit-details-marker { display: none; }
+
+.site-links-toggle::after {
+  width: .4rem;
+  height: .4rem;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  content: "";
+}
+
+.site-links-toggle:hover,
+.site-links[open] .site-links-toggle {
+  color: var(--ink-strong);
+  background: var(--surface-raised);
+}
+
+.site-links-panel {
+  position: absolute;
+  inset-inline-end: 0;
+  top: calc(100% + .5rem);
+  width: max-content;
+  max-width: min(20rem, calc(100vw - 2rem));
+  padding: .375rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-medium);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.site-links-panel a {
+  display: block;
+  padding: .5rem .75rem;
+  border-radius: var(--radius-small);
+  color: var(--ink);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.site-links-panel a:hover { background: var(--surface-raised); }
+.site-links-toggle:focus-visible,
+.site-links-panel a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+@media (max-width: 47.999rem) {
+  .site-links-panel {
+    position: fixed;
+    inset-inline: 1rem;
+    top: calc(var(--topbar-height) + .5rem);
+    width: auto;
+    max-width: none;
+  }
+}

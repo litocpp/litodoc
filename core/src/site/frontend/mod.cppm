@@ -42,6 +42,8 @@ struct FrontendBundle {
     String             digest;
     bool               supports_api { false };
     bool               supports_book { false };
+    usize              book_template_api {};
+    usize              doc_template_api {};
     String             root_template;
     String             package_template;
     String             module_template;
@@ -49,12 +51,37 @@ struct FrontendBundle {
     String             book_root_template;
     String             book_page_template;
     String             book_not_found_template;
+    String             book_redirect_template;
     TemplateSet        templates;
     Vec<FrontendAsset> assets;
 };
 
 inline constexpr uint64_t FRONTEND_FNV_OFFSET = 14695981039346656037ull;
 inline constexpr uint64_t FRONTEND_FNV_PRIME  = 1099511628211ull;
+
+auto validate_book_theme(const FrontendBundle& bundle) -> Result<empty, String> {
+    if (! bundle.supports_book || bundle.book_template_api != usize(2))
+        return Err("frontend requires Book template API 2"_Str);
+    for (auto path : array<ref<str>, 4> { bundle.book_root_template.as_str(),
+                                          bundle.book_page_template.as_str(),
+                                          bundle.book_not_found_template.as_str(),
+                                          bundle.book_redirect_template.as_str() })
+        if (path.is_empty() || ! bundle.templates.documents.contains_key(path))
+            return Err(rstd::format("Book theme is missing a required template '{}'", path));
+    return Ok(empty {});
+}
+
+auto validate_doc_theme(const FrontendBundle& bundle) -> Result<empty, String> {
+    if (! bundle.supports_api || bundle.doc_template_api != usize(2))
+        return Err("frontend requires Doc template API 2"_Str);
+    for (auto path : array<ref<str>, 4> { bundle.root_template.as_str(),
+                                          bundle.package_template.as_str(),
+                                          bundle.module_template.as_str(),
+                                          bundle.symbol_template.as_str() })
+        if (path.is_empty() || ! bundle.templates.documents.contains_key(path))
+            return Err(rstd::format("Doc theme is missing a required template '{}'", path));
+    return Ok(empty {});
+}
 
 auto frontend_hex(uint64_t value) -> String {
     static constexpr char digits[] = "0123456789abcdef";
@@ -102,30 +129,21 @@ auto safe_frontend_path(ref<str> value) -> bool {
     return true;
 }
 
-auto parse_frontend_manifest(ref<str> contents) -> Result<FrontendManifest, String> {
-    auto parsed = rstd::json::decode<FrontendManifest>(contents);
-    if (parsed.is_err())
-        return Err(rstd::format("invalid frontend manifest JSON: {}", parsed.unwrap_err()));
-    if (parsed->format.as_str() != "lito-doc-frontend"_str)
-        return Err(rstd::format("unsupported frontend format '{}'", parsed->format));
-    if (parsed->version != usize(1) && parsed->version != usize(2))
-        return Err(rstd::format("unsupported frontend bundle version {}", parsed->version));
-    if (parsed->template_api != usize(1))
+auto validate_frontend_manifest(const FrontendManifest& manifest) -> Result<empty, String> {
+    if (manifest.format.as_str() != "lito-doc-frontend"_str)
+        return Err(rstd::format("unsupported frontend format '{}'", manifest.format));
+    if (manifest.version != usize(2))
+        return Err(rstd::format("unsupported frontend bundle version {}; migrate to version 2 with "
+                                "explicit theme API 2 declarations",
+                                manifest.version));
+    if (manifest.template_api != usize(1))
         return Err(
-            rstd::format("frontend requires unsupported template API {}", parsed->template_api));
-    if (parsed->version == usize(1)) {
-        if (parsed->data_api.is_none())
-            return Err(String::make("frontend manifest is missing 'data-api'"_str));
-        if (*parsed->data_api != usize(4))
-            return Err(
-                rstd::format("frontend requires unsupported doc data API {}", *parsed->data_api));
-        return Ok(rstd::move(parsed).unwrap());
-    }
-    if (parsed->capabilities.is_none())
+            rstd::format("frontend requires unsupported template API {}", manifest.template_api));
+    if (manifest.capabilities.is_none())
         return Err(String::make("frontend manifest is missing 'capabilities'"_str));
     auto api  = false;
     auto book = false;
-    for (const auto& capability : *parsed->capabilities) {
+    for (const auto& capability : *manifest.capabilities) {
         if (capability.as_str() == "api"_str) {
             if (api) return Err(String::make("frontend repeats capability 'api'"_str));
             api = true;
@@ -138,25 +156,43 @@ auto parse_frontend_manifest(ref<str> contents) -> Result<FrontendManifest, Stri
     }
     if (! api && ! book)
         return Err(String::make("frontend must declare at least one capability"_str));
+    if (! book && manifest.book_template_api.is_some())
+        return Err("book-template-api requires the 'book' capability"_Str);
+    if (! api && manifest.doc_template_api.is_some())
+        return Err("doc-template-api requires the 'api' capability"_Str);
     if (api) {
-        if (parsed->data_api.is_none())
-            return Err(String::make("frontend manifest is missing 'data-api'"_str));
-        if (*parsed->data_api != usize(4))
+        if (manifest.doc_template_api.is_none() || *manifest.doc_template_api != usize(2))
             return Err(
-                rstd::format("frontend requires unsupported doc data API {}", *parsed->data_api));
+                "frontend requires explicit 'doc-template-api': 2; migrate the Doc theme context"_Str);
+        if (manifest.data_api.is_none())
+            return Err(String::make("frontend manifest is missing 'data-api'"_str));
+        if (*manifest.data_api != usize(4))
+            return Err(
+                rstd::format("frontend requires unsupported doc data API {}", *manifest.data_api));
     }
     if (book) {
-        if (parsed->book_data_api.is_none())
+        if (manifest.book_template_api.is_none() || *manifest.book_template_api != usize(2))
+            return Err(
+                "frontend requires explicit 'book-template-api': 2; migrate the Book theme context"_Str);
+        if (manifest.book_data_api.is_none())
             return Err(String::make("frontend manifest is missing 'book-data-api'"_str));
-        if (*parsed->book_data_api != usize(1))
+        if (*manifest.book_data_api != usize(1))
             return Err(rstd::format("frontend requires unsupported book data API {}",
-                                    *parsed->book_data_api));
+                                    *manifest.book_data_api));
     }
+    return Ok(empty {});
+}
+
+auto parse_frontend_manifest(ref<str> contents) -> Result<FrontendManifest, String> {
+    auto parsed = rstd::json::decode<FrontendManifest>(contents);
+    if (parsed.is_err())
+        return Err(rstd::format("invalid frontend manifest JSON: {}", parsed.unwrap_err()));
+    rstd_try(validate_frontend_manifest(*parsed));
     return Ok(rstd::move(parsed).unwrap());
 }
 
 auto frontend_capability(const FrontendManifest& manifest, ref<str> requested) -> bool {
-    if (manifest.version == usize(1)) return requested == "api"_str;
+    if (manifest.capabilities.is_none()) return false;
     for (const auto& capability : *manifest.capabilities) {
         if (capability.as_str() == requested) return true;
     }
@@ -164,6 +200,7 @@ auto frontend_capability(const FrontendManifest& manifest, ref<str> requested) -
 }
 
 auto frontend_manifest_paths(const FrontendManifest& manifest) -> Result<Vec<String>, String> {
+    rstd_try(validate_frontend_manifest(manifest));
     if (manifest.templates.is_none())
         return Err(String::make("frontend manifest is missing 'templates'"_str));
     if (manifest.partials.is_none())
@@ -191,20 +228,16 @@ auto frontend_manifest_paths(const FrontendManifest& manifest) -> Result<Vec<Str
         if (appended.is_err()) return Err(rstd::move(appended).unwrap_err());
         appended = append_template(templates.symbol, "symbol"_str);
         if (appended.is_err()) return Err(rstd::move(appended).unwrap_err());
-        if (templates.source.is_some()) {
-            appended = append_template(templates.source, "source"_str);
-            if (appended.is_err()) return Err(rstd::move(appended).unwrap_err());
-        }
     }
     if (book) {
         auto appended = append_template(templates.book_root, "book-root"_str);
         if (appended.is_err()) return Err(rstd::move(appended).unwrap_err());
         appended = append_template(templates.book_page, "book-page"_str);
         if (appended.is_err()) return Err(rstd::move(appended).unwrap_err());
-        if (templates.book_not_found.is_some()) {
-            appended = append_template(templates.book_not_found, "book-not-found"_str);
-            if (appended.is_err()) return Err(rstd::move(appended).unwrap_err());
-        }
+        appended = append_template(templates.book_not_found, "book-not-found"_str);
+        if (appended.is_err()) return Err(rstd::move(appended).unwrap_err());
+        appended = append_template(templates.book_redirect, "book-redirect"_str);
+        if (appended.is_err()) return Err(rstd::move(appended).unwrap_err());
     }
     for (const auto& partial : *manifest.partials) {
         if (! safe_frontend_path(partial.as_str()))
@@ -245,6 +278,7 @@ auto make_frontend_bundle(String                                                
                           String                                                digest,
                           rstd::collections::BTreeMap<String, FrontendResource> resources,
                           FrontendManifest manifest) -> Result<FrontendBundle, String> {
+    rstd_try(validate_frontend_manifest(manifest));
     if (manifest.templates.is_none())
         return Err(String::make("frontend manifest is missing 'templates'"_str));
     if (manifest.partials.is_none())
@@ -260,6 +294,9 @@ auto make_frontend_bundle(String                                                
     auto book_root_template      = String::make();
     auto book_page_template      = String::make();
     auto book_not_found_template = String::make();
+    auto book_redirect_template  = String::make();
+    auto book_template_api       = supports_book ? *manifest.book_template_api : usize {};
+    auto doc_template_api        = supports_api ? *manifest.doc_template_api : usize {};
     auto read_template = [](Option<String>& value, ref<str> name) -> Result<String, String> {
         if (value.is_none()) return Err(rstd::format("frontend templates is missing '{}'", name));
         return Ok(rstd::move(value).unwrap());
@@ -274,9 +311,10 @@ auto make_frontend_bundle(String                                                
     if (supports_book) {
         book_root_template = rstd_try(read_template(templates.book_root, "book-root"_str));
         book_page_template = rstd_try(read_template(templates.book_page, "book-page"_str));
-        if (templates.book_not_found.is_some())
-            book_not_found_template =
-                rstd_try(read_template(templates.book_not_found, "book-not-found"_str));
+        book_not_found_template =
+            rstd_try(read_template(templates.book_not_found, "book-not-found"_str));
+        book_redirect_template =
+            rstd_try(read_template(templates.book_redirect, "book-redirect"_str));
     }
 
     auto set = TemplateSet {
@@ -293,8 +331,8 @@ auto make_frontend_bundle(String                                                
     if (supports_book) {
         template_paths.push(book_root_template.clone());
         template_paths.push(book_page_template.clone());
-        if (! book_not_found_template.is_empty())
-            template_paths.push(book_not_found_template.clone());
+        template_paths.push(book_not_found_template.clone());
+        template_paths.push(book_redirect_template.clone());
     }
     for (const auto& partial : *manifest.partials) {
         template_paths.push(partial.clone());
@@ -329,6 +367,8 @@ auto make_frontend_bundle(String                                                
         .digest                  = rstd::move(digest),
         .supports_api            = supports_api,
         .supports_book           = supports_book,
+        .book_template_api       = book_template_api,
+        .doc_template_api        = doc_template_api,
         .root_template           = rstd::move(root_template),
         .package_template        = rstd::move(package_template),
         .module_template         = rstd::move(module_template),
@@ -336,6 +376,7 @@ auto make_frontend_bundle(String                                                
         .book_root_template      = rstd::move(book_root_template),
         .book_page_template      = rstd::move(book_page_template),
         .book_not_found_template = rstd::move(book_not_found_template),
+        .book_redirect_template  = rstd::move(book_redirect_template),
         .templates               = rstd::move(set),
         .assets                  = rstd::move(frontend_assets),
     });

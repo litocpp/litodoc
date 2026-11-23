@@ -87,6 +87,7 @@ auto load_book_frontend(const BookProject& project, Option<FrontendBundle> defau
     if (! frontend->supports_book)
         return Err(rstd::format("frontend '{}' does not support Book documentation",
                                 frontend->identity.as_str()));
+    rstd_try(validate_book_theme(*frontend));
     return Ok(rstd::move(frontend).unwrap());
 }
 

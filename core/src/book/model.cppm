@@ -213,6 +213,7 @@ struct PreparedBook {
         Option<String>               description;
         Option<String>               canonical;
         Option<String>               edit_url;
+        Option<String>               source;
         Option<lito::site::SiteLink> redirect;
     };
     struct HtmlPublication {

@@ -4,6 +4,8 @@
   "capabilities": ["api", "book"],
   "data-api": 4,
   "book-data-api": 1,
+  "book-template-api": 2,
+  "doc-template-api": 2,
   "template-api": 1,
   "templates": {
     "root": "templates/root.html",
@@ -12,10 +14,13 @@
     "symbol": "templates/symbol.html",
     "book-root": "templates/book-root.html",
     "book-page": "templates/book-page.html",
-    "book-not-found": "templates/book-not-found.html"
+    "book-not-found": "templates/book-not-found.html",
+    "book-redirect": "templates/book-redirect.html"
   },
   "partials": [
     "templates/partials/head.html",
+    "templates/partials/module-links.html",
+    "templates/partials/site-links.html",
     "templates/partials/foot.html"
   ],
   "assets": [

@@ -4,30 +4,28 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="generator" content="Lito">
-  {{#if page.is_not_found}}<base href="{{page.base_href}}">{{/if}}
-  {{#if page.has_description}}<meta name="description" content="{{page.description}}">{{/if}}
-  {{#if page.has_canonical}}<link rel="canonical" href="{{page.canonical_url}}">{{/if}}
+  {{#if page.base_href}}<base href="{{page.base_href}}">{{/if}}
+  {{#if page.description}}<meta name="description" content="{{page.description}}">{{/if}}
+  {{#if page.canonical_url}}<link rel="canonical" href="{{page.canonical_url}}">{{/if}}
   {{#if page.noindex}}<meta name="robots" content="noindex">{{/if}}
-  <title>{{page.title}} · {{site.title}}</title>
-  <link rel="icon" href="{{page.icon_url}}" type="{{page.icon_media_type}}">
-  {{#if navigation.show_modules}}<link rel="preload" href="{{navigation.module_navigation_url}}" as="fetch" crossorigin="anonymous">{{/if}}
+  <title>{{#if page.not_found}}Page not found{{else}}{{page.title}}{{/if}} · {{site.title}}</title>
+  {{#if page.icon_url}}<link rel="icon" href="{{page.icon_url}}" type="{{page.icon_media_type}}">{{else}}<link rel="icon" href="{{page.asset_prefix}}static/favicon.svg" type="image/svg+xml">{{/if}}
+  {{#if page.is_api}}{{#if module}}{{#if navigation.modules}}{{#if symbol}}<link rel="preload" href="{{navigation.module_index.href}}" as="fetch" crossorigin="anonymous">{{else}}{{#if module.name != package.root_module}}<link rel="preload" href="{{navigation.module_index.href}}" as="fetch" crossorigin="anonymous">{{/if}}{{/if}}{{/if}}{{/if}}{{/if}}
   <link rel="stylesheet" href="{{page.asset_prefix}}static/style.css">
   <script src="{{page.asset_prefix}}static/theme-bootstrap.js"></script>
   <script defer src="{{page.asset_prefix}}static/app.js"></script>
 </head>
-<body data-page-kind="{{page.kind}}"{{#if page.has_outline}} data-has-outline{{/if}}{{#if page.is_book}} data-has-sidebar{{/if}}{{#if navigation.has_packages}} data-has-sidebar{{/if}}{{#if navigation.show_modules}} data-has-sidebar{{/if}}>
+<body data-page-kind="{{#if page.is_book}}book{{else}}{{page.kind}}{{/if}}"{{#if page.outline}} data-has-outline{{/if}}{{#if page.is_book}} data-has-sidebar{{/if}}{{#if page.is_api}}{{#if navigation.packages}} data-has-sidebar{{/if}}{{#if module}}{{#if navigation.modules}}{{#if symbol}} data-has-sidebar{{else}}{{#if module.name != package.root_module}} data-has-sidebar{{/if}}{{/if}}{{/if}}{{/if}}{{/if}}>
   <a class="skip-link" href="#content">Skip to documentation</a>
   <lito-doc-shell>
     <header class="topbar">
       <div class="topbar-frame">
         <div class="brand">
-          {{#if site.has_default_brand}}<a class="brand-home" href="https://litocpp.org/" aria-label="Litocpp home"><span>Lito</span><span class="brand-cpp">cpp</span></a>{{/if}}
-          {{#if site.has_custom_brand}}<a class="brand-home" href="{{site.brand.href}}">{{site.brand.label}}</a>{{/if}}
+          {{#if site.brand}}<a class="brand-home" href="{{site.brand.href}}">{{site.brand.label}}</a>{{else}}<a class="brand-home" href="https://litocpp.org/" aria-label="Litocpp home"><span>Lito</span><span class="brand-cpp">cpp</span></a>{{/if}}
           <a class="brand-product" href="{{page.asset_prefix}}index.html"><span class="brand-mark">::</span><span class="brand-title">{{site.title}}</span></a>
         </div>
-        {{#if site.has_navigation}}<nav class="site-top-navigation" aria-label="Site navigation">{{#each site.navigation}}<a href="{{href}}">{{label}}</a>{{/each}}</nav>{{/if}}
         <div class="desktop-search">
-          {{#if page.is_api}}<lito-doc-search root-prefix="{{page.asset_prefix}}" catalog-url="{{page.asset_prefix}}search-index.json" current-package="{{page.search_package}}" current-module="{{page.search_module}}">
+          {{#if page.is_api}}<lito-doc-search root-prefix="{{page.asset_prefix}}" catalog-url="{{page.asset_prefix}}search-index.json"{{#if page.package}} current-package="{{page.package}}"{{/if}}{{#if page.module}} current-module="{{page.module}}"{{/if}}>
             <label for="doc-search">Search documentation</label>
             <input id="doc-search" data-search-input type="search" autocomplete="off" spellcheck="false" placeholder="Search documentation…" aria-controls="search-results">
             <kbd aria-hidden="true">CTRL K</kbd>
@@ -40,7 +38,7 @@
             <div id="search-results" data-search-results hidden aria-live="polite"></div>
           </lito-doc-search>{{/if}}
         </div>
-        {{#if site.has_repository}}<a class="site-repository" href="{{site.repository_url}}">Repository</a>{{/if}}
+        {{#if site.navigation}}{{> templates/partials/site-links.html}}{{else}}{{#if site.repository}}{{> templates/partials/site-links.html}}{{/if}}{{/if}}
         <lito-doc-theme-picker>
           <button class="theme-toggle" data-theme-toggle type="button" aria-label="Switch color theme" title="Switch color theme">
             <svg data-theme-icon="dark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="{{page.asset_prefix}}static/theme-icons.svg#moon"></use></svg>
@@ -56,7 +54,7 @@
       <div class="sidebar-placeholder" aria-hidden="true"></div>
       <aside class="sidebar" id="sidebar" data-drawer-panel aria-label="Documentation navigation">
         <div class="mobile-search">
-          {{#if page.is_api}}<lito-doc-search root-prefix="{{page.asset_prefix}}" catalog-url="{{page.asset_prefix}}search-index.json" current-package="{{page.search_package}}" current-module="{{page.search_module}}">
+          {{#if page.is_api}}<lito-doc-search root-prefix="{{page.asset_prefix}}" catalog-url="{{page.asset_prefix}}search-index.json"{{#if page.package}} current-package="{{page.package}}"{{/if}}{{#if page.module}} current-module="{{page.module}}"{{/if}}>
             <label for="doc-search-mobile">Search documentation</label>
             <input id="doc-search-mobile" data-search-input type="search" autocomplete="off" spellcheck="false" placeholder="Search documentation…" aria-controls="search-results-mobile">
             <div id="search-results-mobile" data-search-results hidden aria-live="polite"></div>
@@ -68,12 +66,9 @@
           </lito-doc-search>{{/if}}
         </div>
         <div class="sidebar-scroll">
-          {{#if site.has_site_links}}<div class="site-mobile-links">
-            {{#if site.has_navigation}}<nav aria-label="Site navigation">{{#each site.navigation}}<a href="{{href}}">{{label}}</a>{{/each}}</nav>{{/if}}
-            {{#if site.has_repository}}<a href="{{site.repository_url}}">Repository</a>{{/if}}
-          </div>{{/if}}
-          <lito-doc-navigation{{#if navigation.has_scroll_state}} scroll-state-url="{{navigation.scroll_state_url}}"{{/if}}{{#if navigation.show_modules}} module-navigation-url="{{navigation.module_navigation_url}}" module-navigation-package="{{page.search_package}}"{{/if}}>
-          {{#if navigation.has_packages}}
+          <lito-doc-navigation{{#if page.is_book}} scroll-state-url="{{navigation.data_url}}"{{/if}}{{#if page.is_api}}{{#if module}}{{#if navigation.modules}}{{#if symbol}} scroll-state-url="{{navigation.data_url}}" module-navigation-url="{{navigation.module_index.href}}" module-navigation-package="{{page.package}}"{{else}}{{#if module.name != package.root_module}} scroll-state-url="{{navigation.data_url}}" module-navigation-url="{{navigation.module_index.href}}" module-navigation-package="{{page.package}}"{{/if}}{{/if}}{{/if}}{{/if}}{{/if}}>
+          {{#if page.is_api}}
+          {{#if navigation.packages}}
           <div class="sidebar-section" data-navigation-section>
             <nav aria-label="Packages" data-page-navigation>
               <ul class="nav-list package-list">
@@ -82,8 +77,9 @@
             </nav>
           </div>
           {{/if}}
+          {{/if}}
           {{#if page.is_book}}
-          {{#if navigation.has_pages}}
+          {{#if navigation.pages}}
           <div class="sidebar-section" data-navigation-section>
             <nav aria-label="Book chapters" data-page-navigation>
               <ul class="nav-list book-page-list">
@@ -93,16 +89,9 @@
           </div>
           {{/if}}
           {{/if}}
-          {{#if navigation.show_modules}}
-          <div class="sidebar-section" data-navigation-section>
-            <div class="sidebar-heading">Modules</div>
-            <nav aria-label="Package modules" data-page-navigation>
-              <ul class="nav-list module-list" data-module-navigation>
-                <li><a href="{{navigation.module_fallback_url}}">View package modules</a></li>
-              </ul>
-            </nav>
-          </div>
-          {{/if}}
+          {{#if page.is_api}}{{#if module}}{{#if navigation.modules}}
+          {{#if symbol}}{{> templates/partials/module-links.html}}{{else}}{{#if module.name != package.root_module}}{{> templates/partials/module-links.html}}{{/if}}{{/if}}
+          {{/if}}{{/if}}{{/if}}
           </lito-doc-navigation>
         </div>
       </aside>

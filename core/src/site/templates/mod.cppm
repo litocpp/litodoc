@@ -58,6 +58,16 @@ struct TemplateValue {
     auto insert(ref<str> name, TemplateValue value) -> void {
         object.insert(String::make(name), rstd::move(value));
     }
+
+    auto clone() const -> TemplateValue {
+        auto copy = TemplateValue { .kind = kind, .boolean = boolean, .text = text.clone() };
+        for (const auto& item : array) copy.array.push(item.clone());
+        auto entries = object.iter();
+        for (auto item = entries.next(); item.is_some(); item = entries.next())
+            copy.insert((*(*item).template get<0>()).as_str(),
+                        (*(*item).template get<1>()).clone());
+        return copy;
+    }
 };
 
 enum class TemplateNodeKind
@@ -70,10 +80,30 @@ enum class TemplateNodeKind
     Partial,
 };
 
+enum class TemplateConditionKind
+{
+    Truthy,
+    Equal,
+    NotEqual,
+};
+
+struct TemplateOperand {
+    bool   literal { false };
+    String value;
+};
+
+struct TemplateCondition {
+    TemplateConditionKind kind { TemplateConditionKind::Truthy };
+    TemplateOperand       left;
+    TemplateOperand       right;
+};
+
 struct TemplateNode {
     TemplateNodeKind  kind { TemplateNodeKind::Text };
     String            value;
+    TemplateCondition condition;
     Vec<TemplateNode> children;
+    Vec<TemplateNode> alternative;
     usize             line { usize(1) };
     usize             column { usize(1) };
 };
@@ -123,7 +153,97 @@ auto find_template_marker(ref<str> source, usize begin, ref<str> marker) -> Opti
     return None();
 }
 
-auto parse_template_nodes(ref<str> path, ref<str> source, usize& cursor, ref<str> expected_close)
+auto template_expression_space(u8 byte) -> bool {
+    return byte == u8(' ') || byte == u8('\t') || byte == u8('\r') || byte == u8('\n');
+}
+
+auto template_value_path(ref<str> path) -> bool {
+    if (path == "."_str) return true;
+    auto segment = false;
+    for (auto index = usize {}; index < path.len(); ++index) {
+        auto byte = path[index];
+        if (byte == u8('.')) {
+            if (! segment) return false;
+            segment = false;
+        } else if ((byte >= u8('a') && byte <= u8('z')) || (byte >= u8('A') && byte <= u8('Z')) ||
+                   (byte >= u8('0') && byte <= u8('9')) || byte == u8('_') || byte == u8('-') ||
+                   byte >= u8(0x80)) {
+            segment = true;
+        } else {
+            return false;
+        }
+    }
+    return segment;
+}
+
+auto parse_template_operand(ref<str> expression, usize& cursor) -> Result<TemplateOperand, String> {
+    while (cursor < expression.len() && template_expression_space(expression[cursor])) ++cursor;
+    if (cursor == expression.len()) return Err("template condition is missing an operand"_Str);
+    if (expression[cursor] == u8('"')) {
+        ++cursor;
+        auto begin = cursor;
+        auto text  = String::make();
+        while (cursor < expression.len()) {
+            if (expression[cursor] == u8('"')) {
+                text.push_str(expression.get(begin, cursor).unwrap());
+                ++cursor;
+                return Ok(TemplateOperand { .literal = true, .value = rstd::move(text) });
+            }
+            if (expression[cursor] == u8('\\')) {
+                text.push_str(expression.get(begin, cursor).unwrap());
+                ++cursor;
+                if (cursor == expression.len() ||
+                    (expression[cursor] != u8('"') && expression[cursor] != u8('\\')))
+                    return Err("unsupported escape in template text literal"_Str);
+                text.push_str(expression.get(cursor, cursor + usize(1)).unwrap());
+                ++cursor;
+                begin = cursor;
+            } else {
+                ++cursor;
+            }
+        }
+        return Err("unterminated template text literal"_Str);
+    }
+    auto begin = cursor;
+    while (cursor < expression.len() && ! template_expression_space(expression[cursor]) &&
+           expression[cursor] != u8('=') && expression[cursor] != u8('!'))
+        ++cursor;
+    auto path = expression.get(begin, cursor).unwrap();
+    if (! template_value_path(path)) return Err("invalid template condition value path"_Str);
+    return Ok(TemplateOperand { .value = String::make(path) });
+}
+
+auto parse_template_condition(ref<str> expression) -> Result<TemplateCondition, String> {
+    auto cursor = usize {};
+    auto left   = parse_template_operand(expression, cursor);
+    if (left.is_err()) return Err(rstd::move(left).unwrap_err());
+    while (cursor < expression.len() && template_expression_space(expression[cursor])) ++cursor;
+    if (cursor == expression.len()) {
+        if (left->literal) return Err("template truthiness condition requires a value path"_Str);
+        return Ok(TemplateCondition { .left = rstd::move(left).unwrap() });
+    }
+    if (cursor + usize(1) >= expression.len() || expression[cursor + usize(1)] != u8('=') ||
+        (expression[cursor] != u8('=') && expression[cursor] != u8('!')))
+        return Err("template condition requires a single '==' or '!=' comparison"_Str);
+    auto kind = expression[cursor] == u8('=') ? TemplateConditionKind::Equal
+                                              : TemplateConditionKind::NotEqual;
+    cursor += usize(2);
+    auto right = parse_template_operand(expression, cursor);
+    if (right.is_err()) return Err(rstd::move(right).unwrap_err());
+    while (cursor < expression.len() && template_expression_space(expression[cursor])) ++cursor;
+    if (cursor != expression.len()) return Err("unexpected text after template comparison"_Str);
+    return Ok(TemplateCondition {
+        .kind  = kind,
+        .left  = rstd::move(left).unwrap(),
+        .right = rstd::move(right).unwrap(),
+    });
+}
+
+auto parse_template_nodes(ref<str>           path,
+                          ref<str>           source,
+                          usize&             cursor,
+                          ref<str>           expected_close,
+                          Vec<TemplateNode>* alternative = nullptr)
     -> Result<Vec<TemplateNode>, String> {
     auto nodes = Vec<TemplateNode>::make();
     while (cursor < source.len()) {
@@ -169,6 +289,15 @@ auto parse_template_nodes(ref<str> path, ref<str> source, usize& cursor, ref<str
             });
             continue;
         }
+        if (expression == "else"_str) {
+            if (expected_close != "if"_str || alternative == nullptr)
+                return Err(template_error(
+                    path, source, *marker, "unexpected or repeated template else"_str));
+            auto remaining = parse_template_nodes(path, source, cursor, expected_close);
+            if (remaining.is_err()) return Err(rstd::move(remaining).unwrap_err());
+            *alternative = rstd::move(remaining).unwrap();
+            return Ok(rstd::move(nodes));
+        }
         if (expression.starts_with("/"_str)) {
             auto close_name = expression.get(usize(1), expression.len()).unwrap().trim_ascii();
             if (expected_close.is_empty())
@@ -189,15 +318,31 @@ auto parse_template_nodes(ref<str> path, ref<str> source, usize& cursor, ref<str
             if (name.is_empty())
                 return Err(
                     template_error(path, source, *marker, "template block has no value"_str));
-            auto children =
-                parse_template_nodes(path, source, cursor, is_if ? "if"_str : "each"_str);
+            auto condition = TemplateCondition {};
+            if (is_if) {
+                auto parsed = parse_template_condition(name);
+                if (parsed.is_err())
+                    return Err(template_error(path, source, *marker, parsed.unwrap_err().as_str()));
+                condition = rstd::move(parsed).unwrap();
+            } else if (! template_value_path(name)) {
+                return Err(template_error(
+                    path, source, *marker, "template each requires a value path"_str));
+            }
+            Vec<TemplateNode> otherwise;
+            auto children = parse_template_nodes(path,
+                                                 source,
+                                                 cursor,
+                                                 is_if ? "if"_str : "each"_str,
+                                                 is_if ? rstd::addressof(otherwise) : nullptr);
             if (children.is_err()) return Err(rstd::move(children).unwrap_err());
             nodes.push(TemplateNode {
-                .kind     = is_if ? TemplateNodeKind::If : TemplateNodeKind::Each,
-                .value    = String::make(name),
-                .children = rstd::move(children).unwrap(),
-                .line     = location.template get<0>(),
-                .column   = location.template get<1>(),
+                .kind        = is_if ? TemplateNodeKind::If : TemplateNodeKind::Each,
+                .value       = String::make(name),
+                .condition   = rstd::move(condition),
+                .children    = rstd::move(children).unwrap(),
+                .alternative = rstd::move(otherwise),
+                .line        = location.template get<0>(),
+                .column      = location.template get<1>(),
             });
             continue;
         }
@@ -285,6 +430,35 @@ auto template_render_error(const TemplateDocument& document,
     return rstd::format("{}:{}:{}: {}", document.path.as_str(), node.line, node.column, message);
 }
 
+auto template_operand_text(const TemplateOperand& operand,
+                           const TemplateValue&   root,
+                           const TemplateValue&   current) -> Result<ref<str>, String> {
+    if (operand.literal) return Ok(operand.value.as_str());
+    auto value = resolve_template_value(root, current, operand.value.as_str());
+    if (value.is_none()) return Err(rstd::format("missing template value '{}'", operand.value));
+    if ((**value).kind != TemplateValueKind::Text)
+        return Err(rstd::format("template comparison value '{}' is not text", operand.value));
+    return Ok((**value).text.as_str());
+}
+
+auto evaluate_template_condition(const TemplateNode&  node,
+                                 const TemplateValue& root,
+                                 const TemplateValue& current) -> Result<bool, String> {
+    const auto& condition = node.condition;
+    if (condition.kind == TemplateConditionKind::Truthy) {
+        auto value = resolve_template_value(root, current, condition.left.value.as_str());
+        if (value.is_none())
+            return Err(rstd::format("missing template value '{}'", condition.left.value));
+        return Ok(template_truthy(**value));
+    }
+    auto left = template_operand_text(condition.left, root, current);
+    if (left.is_err()) return Err(rstd::move(left).unwrap_err());
+    auto right = template_operand_text(condition.right, root, current);
+    if (right.is_err()) return Err(rstd::move(right).unwrap_err());
+    auto equal = *left == *right;
+    return Ok(condition.kind == TemplateConditionKind::Equal ? equal : ! equal);
+}
+
 auto render_template_nodes(const TemplateSet&       templates,
                            const TemplateDocument&  document,
                            const Vec<TemplateNode>& nodes,
@@ -319,6 +493,20 @@ auto render_template_nodes(const TemplateSet&       templates,
             if (rendered.is_err()) return rendered;
             continue;
         }
+        if (node.kind == TemplateNodeKind::If) {
+            auto condition = evaluate_template_condition(node, root, current);
+            if (condition.is_err())
+                return Err(template_render_error(document, node, condition.unwrap_err().as_str()));
+            auto rendered = render_template_nodes(templates,
+                                                  document,
+                                                  *condition ? node.children : node.alternative,
+                                                  root,
+                                                  current,
+                                                  partial_stack,
+                                                  output);
+            if (rendered.is_err()) return rendered;
+            continue;
+        }
         auto value = resolve_template_value(root, current, node.value.as_str());
         if (value.is_none())
             return Err(template_render_error(
@@ -343,14 +531,6 @@ auto render_template_nodes(const TemplateSet&       templates,
                     rstd::format("template value '{}' is not trusted HTML", node.value.as_str())
                         .as_str()));
             output.push_str((**value).text.as_str());
-            continue;
-        }
-        if (node.kind == TemplateNodeKind::If) {
-            if (template_truthy(**value)) {
-                auto rendered = render_template_nodes(
-                    templates, document, node.children, root, current, partial_stack, output);
-                if (rendered.is_err()) return rendered;
-            }
             continue;
         }
         if ((**value).kind != TemplateValueKind::Array)

@@ -25,16 +25,24 @@ auto write_text(ref<rstd::path::Path> root, ref<str> relative, ref<str> text)
 }
 
 auto make_frontend(ref<rstd::path::Path> root) -> rstd::io::Result<empty> {
-    auto written = write_text(root,
-                              "frontend.json"_str,
-                              "{\"format\":\"lito-doc-frontend\",\"version\":2,\"template-api\":1,"
-                              "\"book-data-api\":1,\"capabilities\":[\"book\"],\"templates\":{"
-                              "\"book-root\":\"root.html\",\"book-page\":\"page.html\"},"
-                              "\"partials\":[],\"assets\":[]}"_str);
+    auto written = write_text(
+        root,
+        "frontend.json"_str,
+        "{\"format\":\"lito-doc-frontend\",\"version\":2,\"template-api\":1,"
+        "\"book-data-api\":1,\"book-template-api\":2,\"capabilities\":[\"book\"],\"templates\":{"
+        "\"book-root\":\"root.html\",\"book-page\":\"page.html\","
+        "\"book-not-found\":\"missing.html\",\"book-redirect\":\"moved.html\"},"
+        "\"partials\":[],\"assets\":[]}"_str);
     if (written.is_err()) return written;
-    written = write_text(root, "root.html"_str, "<!doctype html>{{{book.content}}}"_str);
+    written = write_text(root, "root.html"_str, "<!doctype html>{{{page.content}}}"_str);
     if (written.is_err()) return written;
-    return write_text(root, "page.html"_str, "<!doctype html>{{{book.content}}}"_str);
+    written = write_text(root, "page.html"_str, "<!doctype html>{{{page.content}}}"_str);
+    if (written.is_err()) return written;
+    written = write_text(
+        root, "missing.html"_str, "<!doctype html><base href=\"{{page.base_href}}\">Missing"_str);
+    if (written.is_err()) return written;
+    return write_text(
+        root, "moved.html"_str, "<!doctype html><a href=\"{{page.redirect.href}}\">Moved</a>"_str);
 }
 
 auto make_book(ref<rstd::path::Path> root) -> rstd::io::Result<empty> {

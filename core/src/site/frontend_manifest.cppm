@@ -14,10 +14,10 @@ struct FrontendManifestTemplates {
     Option<String> package;
     Option<String> module;
     Option<String> symbol;
-    Option<String> source;
     Option<String> book_root;
     Option<String> book_page;
     Option<String> book_not_found;
+    Option<String> book_redirect;
 };
 
 struct FrontendManifestAsset {
@@ -31,6 +31,8 @@ struct FrontendManifest {
     usize                              template_api {};
     Option<usize>                      data_api;
     Option<usize>                      book_data_api;
+    Option<usize>                      book_template_api;
+    Option<usize>                      doc_template_api;
     Option<Vec<String>>                capabilities;
     Option<FrontendManifestTemplates>  templates;
     Option<Vec<String>>                partials;
@@ -51,10 +53,10 @@ struct Impl<serde::Deserialize, lito::site::FrontendManifestTemplates> {
         auto package        = serde::OptionalField<String>("package"_str);
         auto module         = serde::OptionalField<String>("module"_str);
         auto symbol         = serde::OptionalField<String>("symbol"_str);
-        auto source         = serde::OptionalField<String>("source"_str);
         auto book_root      = serde::OptionalField<String>("book-root"_str);
         auto book_page      = serde::OptionalField<String>("book-page"_str);
         auto book_not_found = serde::OptionalField<String>("book-not-found"_str);
+        auto book_redirect  = serde::OptionalField<String>("book-redirect"_str);
         auto result         = serde::deserialize_record(
             deserializer,
             [&](ref<str> name, auto& input) -> Result<empty, typename Deserializer::error_type> {
@@ -62,10 +64,10 @@ struct Impl<serde::Deserialize, lito::site::FrontendManifestTemplates> {
                 if (package.matches(name)) return package.assign(deserializer, input);
                 if (module.matches(name)) return module.assign(deserializer, input);
                 if (symbol.matches(name)) return symbol.assign(deserializer, input);
-                if (source.matches(name)) return source.assign(deserializer, input);
                 if (book_root.matches(name)) return book_root.assign(deserializer, input);
                 if (book_page.matches(name)) return book_page.assign(deserializer, input);
                 if (book_not_found.matches(name)) return book_not_found.assign(deserializer, input);
+                if (book_redirect.matches(name)) return book_redirect.assign(deserializer, input);
                 return Err(deserializer.unknown_field(name));
             });
         if (result.is_err()) return Err(rstd::move(result).unwrap_err_unchecked());
@@ -74,10 +76,10 @@ struct Impl<serde::Deserialize, lito::site::FrontendManifestTemplates> {
             .package        = package.take(),
             .module         = module.take(),
             .symbol         = symbol.take(),
-            .source         = source.take(),
             .book_root      = book_root.take(),
             .book_page      = book_page.take(),
             .book_not_found = book_not_found.take(),
+            .book_redirect  = book_redirect.take(),
         });
     }
 };
@@ -114,12 +116,14 @@ struct Impl<serde::Deserialize, lito::site::FrontendManifest> {
     template<typename Deserializer>
     static auto deserialize(Deserializer& deserializer)
         -> Result<lito::site::FrontendManifest, typename Deserializer::error_type> {
-        auto format        = serde::RequiredField<String>("format"_str);
-        auto version       = serde::RequiredField<usize>("version"_str);
-        auto template_api  = serde::RequiredField<usize>("template-api"_str);
-        auto data_api      = serde::OptionalField<usize>("data-api"_str);
-        auto book_data_api = serde::OptionalField<usize>("book-data-api"_str);
-        auto capabilities  = serde::OptionalField<Vec<String>>("capabilities"_str);
+        auto format            = serde::RequiredField<String>("format"_str);
+        auto version           = serde::RequiredField<usize>("version"_str);
+        auto template_api      = serde::RequiredField<usize>("template-api"_str);
+        auto data_api          = serde::OptionalField<usize>("data-api"_str);
+        auto book_data_api     = serde::OptionalField<usize>("book-data-api"_str);
+        auto book_template_api = serde::OptionalField<usize>("book-template-api"_str);
+        auto doc_template_api  = serde::OptionalField<usize>("doc-template-api"_str);
+        auto capabilities      = serde::OptionalField<Vec<String>>("capabilities"_str);
         auto templates =
             serde::OptionalField<lito::site::FrontendManifestTemplates>("templates"_str);
         auto partials = serde::OptionalField<Vec<String>>("partials"_str);
@@ -132,6 +136,10 @@ struct Impl<serde::Deserialize, lito::site::FrontendManifest> {
                 if (template_api.matches(name)) return template_api.assign(deserializer, input);
                 if (data_api.matches(name)) return data_api.assign(deserializer, input);
                 if (book_data_api.matches(name)) return book_data_api.assign(deserializer, input);
+                if (book_template_api.matches(name))
+                    return book_template_api.assign(deserializer, input);
+                if (doc_template_api.matches(name))
+                    return doc_template_api.assign(deserializer, input);
                 if (capabilities.matches(name)) return capabilities.assign(deserializer, input);
                 if (templates.matches(name)) return templates.assign(deserializer, input);
                 if (partials.matches(name)) return partials.assign(deserializer, input);
@@ -147,15 +155,17 @@ struct Impl<serde::Deserialize, lito::site::FrontendManifest> {
         if (template_api_value.is_err())
             return Err(rstd::move(template_api_value).unwrap_err_unchecked());
         return Ok(lito::site::FrontendManifest {
-            .format        = rstd::move(format_value).unwrap_unchecked(),
-            .version       = rstd::move(version_value).unwrap_unchecked(),
-            .template_api  = rstd::move(template_api_value).unwrap_unchecked(),
-            .data_api      = data_api.take(),
-            .book_data_api = book_data_api.take(),
-            .capabilities  = capabilities.take(),
-            .templates     = templates.take(),
-            .partials      = partials.take(),
-            .assets        = assets.take(),
+            .format            = rstd::move(format_value).unwrap_unchecked(),
+            .version           = rstd::move(version_value).unwrap_unchecked(),
+            .template_api      = rstd::move(template_api_value).unwrap_unchecked(),
+            .data_api          = data_api.take(),
+            .book_data_api     = book_data_api.take(),
+            .book_template_api = book_template_api.take(),
+            .doc_template_api  = doc_template_api.take(),
+            .capabilities      = capabilities.take(),
+            .templates         = templates.take(),
+            .partials          = partials.take(),
+            .assets            = assets.take(),
         });
     }
 };
