@@ -87,6 +87,9 @@ auto page_value(ref<str> title, ref<str> kind, ref<str> asset_prefix) -> Templat
     page.insert("title"_str, template_text(title));
     page.insert("kind"_str, template_text(kind));
     page.insert("asset_prefix"_str, template_text(asset_prefix));
+    page.insert("icon_url"_str,
+                TemplateValue::text_value(rstd::format("{}static/favicon.svg", asset_prefix)));
+    page.insert("icon_media_type"_str, template_text("image/svg+xml"_str));
     page.insert("search_package"_str, TemplateValue::text_value(String::make()));
     page.insert("search_module"_str, TemplateValue::text_value(String::make()));
     page.insert("is_api"_str, TemplateValue::boolean_value(true));

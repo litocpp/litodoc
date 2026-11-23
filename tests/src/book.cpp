@@ -255,12 +255,156 @@ TEST(Book, DefaultFrontendKeepsOneNavigationScrollIdentity) {
     ASSERT_TRUE(root_page.is_ok());
     EXPECT_TRUE(root_page->as_str().contains("scroll-state-url=\"data/book.json\""_str));
     EXPECT_TRUE(root_page->as_str().contains("static/theme-icons.svg#moon"_str));
+    EXPECT_TRUE(root_page->as_str().contains(
+        "<link rel=\"icon\" href=\"static/favicon.svg\" type=\"image/svg+xml\">"_str));
     EXPECT_FALSE(root_page->as_str().contains("sidebar-footer"_str));
     auto nested_page = rstd::fs::read_to_string(
         child(project.path(), "build/book/guide/install/index.html"_str).as_path());
     ASSERT_TRUE(nested_page.is_ok());
     EXPECT_TRUE(nested_page->as_str().contains("scroll-state-url=\"../../data/book.json\""_str));
     EXPECT_TRUE(nested_page->as_str().contains("../../static/theme-icons.svg#sun"_str));
+    EXPECT_TRUE(nested_page->as_str().contains(
+        "<link rel=\"icon\" href=\"../../static/favicon.svg\" type=\"image/svg+xml\">"_str));
+}
+
+TEST(Book, PublishesConfiguredIconsForEveryPage) {
+    struct IconCase {
+        ref<str> source;
+        ref<str> output;
+        ref<str> media_type;
+    };
+    const auto cases = array<IconCase, 3> {
+        IconCase { "src/assets/site.SVG"_str, "static/book-icon.svg"_str, "image/svg+xml"_str },
+        IconCase { "src/assets/site.png"_str, "static/book-icon.png"_str, "image/png"_str },
+        IconCase { "src/assets/site.ico"_str, "static/book-icon.ico"_str, "image/x-icon"_str },
+    };
+    const auto binary = array<u8, 4> { u8(0), u8(137), u8(255), u8(10) };
+    for (const auto& item : cases) {
+        auto created = make_book_project();
+        ASSERT_TRUE(created.is_ok());
+        auto project = rstd::move(created).unwrap();
+        ASSERT_TRUE(write_text(project.path(),
+                               "book.toml"_str,
+                               rstd::format("[book]\nname = \"icon-book\"\ntitle = \"Icon "
+                                            "Book\"\n[output.html]\nicon = \"{}\"\n",
+                                            item.source)
+                                   .as_str())
+                        .is_ok());
+        ASSERT_TRUE(write_text(project.path(),
+                               item.source,
+                               "<svg xmlns=\"http://www.w3.org/2000/svg\"/>"_str)
+                        .is_ok());
+        if (item.media_type != "image/svg+xml"_str)
+            ASSERT_TRUE(rstd::fs::write_atomic(child(project.path(), item.source).as_path(),
+                                               binary.as_slice())
+                            .is_ok());
+        else
+            ASSERT_TRUE(write_text(project.path(),
+                                   "src/guide/install.md"_str,
+                                   "# Install\n\n![Icon](../assets/site.SVG)\n"_str)
+                            .is_ok());
+        if (item.media_type == "image/png"_str)
+            ASSERT_TRUE(
+                write_text(project.path(),
+                           "src/SUMMARY.md"_str,
+                           "- [Install](guide/install.md)\n- [Reference](reference.md)\n"_str)
+                    .is_ok());
+        auto checked = lito::book::check({ .directory = child(project.path(), "src/guide"_str) });
+        ASSERT_TRUE(checked.is_ok());
+        ASSERT_TRUE(checked->project.icon.is_some());
+        EXPECT_EQ(checked->project.icon->asset.output.as_str(), item.output);
+        auto frontend = lito::doc::web::load_default_frontend();
+        ASSERT_TRUE(frontend.is_ok());
+        auto output = child(project.path(), "published"_str);
+        auto built  = lito::book::build(
+            { .directory = child(project.path(), "src/guide"_str), .output = Some(output.clone()) },
+            Some(rstd::move(frontend).unwrap()));
+        ASSERT_TRUE(built.is_ok());
+        auto root   = rstd::fs::read_to_string(child(output.as_path(), "index.html"_str).as_path());
+        auto nested = rstd::fs::read_to_string(
+            child(output.as_path(), "guide/install/index.html"_str).as_path());
+        ASSERT_TRUE(root.is_ok());
+        ASSERT_TRUE(nested.is_ok());
+        EXPECT_TRUE(root->as_str().contains(
+            rstd::format(
+                "<link rel=\"icon\" href=\"{}\" type=\"{}\">", item.output, item.media_type)
+                .as_str()));
+        EXPECT_TRUE(nested->as_str().contains(
+            rstd::format(
+                "<link rel=\"icon\" href=\"../../{}\" type=\"{}\">", item.output, item.media_type)
+                .as_str()));
+        if (item.media_type == "image/svg+xml"_str)
+            EXPECT_TRUE(nested->as_str().contains("src=\"../../static/book-icon.svg\""_str));
+        auto source = rstd::fs::read(child(project.path(), item.source).as_path());
+        auto copied = rstd::fs::read(child(output.as_path(), item.output).as_path());
+        ASSERT_TRUE(source.is_ok());
+        ASSERT_TRUE(copied.is_ok());
+        EXPECT_EQ(copied->as_slice(), source->as_slice());
+    }
+}
+
+TEST(Book, RejectsInvalidIconConfiguration) {
+    struct InvalidIcon {
+        ref<str> value;
+        ref<str> message;
+    };
+    const auto cases = array<InvalidIcon, 7> {
+        InvalidIcon { "\"\""_str, "must not be empty"_str },
+        InvalidIcon { "12"_str, "must be a string"_str },
+        InvalidIcon { "\"missing.svg\""_str, "cannot resolve"_str },
+        InvalidIcon { "\"../outside.svg\""_str, "safe relative path"_str },
+        InvalidIcon { "\"/outside.svg\""_str, "safe relative path"_str },
+        InvalidIcon { "\"src\""_str, "must be a file"_str },
+        InvalidIcon { "\"src/index.md\""_str, "SVG, PNG or ICO"_str },
+    };
+    for (const auto& item : cases) {
+        auto created = make_book_project();
+        ASSERT_TRUE(created.is_ok());
+        auto project = rstd::move(created).unwrap();
+        ASSERT_TRUE(write_text(project.path(),
+                               "book.toml"_str,
+                               rstd::format("[book]\nname = \"icon-book\"\ntitle = \"Icon "
+                                            "Book\"\n[output.html]\nicon = {}\n",
+                                            item.value)
+                                   .as_str())
+                        .is_ok());
+        auto checked = lito::book::check({ .directory = PathBuf::from(project.path()) });
+        ASSERT_TRUE(checked.is_err());
+        auto error = rstd::move(checked).unwrap_err();
+        EXPECT_TRUE(error.as_str().contains("book.toml:"_str));
+        EXPECT_TRUE(error.as_str().contains("output.html.icon"_str));
+        EXPECT_TRUE(error.as_str().contains(item.message));
+        EXPECT_FALSE(rstd::fs::exists(child(project.path(), "build/book"_str).as_path()).unwrap());
+    }
+}
+
+TEST(Book, RejectsIconAssetCollisionsWithoutReplacingTheSite) {
+    auto created = make_book_project();
+    ASSERT_TRUE(created.is_ok());
+    auto project = rstd::move(created).unwrap();
+    ASSERT_TRUE(
+        write_text(
+            project.path(),
+            "book.toml"_str,
+            "[book]\nname = \"icon-book\"\ntitle = \"Icon Book\"\n[output.html]\nicon = \"src/guide/image.svg\"\n"_str)
+            .is_ok());
+    ASSERT_TRUE(write_text(project.path(), "build/book/keep.txt"_str, "previous site"_str).is_ok());
+    auto frontend = lito::doc::web::load_default_frontend();
+    ASSERT_TRUE(frontend.is_ok());
+    frontend->assets.push(lito::site::FrontendAsset {
+        .path       = String::make("static/book-icon.svg"_str),
+        .media_type = String::make("image/svg+xml"_str),
+        .contents   = String::make("frontend icon"_str),
+    });
+    auto built = lito::book::build({ .directory = PathBuf::from(project.path()) },
+                                   Some(rstd::move(frontend).unwrap()));
+    ASSERT_TRUE(built.is_err());
+    EXPECT_TRUE(
+        rstd::move(built).unwrap_err().as_str().contains("conflicts with a frontend asset"_str));
+    auto previous =
+        rstd::fs::read_to_string(child(project.path(), "build/book/keep.txt"_str).as_path());
+    ASSERT_TRUE(previous.is_ok());
+    EXPECT_EQ(previous->as_str(), "previous site"_str);
 }
 
 TEST(Book, PreservesVersionOneApiFrontendCompatibility) {

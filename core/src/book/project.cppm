@@ -166,6 +166,26 @@ auto resolve_override_directory(ref<rstd::path::Path> root,
     return Ok(rstd::move(canonical).unwrap());
 }
 
+auto resolve_book_icon(ref<rstd::path::Path> root, ref<str> value, ref<rstd::path::Path> manifest)
+    -> Result<BookIcon, String> {
+    auto source    = rstd_try(resolve_existing_file(root, value, manifest, "output.html.icon"_str));
+    auto extension = source.as_path().extension();
+    const auto extensions = array<ref<str>, 3> { "svg"_str, "png"_str, "ico"_str };
+    const auto media_types =
+        array<ref<str>, 3> { "image/svg+xml"_str, "image/png"_str, "image/x-icon"_str };
+    for (auto index = usize {}; index < extensions.len(); ++index) {
+        if (extension.is_some() &&
+            extension->eq_ignore_ascii_case(ref<rstd::ffi::OsStr>(extensions[index])))
+            return Ok(BookIcon {
+                .asset      = { .source = rstd::move(source),
+                                .output = rstd::format("static/book-icon.{}", extensions[index]) },
+                .media_type = String::make(media_types[index]),
+            });
+    }
+    return project_error<BookIcon>(manifest,
+                                   "output.html.icon must be an SVG, PNG or ICO file"_str);
+}
+
 auto output_path(ref<rstd::path::Path> root, ref<rstd::path::Path> value)
     -> Result<rstd::path::PathBuf, String> {
     if (value.is_empty()) return Err(String::make("Book output must not be empty"_str));
@@ -254,6 +274,7 @@ auto load_book_project(ref<rstd::path::Path>              requested,
         if (configured.is_some()) output_text = rstd::move(configured).unwrap();
     }
     auto frontend_text = String::make("default"_str);
+    auto icon_text     = Option<String> {};
     auto output        = rstd_try(table_at(*parsed, "output"_str, manifest.as_path(), false));
     if (output.is_some()) {
         const auto output_keys = array<ref<str>, 1> { "html"_str };
@@ -264,12 +285,14 @@ auto load_book_project(ref<rstd::path::Path>              requested,
             if (table.is_none())
                 return project_error<BookProject>(manifest.as_path(),
                                                   "output.html must be a table"_str);
-            const auto html_keys = array<ref<str>, 1> { "frontend"_str };
+            const auto html_keys = array<ref<str>, 2> { "frontend"_str, "icon"_str };
             rstd_try(
                 reject_keys(**table, html_keys.as_slice(), "output.html"_str, manifest.as_path()));
             auto configured = rstd_try(
                 string_at(**table, "frontend"_str, "output.html"_str, manifest.as_path(), false));
             if (configured.is_some()) frontend_text = rstd::move(configured).unwrap();
+            icon_text = rstd_try(
+                string_at(**table, "icon"_str, "output.html"_str, manifest.as_path(), false));
         }
     }
 
@@ -297,6 +320,10 @@ auto load_book_project(ref<rstd::path::Path>              requested,
             .map_err([](licrypto::Error error) {
                 return rstd::format("SHA-256 failed: {}", error);
             }));
+    auto icon = Option<BookIcon> {};
+    if (icon_text.is_some())
+        icon = Some(
+            rstd_try(resolve_book_icon(root.as_path(), icon_text->as_str(), manifest.as_path())));
     return Ok(BookProject {
         .root        = rstd::move(root),
         .manifest    = rstd::move(manifest),
@@ -309,6 +336,7 @@ auto load_book_project(ref<rstd::path::Path>              requested,
         .summary     = rstd::move(summary_path),
         .output      = rstd::move(resolved_output),
         .frontend    = rstd::move(resolved_frontend),
+        .icon        = rstd::move(icon),
     });
 }
 

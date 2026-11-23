@@ -559,6 +559,11 @@ auto resolve_book_content(const BookProject&    project,
         return Err(String::make("Book page documents do not match the Book graph"_str));
     auto content       = BookContent {};
     auto asset_outputs = rstd::collections::BTreeMap<String, String>::make();
+    if (project.icon.is_some()) {
+        const auto& icon = project.icon->asset;
+        asset_outputs.insert(icon.source.as_path().to_string_lossy(), icon.output.clone());
+        content.assets.push(icon.clone());
+    }
     for (auto page_index = usize {}; page_index < documents.len(); ++page_index) {
         auto&       document = documents[page_index];
         const auto& page     = graph.pages[page_index];

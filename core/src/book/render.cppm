@@ -141,6 +141,14 @@ auto book_page_context(const BookProject&     project,
     page_value.insert("title"_str, book_template_text(title));
     page_value.insert("kind"_str, book_template_text("book"_str));
     page_value.insert("asset_prefix"_str, TemplateValue::text_value(book_asset_prefix(output)));
+    page_value.insert("icon_url"_str,
+                      TemplateValue::text_value(
+                          relative_url(output,
+                                       project.icon.is_some() ? project.icon->asset.output.as_str()
+                                                              : "static/favicon.svg"_str)));
+    page_value.insert("icon_media_type"_str,
+                      book_template_text(project.icon.is_some() ? project.icon->media_type.as_str()
+                                                                : "image/svg+xml"_str));
     page_value.insert("search_package"_str, book_template_text(ref<str> {}));
     page_value.insert("search_module"_str, book_template_text(ref<str> {}));
     page_value.insert("is_api"_str, TemplateValue::boolean_value(false));
@@ -230,6 +238,11 @@ auto publish_book_site(const BookProject&    project,
     if (! frontend.supports_book)
         return Err(rstd::format("frontend '{}' does not support Book documentation",
                                 frontend.identity.as_str()));
+    for (const auto& asset : content.assets)
+        for (const auto& bundled : frontend.assets)
+            if (asset.output.as_str() == bundled.path.as_str())
+                return Err(
+                    rstd::format("Book asset '{}' conflicts with a frontend asset", asset.output));
     auto publication = begin_publication(project.output.as_path(), "book-site"_str);
     if (publication.is_err()) return Err(rstd::move(publication).unwrap_err());
     auto fail = [&publication](String error) -> Result<BookSummary, String> {

@@ -13,6 +13,18 @@ struct SourceSpan {
     usize               column { usize(1) };
 };
 
+struct BookAsset {
+    rstd::path::PathBuf source;
+    String              output;
+
+    auto clone() const -> BookAsset { return { source.clone(), output.clone() }; }
+};
+
+struct BookIcon {
+    BookAsset asset;
+    String    media_type;
+};
+
 struct BookProject {
     rstd::path::PathBuf         root;
     rstd::path::PathBuf         manifest;
@@ -25,6 +37,7 @@ struct BookProject {
     rstd::path::PathBuf         summary;
     rstd::path::PathBuf         output;
     Option<rstd::path::PathBuf> frontend;
+    Option<BookIcon>            icon;
 };
 
 struct SummaryEntry {
@@ -122,11 +135,6 @@ struct BookPageDocument {
     usize            page {};
     MarkdownDocument document;
     String           html;
-};
-
-struct BookAsset {
-    rstd::path::PathBuf source;
-    String              output;
 };
 
 struct BookContent {
