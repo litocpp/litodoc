@@ -21,7 +21,7 @@
       "responses": [
         {
           "path": "tests/fixtures/basic-response.json",
-          "digest": "55cee340cd86e86b6e875ef425f62e09d06d40c7b5b0b3c74cc36b13c8c34a7d"
+          "digest": "5f5b02c592ff3f5d8ac7e8c2bdb60ac9ddde7b00deace64ef0aa1f70b1ee4790"
         }
       ]
     }

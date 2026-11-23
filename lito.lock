@@ -2,18 +2,69 @@ version = 1
 
 [[packages]]
 name = "licrypto"
-version = "0.1.0"
+version = "0.2.2"
 source = "registry+https://registry.litocpp.org/"
-checksum = "eed4984fac8080d67e14e83b15861dd0b4a22264a2ba8f2e1a143155811ac6cd"
+checksum = "fc209832a8027b126220adfc4184df48017f4715f968e92ce0783d55b73d2ac5"
 dependencies = [
   "rstd-std",
-  "rstd-test",
 ]
 
 [[packages]]
-name = "litobook"
-version = "0.2.0"
+name = "lihttpto"
+version = "0.1.4"
+source = "registry+https://registry.litocpp.org/"
+checksum = "f574b8b3cb5dc35f38226907cb5799d3f81ef9a71f68e26938870565bbc3d4ad"
 dependencies = [
+  "rstd-parse",
+  "rstd-std",
+]
+
+[[packages]]
+name = "limarkto"
+version = "0.1.1"
+source = "registry+https://registry.litocpp.org/"
+checksum = "cfb04a281b78528b3bf94bcb70ce725736b1d9d9c9681d36fae60c9721c121fe"
+dependencies = [
+  "liunicode",
+  "rstd-parse",
+  "rstd-std",
+]
+
+[[packages]]
+name = "liresto"
+version = "0.1.1"
+source = "registry+https://registry.litocpp.org/"
+checksum = "791eb42b0f688f20bc5e076891993bb43b6094bc70406cb62224f638b7cc4428"
+dependencies = [
+  "licrypto",
+  "rstd-nostd",
+  "rstd-std",
+]
+
+[[packages]]
+name = "liserveto"
+version = "0.1.3"
+source = "registry+https://registry.litocpp.org/"
+checksum = "49ed1b696d81b0084f1f7ffc6fad5a808c7a2d9ae5f1cd383369d8e0aab98de3"
+dependencies = [
+  "lihttpto",
+  "liresto",
+  "liwebsocketo",
+  "rstd-json",
+  "rstd-std",
+]
+
+[[packages]]
+name = "lito-resource"
+version = "0.1.1"
+source = "registry+https://registry.litocpp.org/"
+checksum = "2c38814027b30a43b79cdfcd7428c2d303cf3dede097c63dc1027d6c171339c9"
+
+[[packages]]
+name = "litobook"
+version = "0.3.0"
+dependencies = [
+  "liserveto",
   "litodoc-core",
   "litodoc-web",
   "rstd-argparse",
@@ -22,7 +73,7 @@ dependencies = [
 
 [[packages]]
 name = "litodoc"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
   "licrypto",
   "litodoc-core",
@@ -34,9 +85,11 @@ dependencies = [
 
 [[packages]]
 name = "litodoc-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
   "licrypto",
+  "lihttpto",
+  "limarkto",
   "rstd-json",
   "rstd-serde",
   "rstd-std",
@@ -45,9 +98,10 @@ dependencies = [
 
 [[packages]]
 name = "litodoc-tests"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
   "licrypto",
+  "litobook",
   "litodoc-core",
   "litodoc-web",
   "rstd-std",
@@ -56,8 +110,10 @@ dependencies = [
 
 [[packages]]
 name = "litodoc-web"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
+  "liresto",
+  "lito-resource",
   "litodoc-core",
   "rstd-std",
 ]
@@ -79,10 +135,30 @@ architectures = [
 ]
 
 [[packages]]
-name = "rstd-alloc"
-version = "0.1.0"
+name = "liunicode"
+version = "0.1.1"
 source = "registry+https://registry.litocpp.org/"
-checksum = "d5209327d6fd03f2ccf79081dc40bc3239b8a3dbbbf5ca3c99bff59d0b70a5d3"
+checksum = "6b99808201e17df098c037acdc01906052310a89c329e65a982bb57e2d6896f2"
+dependencies = [
+  "rstd-std",
+]
+
+[[packages]]
+name = "liwebsocketo"
+version = "0.1.1"
+source = "registry+https://registry.litocpp.org/"
+checksum = "018d0cec18643570f0874adbe7f54fdac03f5e48412d69100564e3337b1d799e"
+dependencies = [
+  "licrypto",
+  "lihttpto",
+  "rstd-std",
+]
+
+[[packages]]
+name = "rstd-alloc"
+version = "0.1.15"
+source = "registry+https://registry.litocpp.org/"
+checksum = "5cf687a31b57883ffea1449002ce0baabe23323237218ab98f46bd9349b8a4fc"
 dependencies = [
   "rstd-core",
   "rstd-runtime",
@@ -90,24 +166,24 @@ dependencies = [
 
 [[packages]]
 name = "rstd-argparse"
-version = "0.1.0"
+version = "0.1.15"
 source = "registry+https://registry.litocpp.org/"
-checksum = "3590da4c6dc90f4ed42fc5983e520c6e7f12966d6ff2d3708469db97631647a6"
+checksum = "e227c722387fb5c4b336eedecc3b66267eb3ff4e831a9e5129d02063caa21f5b"
 dependencies = [
   "rstd-std",
 ]
 
 [[packages]]
 name = "rstd-basic"
-version = "0.1.0"
+version = "0.1.15"
 source = "registry+https://registry.litocpp.org/"
-checksum = "7a294e444c3356dbdc034f248bd7474e29834c61f6d44227d26cfd2814137636"
+checksum = "05161743f9f3d60173f6858c433611915d80e24c357623c4b23db9011dea2cae"
 
 [[packages]]
 name = "rstd-core"
-version = "0.1.0"
+version = "0.1.15"
 source = "registry+https://registry.litocpp.org/"
-checksum = "b4cc9c7fbc26ced52d150168b281537c33cb5663f083787976e093f034102845"
+checksum = "dc63868984249e22e865958f92c964565bf9c1f1a2bd2b330f48c3d391a42cdd"
 dependencies = [
   "rstd-basic",
   "rstd-runtime",
@@ -115,9 +191,9 @@ dependencies = [
 
 [[packages]]
 name = "rstd-json"
-version = "0.1.0"
+version = "0.1.15"
 source = "registry+https://registry.litocpp.org/"
-checksum = "edf374ebeb024fda08bf71cfd39a01cf014fb0369df5342662a5a9c8cca73031"
+checksum = "e9bd7ba456caaa624670da94cb292bf70b37d5fd5ebe10c4921efc0b2ea20239"
 dependencies = [
   "rstd-core",
   "rstd-parse",
@@ -126,10 +202,16 @@ dependencies = [
 ]
 
 [[packages]]
-name = "rstd-parse"
-version = "0.1.0"
+name = "rstd-nostd"
+version = "0.1.15"
 source = "registry+https://registry.litocpp.org/"
-checksum = "a6090dd501bebbbdab5166e15047078197f817843c26c319fe992419942ea870"
+checksum = "9a882ae276858cf0d33109beee26cdce65a48586043c9fd4a0b52d582a221b70"
+
+[[packages]]
+name = "rstd-parse"
+version = "0.1.15"
+source = "registry+https://registry.litocpp.org/"
+checksum = "67e5741a7fc14755c0337a764b1aa6ee3f978755a4eca743bee28425825cb038"
 dependencies = [
   "rstd-alloc",
   "rstd-core",
@@ -137,46 +219,44 @@ dependencies = [
 
 [[packages]]
 name = "rstd-runtime"
-version = "0.1.0"
+version = "0.1.15"
 source = "registry+https://registry.litocpp.org/"
-checksum = "74e6c2e2dc315f95983f319edba00348b7fbafbf703e5ef47728e2ab3c4fcbc3"
-dependencies = [
-  "rstd-basic",
-]
+checksum = "b240844d9e564bf379589846bf97a267b7ecec54ef5254726c75b30d5c20af9b"
 
 [[packages]]
 name = "rstd-serde"
-version = "0.1.0"
+version = "0.1.15"
 source = "registry+https://registry.litocpp.org/"
-checksum = "1809e3a422b309d3ae85f757d9cdc7041e600de935123ca414d134078f868ad8"
+checksum = "6bbaa21de113efed8ce1b49f4f096675e90ab039b0f8b1a23860190ae6524826"
 dependencies = [
   "rstd-alloc",
 ]
 
 [[packages]]
 name = "rstd-std"
-version = "0.1.0"
+version = "0.1.15"
 source = "registry+https://registry.litocpp.org/"
-checksum = "6f96c5be8d83ec3fafd0d5df61fb9bfaa3edddedc0156c58b82e01147bd07cd1"
+checksum = "9ce5825219175f9f1eafe8cac663679c9939b3976f96ab3d031210972332e7cc"
 dependencies = [
   "rstd-alloc",
   "rstd-core",
+  "rstd-parse",
 ]
 
 [[packages]]
 name = "rstd-test"
-version = "0.1.0"
+version = "0.1.15"
 source = "registry+https://registry.litocpp.org/"
-checksum = "34a01ef65821e0378fd90c7460f394fbbd98b41c93b354fe83717649061cdb51"
+checksum = "bf437fe103b415ea924f7810d21a6a0060c11fa4db3570cdc9a85192abbd2fd8"
 dependencies = [
   "rstd-std",
 ]
 
 [[packages]]
 name = "rstd-toml"
-version = "0.1.0"
+version = "0.1.15"
 source = "registry+https://registry.litocpp.org/"
-checksum = "01e9317a19964925344a8097165590073b858012bce5cd246debb365ce23f2bf"
+checksum = "8fcc58c9e7554ace6e14a5704a3d19673085cc2f72bed6871ba61972470de8aa"
 dependencies = [
   "rstd-alloc",
   "rstd-core",
